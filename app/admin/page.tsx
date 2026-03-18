@@ -23,6 +23,12 @@ import {
   rejectMissionSubmission,
   type MissionSubmissionRow,
 } from '@/lib/admin-mission-submissions'
+import {
+  createTable,
+  listTablesForAdmin,
+  updateTable,
+  type AdminTableRow,
+} from '@/lib/admin-tables'
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
@@ -86,6 +92,27 @@ export default function AdminPage() {
   const [msSuccess, setMsSuccess] = useState<string | null>(null)
   const [msProcessingId, setMsProcessingId] = useState<string | null>(null)
 
+  const [ttTables, setTtTables] = useState<AdminTableRow[]>([])
+  const [ttLoading, setTtLoading] = useState(true)
+  const [ttError, setTtError] = useState<string | null>(null)
+  const [ttSuccess, setTtSuccess] = useState<string | null>(null)
+  const [ttCreating, setTtCreating] = useState(false)
+  const [ttCreate, setTtCreate] = useState({ name: '', color: '', is_active: true })
+  const [ttEditingId, setTtEditingId] = useState<string | null>(null)
+  const [ttEditName, setTtEditName] = useState('')
+  const [ttSavingId, setTtSavingId] = useState<string | null>(null)
+
+  const refreshTables = useCallback(async () => {
+    setTtError(null)
+    try {
+      setTtTables(await listTablesForAdmin())
+    } catch (e) {
+      setTtError(e instanceof Error ? e.message : 'Failed to load tables.')
+    } finally {
+      setTtLoading(false)
+    }
+  }, [])
+
   const refreshMissionSubmissions = useCallback(async () => {
     setMsError(null)
     try {
@@ -120,10 +147,11 @@ export default function AdminPage() {
   }, [])
 
   useEffect(() => {
+    void refreshTables()
     void refreshMissionData()
     void refreshMmList()
     void refreshMissionSubmissions()
-  }, [refreshMissionData, refreshMmList, refreshMissionSubmissions])
+  }, [refreshTables, refreshMissionData, refreshMmList, refreshMissionSubmissions])
 
   const mcAlreadyDone = useMemo(() => {
     if (!mcTableId || !mcMissionId) return false
@@ -218,6 +246,195 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 px-4 py-6 md:px-6">
       <div className="mx-auto w-full max-w-5xl">
+        <section className="mb-8 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              Tables
+            </h2>
+            <button
+              type="button"
+              onClick={() => void refreshTables()}
+              disabled={ttLoading}
+              className="rounded border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-xs text-zinc-600 dark:text-zinc-400 disabled:opacity-50"
+            >
+              Refresh
+            </button>
+          </div>
+          <p className="text-xs text-zinc-500">
+            Create and edit teams/tables. Names must be unique.
+          </p>
+          {ttError && (
+            <p className="mt-2 text-xs text-red-600 dark:text-red-400" role="alert">
+              {ttError}
+            </p>
+          )}
+          {ttSuccess && (
+            <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400" role="status">
+              {ttSuccess}
+            </p>
+          )}
+          <div className="mt-3 rounded border border-zinc-200 dark:border-zinc-700 p-3">
+            <p className="mb-2 text-xs font-medium text-zinc-500">New table</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <input
+                placeholder="Name"
+                value={ttCreate.name}
+                onChange={(e) => {
+                  setTtCreate((s) => ({ ...s, name: e.target.value }))
+                  setTtError(null)
+                  setTtSuccess(null)
+                }}
+                className="min-w-[120px] rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 py-1.5 text-sm"
+              />
+              <input
+                placeholder="Color (e.g. #3b82f6)"
+                value={ttCreate.color}
+                onChange={(e) => {
+                  setTtCreate((s) => ({ ...s, color: e.target.value }))
+                  setTtError(null)
+                  setTtSuccess(null)
+                }}
+                className="w-28 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 py-1.5 text-sm"
+              />
+              <label className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={ttCreate.is_active}
+                  onChange={(e) =>
+                    setTtCreate((s) => ({ ...s, is_active: e.target.checked }))
+                  }
+                />
+                Active
+              </label>
+              <button
+                type="button"
+                disabled={ttCreating || !ttCreate.name.trim()}
+                onClick={async () => {
+                  setTtError(null)
+                  setTtSuccess(null)
+                  setTtCreating(true)
+                  try {
+                    await createTable({
+                      name: ttCreate.name.trim(),
+                      color: ttCreate.color.trim() || null,
+                      is_active: ttCreate.is_active,
+                    })
+                    setTtSuccess('Table created.')
+                    setTtCreate({ name: '', color: '', is_active: true })
+                    await refreshTables()
+                    await refreshMissionData()
+                  } catch (e) {
+                    setTtError(e instanceof Error ? e.message : 'Failed to create table.')
+                  } finally {
+                    setTtCreating(false)
+                  }
+                }}
+                className="rounded bg-zinc-900 dark:bg-zinc-100 px-3 py-1.5 text-xs font-medium text-white dark:text-zinc-900 disabled:opacity-50"
+              >
+                {ttCreating ? 'Saving…' : 'Create'}
+              </button>
+            </div>
+          </div>
+          {ttLoading && (
+            <p className="mt-3 text-xs text-zinc-500">Loading tables…</p>
+          )}
+          {!ttLoading && ttTables.length === 0 && (
+            <p className="mt-3 text-xs text-zinc-500">No tables yet. Create one above.</p>
+          )}
+          {!ttLoading && ttTables.length > 0 && (
+            <ul className="mt-3 space-y-1.5">
+              {ttTables.map((t) => {
+                const isEditing = ttEditingId === t.id
+                return (
+                  <li
+                    key={t.id}
+                    className="flex flex-wrap items-center gap-2 rounded border border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 px-2 py-1.5 text-sm"
+                  >
+                    {t.color && (
+                      <span
+                        className="h-4 w-4 shrink-0 rounded border border-zinc-200 dark:border-zinc-600"
+                        style={{ backgroundColor: t.color }}
+                        aria-hidden
+                      />
+                    )}
+                    {isEditing ? (
+                      <>
+                        <input
+                          value={ttEditName}
+                          onChange={(e) => setTtEditName(e.target.value)}
+                          className="min-w-[120px] flex-1 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 py-1 text-sm"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          disabled={ttSavingId !== null || !ttEditName.trim()}
+                          onClick={async () => {
+                            if (!ttEditName.trim()) return
+                            setTtError(null)
+                            setTtSuccess(null)
+                            setTtSavingId(t.id)
+                            try {
+                              await updateTable(t.id, { name: ttEditName.trim() })
+                              setTtSuccess('Table updated.')
+                              setTtEditingId(null)
+                              setTtEditName('')
+                              await refreshTables()
+                              await refreshMissionData()
+                            } catch (e) {
+                              setTtError(e instanceof Error ? e.message : 'Failed to update.')
+                            } finally {
+                              setTtSavingId(null)
+                            }
+                          }}
+                          className="rounded bg-emerald-700 px-2 py-1 text-xs text-white disabled:opacity-50"
+                        >
+                          {ttSavingId === t.id ? '…' : 'Save'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTtEditingId(null)
+                            setTtEditName('')
+                            setTtError(null)
+                          }}
+                          className="rounded border border-zinc-300 dark:border-zinc-600 px-2 py-1 text-xs disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                          {t.name}
+                        </span>
+                        {!t.is_active && (
+                          <span className="rounded bg-zinc-200 dark:bg-zinc-700 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-600 dark:text-zinc-300">
+                            Inactive
+                          </span>
+                        )}
+                        <span className="text-zinc-500 text-xs">
+                          {formatDate(t.created_at)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTtEditingId(t.id)
+                            setTtEditName(t.name)
+                            setTtError(null)
+                          }}
+                          className="ml-auto rounded border border-zinc-200 dark:border-zinc-700 px-2 py-0.5 text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        >
+                          Edit
+                        </button>
+                      </>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+
         <section className="mb-8 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">

@@ -267,8 +267,21 @@ export default function DisplayPage() {
                     className={`border-b border-zinc-800/80 pl-1 transition-[filter] duration-300 ${rankRowClass(rank)} ${glow} ${rankLift}`}
                   >
                     <td className={`py-3 pr-2 pl-1 ${rankCellClass(rank)}`}>{rank}</td>
-                    <td className="py-3 pr-2 font-medium text-zinc-200 truncate max-w-[72px] text-sm">
-                      {entry.tableName}
+                    <td className="py-3 pr-2 font-medium text-zinc-200 max-w-[72px] text-sm">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span
+                          className={`h-2.5 w-2.5 shrink-0 rounded-full border border-zinc-600/40 ${
+                            entry.tableColor ? '' : 'bg-zinc-500'
+                          }`}
+                          style={
+                            entry.tableColor
+                              ? { backgroundColor: entry.tableColor }
+                              : undefined
+                          }
+                          aria-hidden
+                        />
+                        <span className="truncate">{entry.tableName}</span>
+                      </span>
                     </td>
                     <td className={`py-3 pr-2 ${pointsCellClass(rank)}`}>
                       <span className="inline-flex items-baseline gap-1">
@@ -316,7 +329,20 @@ export default function DisplayPage() {
                 }`}
               >
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="truncate font-medium text-zinc-300">{item.tableName}</span>
+                  <span className="flex min-w-0 flex-1 items-center gap-1.5 font-medium text-zinc-300">
+                    <span
+                      className={`h-2 w-2 shrink-0 rounded-full border border-zinc-600/40 ${
+                        item.tableColor ? '' : 'bg-zinc-500'
+                      }`}
+                      style={
+                        item.tableColor
+                          ? { backgroundColor: item.tableColor }
+                          : undefined
+                      }
+                      aria-hidden
+                    />
+                    <span className="truncate">{item.tableName}</span>
+                  </span>
                   <span className="shrink-0 tabular-nums font-semibold text-amber-200/90">
                     +{item.points}
                   </span>

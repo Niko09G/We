@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase/client'
 import type { MissionsTableRow } from '@/lib/missions-schema'
 
-export type TableRow = { id: string; name: string }
+export type TableRow = { id: string; name: string; color: string | null }
 /** Subset of missions schema for leaderboard (id, points, title for labels). */
 export type MissionRow = Pick<MissionsTableRow, 'id' | 'points'> & { title?: string | null }
 export type CompletionRow = {
@@ -14,6 +14,7 @@ export type CompletionRow = {
 export type RecentActivityItem = {
   id: string
   tableName: string
+  tableColor: string | null
   missionTitle: string
   points: number
 }
@@ -21,6 +22,8 @@ export type RecentActivityItem = {
 export type LeaderboardEntry = {
   tableId: string
   tableName: string
+  /** Hex like #3b82f6; null → neutral dot on display */
+  tableColor: string | null
   totalPoints: number
   completedCount: number
   remainingCount: number
@@ -28,7 +31,7 @@ export type LeaderboardEntry = {
 
 export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
   const [tablesRes, missionsRes, completionsRes] = await Promise.all([
-    supabase.from('tables').select('id,name').order('name'),
+    supabase.from('tables').select('id,name,color').order('name'),
     supabase.from('missions').select('id,points').order('id'),
     supabase.from('completions').select('id,table_id,mission_id,created_at'),
   ])
@@ -37,7 +40,11 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
   if (missionsRes.error) throw new Error(missionsRes.error.message || 'Failed to load missions.')
   if (completionsRes.error) throw new Error(completionsRes.error.message || 'Failed to load completions.')
 
-  const tables = (tablesRes.data ?? []) as TableRow[]
+  const tables = (tablesRes.data ?? []).map((t) => ({
+    id: t.id as string,
+    name: t.name as string,
+    color: ((t as { color?: string | null }).color as string | null) ?? null,
+  })) as TableRow[]
   const missions = (missionsRes.data ?? []) as MissionRow[]
   const completions = (completionsRes.data ?? []) as CompletionRow[]
 
@@ -59,6 +66,7 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
     return {
       tableId: table.id,
       tableName: table.name,
+      tableColor: table.color,
       totalPoints,
       completedCount,
       remainingCount,
@@ -78,7 +86,7 @@ export async function fetchLeaderboardBundle(
   recentLimit = 3
 ): Promise<{ leaderboard: LeaderboardEntry[]; recentActivity: RecentActivityItem[] }> {
   const [tablesRes, missionsRes, completionsRes] = await Promise.all([
-    supabase.from('tables').select('id,name').order('name'),
+    supabase.from('tables').select('id,name,color').order('name'),
     supabase.from('missions').select('id,points,title').order('title'),
     supabase.from('completions').select('id,table_id,mission_id,created_at'),
   ])
@@ -87,7 +95,11 @@ export async function fetchLeaderboardBundle(
   if (missionsRes.error) throw new Error(missionsRes.error.message || 'Failed to load missions.')
   if (completionsRes.error) throw new Error(completionsRes.error.message || 'Failed to load completions.')
 
-  const tables = (tablesRes.data ?? []) as TableRow[]
+  const tables = (tablesRes.data ?? []).map((t) => ({
+    id: t.id as string,
+    name: t.name as string,
+    color: ((t as { color?: string | null }).color as string | null) ?? null,
+  })) as TableRow[]
   const missions = (missionsRes.data ?? []) as MissionRow[]
   const completions = (completionsRes.data ?? []) as CompletionRow[]
 
@@ -99,7 +111,11 @@ export async function fetchLeaderboardBundle(
   })
 
   const tableName = new Map<string, string>()
-  tables.forEach((t) => tableName.set(t.id, t.name))
+  const tableColor = new Map<string, string | null>()
+  tables.forEach((t) => {
+    tableName.set(t.id, t.name)
+    tableColor.set(t.id, t.color)
+  })
 
   const allMissionIds = new Set(missions.map((m) => m.id))
   const totalMissions = allMissionIds.size
@@ -117,6 +133,7 @@ export async function fetchLeaderboardBundle(
     return {
       tableId: table.id,
       tableName: table.name,
+      tableColor: table.color,
       totalPoints,
       completedCount,
       remainingCount,
@@ -135,6 +152,7 @@ export async function fetchLeaderboardBundle(
   const recentActivity: RecentActivityItem[] = sortedByTime.slice(0, recentLimit).map((c) => ({
     id: c.id,
     tableName: tableName.get(c.table_id) ?? '—',
+    tableColor: tableColor.get(c.table_id) ?? null,
     missionTitle: missionTitle.get(c.mission_id) ?? '—',
     points: missionPoints.get(c.mission_id) ?? 0,
   }))
