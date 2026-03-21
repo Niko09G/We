@@ -563,7 +563,7 @@ export default function MissionsTablePage({
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="h-[min(520px,78vh)] w-[min(78vw,300px)] shrink-0 animate-pulse rounded-3xl"
+                className="h-[min(560px,82vh)] w-[min(300px,78vw)] shrink-0 snap-start animate-pulse rounded-3xl"
                 style={{ background: MISSION_CARD_SKELETON_BACKGROUND }}
               />
             ))}
@@ -610,7 +610,7 @@ export default function MissionsTablePage({
           ) : (
             <div
               ref={carouselRef}
-              className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3 pr-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {missions.map((m, i) => {
                 const st = statusFor(m.id, m)
@@ -625,61 +625,27 @@ export default function MissionsTablePage({
                     type="button"
                     data-mission-card
                     onClick={() => openMissionModal(m.id)}
-                    className="relative flex h-[min(520px,78vh)] w-[min(78vw,300px)] shrink-0 snap-start flex-col overflow-hidden rounded-3xl p-5 text-left transition active:scale-[0.99]"
+                    className="relative flex h-[min(560px,82vh)] w-[min(300px,78vw)] shrink-0 snap-start flex-col overflow-hidden rounded-3xl p-5 text-left transition active:scale-[0.99]"
                     style={{ background: surface }}
                   >
-                    {completed ? (
-                      <span
-                        className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-emerald-600"
-                        aria-hidden
-                      >
-                        <svg
-                          className="h-5 w-5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2.25}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                      </span>
-                    ) : null}
-                    {pending ? (
-                      <span
-                        className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-amber-600"
-                        aria-hidden
-                      >
-                        <svg
-                          className="h-5 w-5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                          />
-                        </svg>
-                      </span>
-                    ) : null}
+                    <span
+                      className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-lg leading-none text-zinc-800"
+                      aria-hidden
+                    >
+                      {completed ? '✓' : pending ? '⏳' : '○'}
+                    </span>
 
                     <h3 className="pr-12 text-left text-lg font-bold leading-snug text-white">
                       {m.title}
                     </h3>
-                    <p className="mt-2 text-left text-sm font-semibold tabular-nums text-white/90">
+                    <p className="mt-2 text-left text-sm font-semibold tabular-nums text-white/95">
                       +{m.points} pts
                     </p>
 
-                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-1 pb-4 pt-6">
+                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-1 pb-6 pt-8">
                       {completed || pending ? (
-                        <span className="rounded-full bg-white/92 px-4 py-1.5 text-center text-xs font-medium text-zinc-800">
-                          {completed ? 'Completed' : 'Under review'}
+                        <span className="rounded-[9999px] bg-white/92 px-4 py-1.5 text-center text-xs font-medium text-zinc-800">
+                          {completed ? 'Completed' : 'Pending review'}
                         </span>
                       ) : null}
                     </div>
