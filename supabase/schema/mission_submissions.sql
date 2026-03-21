@@ -13,12 +13,16 @@ create table if not exists public.mission_submissions (
   submission_type text not null,
   submission_data jsonb,
   created_at timestamptz not null default now(),
+  review_note text,
   approved_at timestamptz,
   constraint mission_submissions_status_check
     check (status in ('pending', 'approved', 'rejected')),
   constraint mission_submissions_submission_type_check
     check (submission_type in ('signature', 'photo', 'manual'))
 );
+
+alter table public.mission_submissions
+  add column if not exists review_note text;
 
 create index if not exists mission_submissions_table_id on public.mission_submissions(table_id);
 create index if not exists mission_submissions_mission_id on public.mission_submissions(mission_id);

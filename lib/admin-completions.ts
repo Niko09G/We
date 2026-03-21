@@ -17,7 +17,11 @@ export async function fetchAdminMissionData(): Promise<{
   completions: AdminCompletion[]
 }> {
   const [tablesRes, completionsRes, missionsRes] = await Promise.all([
-    supabase.from('tables').select('id,name').order('name'),
+    supabase
+      .from('tables')
+      .select('id,name')
+      .eq('is_archived', false)
+      .order('name'),
     supabase
       .from('completions')
       .select('id,table_id,mission_id,created_at')
@@ -46,5 +50,19 @@ export async function insertCompletion(tableId: string, missionId: string): Prom
       throw new Error('This mission is already completed for that table.')
     }
     throw new Error(error.message || 'Failed to record completion.')
+  }
+}
+
+export async function deleteCompletion(tableId: string, missionId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('completions')
+    .delete()
+    .eq('table_id', tableId)
+    .eq('mission_id', missionId)
+    .select('id')
+
+  if (error) throw new Error(error.message || 'Failed to reset completion.')
+  if (!data || data.length === 0) {
+    throw new Error('No completion exists for that table and mission.')
   }
 }

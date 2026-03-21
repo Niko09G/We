@@ -7,6 +7,10 @@ export type GreetingInsert = {
   message: string
   image_url: string
   status: 'ready'
+  source_type?: 'upload' | 'mission'
+  table_id?: string | null
+  table_name?: string | null
+  table_color?: string | null
 }
 
 /**
@@ -42,6 +46,10 @@ export async function insertGreeting(row: GreetingInsert): Promise<void> {
     message: row.message,
     image_url: row.image_url,
     status: row.status,
+    source_type: row.source_type ?? 'upload',
+    table_id: row.table_id ?? null,
+    table_name: row.table_name ?? null,
+    table_color: row.table_color ?? null,
   })
 
   if (error) {

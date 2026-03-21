@@ -9,12 +9,16 @@ export type GreetingRow = {
   image_url: string
   status: string
   created_at: string
+  source_type?: 'upload' | 'mission'
+  table_id?: string | null
+  table_name?: string | null
+  table_color?: string | null
 }
 
 export async function listGreetings(): Promise<GreetingRow[]> {
   const { data, error } = await supabase
     .from('greetings')
-    .select('id,name,message,image_url,status,created_at')
+    .select('id,name,message,image_url,status,created_at,source_type,table_id,table_name,table_color')
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(error.message || 'Failed to load greetings.')
@@ -25,7 +29,7 @@ export async function listGreetings(): Promise<GreetingRow[]> {
 export async function listReadyGreetingsForDisplay(): Promise<GreetingRow[]> {
   const { data, error } = await supabase
     .from('greetings')
-    .select('id,name,message,image_url,status,created_at')
+    .select('id,name,message,image_url,status,created_at,source_type,table_id,table_name,table_color')
     .eq('status', 'ready')
     .order('created_at', { ascending: true })
 
@@ -64,4 +68,14 @@ export async function deleteGreeting(
   if (dbError) throw new Error(dbError.message || 'Failed to delete greeting.')
 
   return storageWarning ? { storageWarning } : {}
+}
+
+export async function deleteMissionGeneratedGreetingsBySubmissionId(
+  missionSubmissionId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('greetings')
+    .delete()
+    .eq('mission_submission_id', missionSubmissionId)
+  if (error) throw new Error(error.message || 'Failed to delete greetings.')
 }

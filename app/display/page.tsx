@@ -8,6 +8,20 @@ const ROTATE_INTERVAL_MS = 10_000
 const POLL_INTERVAL_MS = 20_000
 const LEADERBOARD_POLL_MS = 12_000
 
+/** Very subtle row tint from team hex (left accent is main signal). */
+function teamColorTint(hex: string | null): string | null {
+  if (!hex?.trim()) return null
+  const h = hex.trim().replace('#', '')
+  if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(h)) return null
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+  const r = parseInt(full.slice(0, 2), 16)
+  const g = parseInt(full.slice(2, 4), 16)
+  const b = parseInt(full.slice(4, 6), 16)
+  return `rgba(${r},${g},${b},0.04)`
+}
+
+const MEDALS = ['🥇', '🥈', '🥉'] as const
+
 function ImageWithFallback({
   src,
   alt,
@@ -188,32 +202,29 @@ export default function DisplayPage() {
     el.requestFullscreen?.()
   }, [])
 
-  const rankRowClass = (rank: number) => {
-    if (rank === 1)
-      return 'border-l-2 border-l-amber-500/60 bg-gradient-to-r from-amber-950/35 to-transparent'
-    if (rank === 2)
-      return 'border-l-2 border-l-zinc-400/50 bg-gradient-to-r from-zinc-800/40 to-transparent'
-    if (rank === 3)
-      return 'border-l-2 border-l-orange-900/50 bg-gradient-to-r from-orange-950/25 to-transparent'
-    return ''
-  }
+  /** Strong left accent from team color; neutral when no color. */
+  const rowLeftBorderStyle = (tableColor: string | null): { borderLeftColor: string } | undefined =>
+    tableColor?.trim() && /^#?[0-9a-fA-F]{3,6}$/.test(tableColor.trim())
+      ? { borderLeftColor: tableColor.trim().startsWith('#') ? tableColor.trim() : `#${tableColor.trim()}` }
+      : undefined
 
   const rankCellClass = (rank: number) => {
-    if (rank === 1) return 'font-mono text-base font-semibold text-amber-200/95'
-    if (rank === 2) return 'font-mono text-base font-medium text-zinc-300'
-    if (rank === 3) return 'font-mono text-base font-medium text-orange-200/80'
-    return 'font-mono text-zinc-600'
+    if (rank === 1) return 'font-mono text-base font-semibold text-amber-100'
+    if (rank === 2) return 'font-mono text-base font-medium text-zinc-200'
+    if (rank === 3) return 'font-mono text-base font-medium text-orange-100/90'
+    return 'font-mono text-zinc-500'
   }
 
   const pointsCellClass = (rank: number) => {
-    if (rank <= 3) return 'text-xl font-bold tabular-nums text-white tracking-tight'
+    if (rank === 1) return 'text-2xl font-bold tabular-nums text-white tracking-tight'
+    if (rank <= 3) return 'text-xl font-bold tabular-nums text-zinc-50 tracking-tight'
     return 'text-base font-semibold tabular-nums text-zinc-200'
   }
 
   const LeaderboardPanel = ({ showFullscreenButton = true }: { showFullscreenButton?: boolean }) => (
     <aside className="flex flex-1 min-w-0 flex-col min-h-0 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-6">
       <div className="flex items-center justify-between shrink-0">
-        <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">
+        <h2 className="text-lg font-semibold tracking-tight text-white">
           Leaderboard
         </h2>
         {showFullscreenButton && !isFullscreen && (
@@ -261,25 +272,37 @@ export default function DisplayPage() {
                 const anim = rowAnim[entry.tableId]
                 const glow = anim?.delta != null ? 'animate-[lbRowGlow_1.4s_ease-out]' : ''
                 const rankLift = anim?.rankUp ? 'animate-[lbRankLift_1.15s_ease-out]' : ''
+                const tint = teamColorTint(entry.tableColor)
+                const leftBorderStyle = rowLeftBorderStyle(entry.tableColor)
+                const rowStyle = {
+                  ...(tint && { backgroundColor: tint }),
+                  ...leftBorderStyle,
+                }
                 return (
                   <tr
                     key={entry.tableId}
-                    className={`border-b border-zinc-800/80 pl-1 transition-[filter] duration-300 ${rankRowClass(rank)} ${glow} ${rankLift}`}
+                    style={Object.keys(rowStyle).length ? rowStyle : undefined}
+                    className={`border-b border-zinc-800/80 border-l-4 pl-1 transition-[filter] duration-300 ${
+                      leftBorderStyle ? '' : 'border-l-zinc-500/70'
+                    } ${glow} ${rankLift}`}
                   >
-                    <td className={`py-3 pr-2 pl-1 ${rankCellClass(rank)}`}>{rank}</td>
+                    <td className={`py-3 pr-2 pl-1 ${rankCellClass(rank)}`}>
+                      <span className="inline-flex items-center gap-1.5 tabular-nums">
+                        {rank <= 3 && (
+                          <span
+                            className={`select-none leading-none ${
+                              rank === 1 ? 'text-lg' : 'text-base'
+                            }`}
+                            aria-hidden
+                          >
+                            {MEDALS[rank - 1]}
+                          </span>
+                        )}
+                        <span>{rank}</span>
+                      </span>
+                    </td>
                     <td className="py-3 pr-2 font-medium text-zinc-200 max-w-[72px] text-sm">
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        <span
-                          className={`h-2.5 w-2.5 shrink-0 rounded-full border border-zinc-600/40 ${
-                            entry.tableColor ? '' : 'bg-zinc-500'
-                          }`}
-                          style={
-                            entry.tableColor
-                              ? { backgroundColor: entry.tableColor }
-                              : undefined
-                          }
-                          aria-hidden
-                        />
+                      <span className="flex min-w-0 items-center">
                         <span className="truncate">{entry.tableName}</span>
                       </span>
                     </td>
@@ -329,19 +352,8 @@ export default function DisplayPage() {
                 }`}
               >
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="flex min-w-0 flex-1 items-center gap-1.5 font-medium text-zinc-300">
-                    <span
-                      className={`h-2 w-2 shrink-0 rounded-full border border-zinc-600/40 ${
-                        item.tableColor ? '' : 'bg-zinc-500'
-                      }`}
-                      style={
-                        item.tableColor
-                          ? { backgroundColor: item.tableColor }
-                          : undefined
-                      }
-                      aria-hidden
-                    />
-                    <span className="truncate">{item.tableName}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium text-zinc-300">
+                    {item.tableName}
                   </span>
                   <span className="shrink-0 tabular-nums font-semibold text-amber-200/90">
                     +{item.points}
@@ -408,13 +420,29 @@ export default function DisplayPage() {
                     'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.78) 20%, rgba(0,0,0,0.45) 45%, transparent 100%)',
                 }}
               />
-              <div className="absolute inset-0 flex flex-col justify-end pb-[16%] px-[7%]">
+              <div
+                key={currentIndex}
+                className="absolute inset-0 flex flex-col justify-end pb-[16%] px-[7%] animate-[greetingTextIn_0.55s_ease-out]"
+              >
                 <p className="max-w-2xl text-2xl font-medium leading-loose text-white whitespace-pre-wrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] md:text-3xl lg:text-4xl">
                   {greetings[currentIndex].message}
                 </p>
-                <p className="mt-4 text-sm text-white/60 tracking-wide">
-                  — {greetings[currentIndex].name?.trim() || 'Anonymous'}
-                </p>
+                {greetings[currentIndex].source_type === 'mission' ? (
+                  <div className="mt-4 inline-flex items-center gap-2">
+                    <span
+                      className="h-2.5 w-2.5 rounded-full border border-white/20"
+                      style={{ backgroundColor: greetings[currentIndex].table_color || '#71717a' }}
+                      aria-hidden
+                    />
+                    <p className="text-sm text-white/70 tracking-wide">
+                      — {greetings[currentIndex].table_name?.trim() || greetings[currentIndex].name?.trim() || 'Table'}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-4 text-sm text-white/60 tracking-wide">
+                    — {greetings[currentIndex].name?.trim() || 'Anonymous'}
+                  </p>
+                )}
               </div>
             </div>
           </>

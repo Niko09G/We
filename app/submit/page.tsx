@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { compressImage } from '@/lib/image-compress'
 import {
@@ -10,6 +12,7 @@ import {
   type SubmitTable,
   type SubmitMission,
 } from '@/lib/mission-submissions'
+import { getMissionsEnabled } from '@/lib/app-settings'
 import {
   missionValidationTypeLabel,
   submissionTypeFromMissionValidation,
@@ -23,9 +26,11 @@ function isAcceptedImageFile(file: File): boolean {
 }
 
 export default function SubmitPage() {
+  const router = useRouter()
   const [tables, setTables] = useState<SubmitTable[]>([])
   const [missions, setMissions] = useState<SubmitMission[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [missionsEnabled, setMissionsEnabled] = useState<boolean | null>(null)
 
   const [tableId, setTableId] = useState('')
   const [missionId, setMissionId] = useState('')
@@ -41,6 +46,30 @@ export default function SubmitPage() {
     let cancelled = false
     ;(async () => {
       try {
+        const enabled = await getMissionsEnabled()
+        if (!cancelled) setMissionsEnabled(enabled)
+      } catch {
+        if (!cancelled) setMissionsEnabled(true)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (missionsEnabled === true) {
+      router.replace('/missions')
+    }
+  }, [missionsEnabled, router])
+
+  useEffect(() => {
+    if (missionsEnabled === false) return
+
+    let cancelled = false
+    ;(async () => {
+      try {
         const [t, m] = await Promise.all([
           listTablesForSubmit(),
           listActiveMissionsForSubmit(),
@@ -52,14 +81,17 @@ export default function SubmitPage() {
         }
       } catch (e) {
         if (!cancelled) {
-          setLoadError(e instanceof Error ? e.message : 'Failed to load form.')
+          setLoadError(
+            e instanceof Error ? e.message : 'Failed to load form.'
+          )
         }
       }
     })()
+
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [missionsEnabled])
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const chosen = e.target.files?.[0]
@@ -96,6 +128,7 @@ export default function SubmitPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!tableId || !missionId || submitting) return
+    if (missionsEnabled !== true) return
 
     setSubmitting(true)
     setSubmitError(null)
@@ -137,11 +170,16 @@ export default function SubmitPage() {
   }
 
   const canSubmit = Boolean(
-    tableId && missionId && !submitting && !loadError && !success
+    tableId &&
+      missionId &&
+      !submitting &&
+      !loadError &&
+      !success &&
+      missionsEnabled === true
   )
 
   const selectedMission = missions.find((m) => m.id === missionId)
-  const validationType = selectedMission?.validation_type ?? 'manual'
+  const validationType = selectedMission?.validation_type ?? 'photo'
 
   return (
     <main className="mx-auto max-w-md px-4 py-10">
@@ -149,6 +187,23 @@ export default function SubmitPage() {
       <p className="mt-1 text-sm text-zinc-600">
         Choose your table and mission. Your submission stays pending until an admin approves it.
       </p>
+
+      {missionsEnabled === false && (
+        <div className="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2">
+          <p className="text-sm font-medium text-amber-900">Opening soon</p>
+          <p className="mt-0.5 text-xs text-amber-900/80">
+            Missions are paused until the event starts.
+          </p>
+          <div className="mt-2">
+            <Link
+              href="/play"
+              className="text-xs font-medium text-amber-900 underline hover:no-underline"
+            >
+              Back to hub
+            </Link>
+          </div>
+        </div>
+      )}
 
       {loadError && (
         <p className="mt-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
@@ -169,7 +224,7 @@ export default function SubmitPage() {
               setTableId(e.target.value)
               setSuccess(false)
             }}
-            disabled={!!loadError || tables.length === 0}
+            disabled={missionsEnabled !== true || !!loadError || tables.length === 0}
           >
             <option value="">Select table…</option>
             {tables.map((t) => (
@@ -195,7 +250,7 @@ export default function SubmitPage() {
               setMissionId(nextId)
               setSuccess(false)
             }}
-            disabled={!!loadError || missions.length === 0}
+            disabled={missionsEnabled !== true || !!loadError || missions.length === 0}
           >
             <option value="">Select mission…</option>
             {missions.map((m) => (
@@ -216,10 +271,10 @@ export default function SubmitPage() {
                 <> — upload a photo if you have one; an admin will verify.</>
               )}
               {validationType === 'signature' && (
-                <> — submit to request review (signature confirmation coming later).</>
+                <> — submit to request review (signature confirmation).</>
               )}
-              {validationType === 'manual' && (
-                <> — an admin will confirm your table completed this mission.</>
+              {validationType === 'video' && (
+                <> — upload a video for admin review.</>
               )}
             </p>
           )}
@@ -236,7 +291,7 @@ export default function SubmitPage() {
               accept={ACCEPT_IMAGES}
               onChange={handleFileChange}
               className="mt-1 block w-full text-sm text-zinc-600"
-              disabled={submitting}
+              disabled={submitting || missionsEnabled !== true}
             />
             {previewUrl && (
               <div className="mt-2">

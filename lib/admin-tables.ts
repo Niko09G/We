@@ -5,37 +5,65 @@ export type AdminTableRow = {
   name: string
   color: string | null
   is_active: boolean
+  is_archived: boolean
+  archived_at: string | null
   created_at: string
+  /** Max seats for seating planner (per-table seat numbers 1..capacity). */
+  capacity: number
 }
 
 export async function listTablesForAdmin(): Promise<AdminTableRow[]> {
   const { data, error } = await supabase
     .from('tables')
-    .select('id, name, color, is_active, created_at')
+    .select(
+      'id, name, color, is_active, is_archived, archived_at, created_at, capacity'
+    )
+    .order('is_archived', { ascending: true })
     .order('name')
 
   if (error) throw new Error(error.message || 'Failed to load tables.')
-  return (data ?? []).map((row) => ({
-    id: row.id as string,
-    name: (row.name as string) ?? '',
-    color: (row.color as string | null) ?? null,
-    is_active: (row.is_active as boolean) ?? true,
-    created_at: (row.created_at as string) ?? new Date().toISOString(),
-  }))
+  return (data ?? []).map((row) => {
+    const r = row as Record<string, unknown>
+    const cap = r.capacity
+    const capacity =
+      typeof cap === 'number' && Number.isFinite(cap) && cap >= 1
+        ? Math.trunc(cap)
+        : 10
+    return {
+      id: row.id as string,
+      name: (row.name as string) ?? '',
+      color: (row.color as string | null) ?? null,
+      is_active: (row.is_active as boolean) ?? true,
+      is_archived: (row as { is_archived?: boolean }).is_archived ?? false,
+      archived_at:
+        ((row as { archived_at?: string | null }).archived_at as string | null) ??
+        null,
+      created_at: (row.created_at as string) ?? new Date().toISOString(),
+      capacity,
+    }
+  })
 }
 
 export async function createTable(input: {
   name: string
   color?: string | null
   is_active?: boolean
+  capacity?: number
 }): Promise<void> {
   const name = input.name.trim()
   if (!name) throw new Error('Table name is required.')
+  const cap =
+    input.capacity !== undefined && Number.isFinite(input.capacity)
+      ? Math.max(1, Math.trunc(input.capacity))
+      : 10
 
   const { error } = await supabase.from('tables').insert({
     name,
     color: input.color?.trim() || null,
     is_active: input.is_active ?? true,
+    is_archived: false,
+    archived_at: null,
+    capacity: cap,
   })
 
   if (error) {
@@ -47,12 +75,21 @@ export async function createTable(input: {
 
 export async function updateTable(
   id: string,
-  patch: { name?: string; color?: string | null; is_active?: boolean }
+  patch: {
+    name?: string
+    color?: string | null
+    is_active?: boolean
+    capacity?: number
+  }
 ): Promise<void> {
   const row: Record<string, unknown> = {}
   if (patch.name !== undefined) row.name = patch.name.trim()
   if (patch.color !== undefined) row.color = patch.color?.trim() || null
   if (patch.is_active !== undefined) row.is_active = patch.is_active
+  if (patch.capacity !== undefined) {
+    const c = Math.max(1, Math.trunc(patch.capacity))
+    row.capacity = c
+  }
   if (Object.keys(row).length === 0) return
 
   const { error } = await supabase.from('tables').update(row).eq('id', id)
@@ -62,4 +99,34 @@ export async function updateTable(
       throw new Error('A table with this name already exists.')
     throw new Error(error.message || 'Failed to update table.')
   }
+}
+
+/** Soft-delete: hide from guests/scoreboard; keep all related rows. */
+export async function archiveTable(id: string): Promise<void> {
+  const now = new Date().toISOString()
+  const { error } = await supabase
+    .from('tables')
+    .update({ is_archived: true, archived_at: now })
+    .eq('id', id)
+    .eq('is_archived', false)
+
+  if (error) throw new Error(error.message || 'Failed to archive table.')
+}
+
+export async function restoreTable(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('tables')
+    .update({ is_archived: false, archived_at: null })
+    .eq('id', id)
+
+  if (error) throw new Error(error.message || 'Failed to restore table.')
+}
+
+/**
+ * Hard delete: removes the table row. DB FKs cascade to completions, mission_assignments,
+ * mission_submissions. Greetings keep snapshot text; table_id may be set null per schema.
+ */
+export async function permanentlyDeleteTable(id: string): Promise<void> {
+  const { error } = await supabase.from('tables').delete().eq('id', id)
+  if (error) throw new Error(error.message || 'Failed to delete table.')
 }
