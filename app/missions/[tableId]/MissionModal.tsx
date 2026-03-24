@@ -18,6 +18,7 @@ import {
   type SubmissionType,
 } from '@/lib/mission-submissions'
 import {
+  effectiveMaxSubmissionsPerTable,
   isRepeatableAutoMission,
 } from '@/lib/mission-limits'
 import {
@@ -38,7 +39,10 @@ import {
 import {
   COIN_SIZE,
   MISSION_INPUT_CLASS,
+  MISSION_OVERLAY_CTA_BAR_PAD,
   MISSION_PRIMARY_CTA_CLASS,
+  MISSION_SIGNATURE_TEXT,
+  MISSION_SIGNATURE_TINT_BG,
 } from '@/lib/mission-ui'
 
 type RewardFlightCoin = {
@@ -105,6 +109,8 @@ type Props = {
   onClose: () => void
   onSuccess: () => void
   rewardHud?: MissionRewardHud
+  /** Next rank emblem for “complete to reach” — announcement only; HUD stays on current rank. */
+  nextRankEmblemUrl?: string | null
   /** Optional emblem URLs; placeholders when null (see `guest_emblems` app_settings, future). */
   hudEmblems?: Partial<GuestMissionHudEmblems>
   resetSignal?: number
@@ -121,7 +127,7 @@ export function MissionModal({
   isCompleted,
   isRejected,
   rejectedNote: _rejectedNote,
-  submissionSlotsUsed: _submissionSlotsUsed = 0,
+  submissionSlotsUsed = 0,
   atSubmissionLimit = false,
   existingPhotoUrl: _existingPhotoUrl,
   missionsEnabled,
@@ -131,6 +137,7 @@ export function MissionModal({
   onClose,
   onSuccess,
   rewardHud,
+  nextRankEmblemUrl = null,
   hudEmblems: hudEmblemsProp,
   resetSignal = 0,
   overlayVariant = 'missions-section',
@@ -163,7 +170,7 @@ export function MissionModal({
   const [rewardFlightActive, setRewardFlightActive] = useState(false)
   const [rewardAbsorbing, setRewardAbsorbing] = useState(false)
   const [rewardCounterValue, setRewardCounterValue] = useState<number | null>(null)
-  const [rewardClaimedText, setRewardClaimedText] = useState<string | null>(null)
+  const [rewardClaimSummaryVisible, setRewardClaimSummaryVisible] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const claimRewardBtnRef = useRef<HTMLButtonElement>(null)
@@ -216,7 +223,7 @@ export function MissionModal({
     setRewardFlightActive(false)
     setRewardAbsorbing(false)
     setRewardCounterValue(null)
-    setRewardClaimedText(null)
+    setRewardClaimSummaryVisible(false)
     signaturePadRef.current?.clear()
     if (fileInputRef.current) fileInputRef.current.value = ''
     if (videoInputRef.current) videoInputRef.current.value = ''
@@ -245,7 +252,7 @@ export function MissionModal({
     setRewardFlightActive(false)
     setRewardAbsorbing(false)
     setRewardCounterValue(null)
-    setRewardClaimedText(null)
+    setRewardClaimSummaryVisible(false)
     signaturePadRef.current?.clear()
     if (fileInputRef.current) fileInputRef.current.value = ''
     if (videoInputRef.current) videoInputRef.current.value = ''
@@ -414,12 +421,10 @@ export function MissionModal({
 
   const cardBodyScrollClass =
     'min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] pl-[10px] pr-3 pb-6 pt-2 sm:pr-4 sm:pb-8 sm:pt-2.5'
-  const cardCtaBarClass =
-    'shrink-0 bg-white px-3 pb-[max(1.1rem,calc(env(safe-area-inset-bottom)+0.55rem))] pt-3.5 sm:px-4'
+  const cardCtaBarClass = `shrink-0 bg-white ${MISSION_OVERLAY_CTA_BAR_PAD}`
 
   /** Primary action pinned to bottom of card while content scrolls (guest flows). */
-  const cardStickyCtaClass =
-    'sticky bottom-0 z-10 mt-5 -mx-3 bg-white px-3 pb-[max(1.1rem,calc(env(safe-area-inset-bottom)+0.55rem))] pt-3.5 sm:-mx-4 sm:px-4'
+  const cardStickyCtaClass = `sticky bottom-0 z-10 mt-5 -mx-3 bg-white ${MISSION_OVERLAY_CTA_BAR_PAD} sm:-mx-4`
 
   const inActiveMissionForm =
     missionsEnabled && !completed && !pending && !atSubmissionLimit
@@ -451,6 +456,18 @@ export function MissionModal({
     Number(mission.points) || Number(rewardHud?.missionRewardPoints) || 0
   )
   const isPendingState = pending && !success
+  const maxSubmissionsCap = effectiveMaxSubmissionsPerTable({
+    max_submissions_per_table: mission.max_submissions_per_table,
+    allow_multiple_submissions: mission.allow_multiple_submissions,
+  })
+  const attemptsRightText =
+    maxSubmissionsCap == null
+      ? 'Unlimited'
+      : `${Math.min(submissionSlotsUsed, maxSubmissionsCap)} / ${maxSubmissionsCap} attempts`
+  const showRankUpTeaser =
+    Boolean(rewardHud?.missionCouldReachNextRank) &&
+    rewardHud?.nextRankTarget != null &&
+    (typeof nextRankEmblemUrl === 'string' && nextRankEmblemUrl.trim().length > 0)
 
   async function runRewardClaimAnimation() {
     if (!rewardHud) return
@@ -460,7 +477,7 @@ export function MissionModal({
     if (!from || !to || animationAltIcons.length === 0) {
       const target = rewardHud.teamPoints + rewardHud.missionRewardPoints
       setRewardCounterValue(target)
-      setRewardClaimedText(`Mission completed (+${rewardAmount} coins)`)
+      setRewardClaimSummaryVisible(true)
       return
     }
 
@@ -520,7 +537,7 @@ export function MissionModal({
       setRewardFlightActive(false)
       setRewardAbsorbing(false)
       setRewardCounterValue(base + gain)
-      setRewardClaimedText(`Mission completed (+${rewardAmount} coins)`)
+      setRewardClaimSummaryVisible(true)
     }, 760)
   }
 
@@ -530,10 +547,11 @@ export function MissionModal({
 
   function renderPrimaryCta(defaultLabel: string) {
     if (success && rewardHud) {
-      if (rewardClaimedText) {
+      if (rewardClaimSummaryVisible) {
         return (
-          <div className="w-full rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-[0.92rem] font-medium text-emerald-800">
-            {rewardClaimedText}
+          <div className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-200/80 bg-emerald-50 px-4 py-3 text-center text-[0.92rem] font-medium text-emerald-800">
+            <span>✓ Mission completed (+{rewardAmount})</span>
+            <RewardUnitIcon size={COIN_SIZE} />
           </div>
         )
       }
@@ -543,7 +561,7 @@ export function MissionModal({
           type="button"
           onClick={() => void runRewardClaimAnimation()}
           disabled={rewardFlightActive}
-          className={`inline-flex items-center justify-center gap-1.5 ${MISSION_PRIMARY_CTA_CLASS}`}
+          className={MISSION_PRIMARY_CTA_CLASS}
         >
           {rewardFlightActive ? 'Claiming…' : `Claim +${rewardHud.missionRewardPoints}`}
           <RewardUnitIcon size={COIN_SIZE} />
@@ -701,11 +719,10 @@ export function MissionModal({
                           <span
                             ref={missionOverlayRewardHeadlineRef}
                             data-mission-overlay-reward-headline
-                            className={`inline-flex items-center tabular-nums leading-none text-emerald-400/85 ${hudGradientStatsClass}`}
+                            className={`inline-flex items-center gap-0.5 tabular-nums leading-none text-emerald-400/85 ${hudGradientStatsClass}`}
                           >
-                            <span data-mission-overlay-reward-amount>
-                              (+{rewardAmount} coins)
-                            </span>
+                            <span data-mission-overlay-reward-amount>(+{rewardAmount})</span>
+                            <RewardUnitIcon size={COIN_SIZE} />
                           </span>
                         ) : null}
                       </div>
@@ -733,22 +750,62 @@ export function MissionModal({
 
               {rewardHud ? (
                 <div className="relative shrink-0 bg-white px-4 pb-3 pt-3.5 sm:px-5 sm:pb-3.5 sm:pt-4">
-                  <div
-                    className={`rounded-lg px-3 py-2 text-[0.9rem] font-medium ${
-                      completed || atSubmissionLimit
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : isPendingState
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-[#6231fb] text-white'
-                    }`}
-                    data-mission-overlay-announcement
-                  >
-                    {completed || atSubmissionLimit
-                      ? `✓ Mission completed (+${rewardAmount} coins)`
-                      : isPendingState
-                        ? `Pending review (+${rewardAmount} coins)`
-                        : `Awards +${rewardAmount} coins`}
-                  </div>
+                  {completed || atSubmissionLimit ? (
+                    <div
+                      className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-[0.9rem] font-medium text-emerald-800"
+                      data-mission-overlay-announcement
+                    >
+                      <span>✓ Mission completed (+{rewardAmount})</span>
+                      <RewardUnitIcon size={COIN_SIZE} />
+                    </div>
+                  ) : isPendingState ? (
+                    <div
+                      className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[0.9rem] font-medium text-amber-800"
+                      data-mission-overlay-announcement
+                    >
+                      <span className="inline-flex min-w-0 items-center gap-1">
+                        <span className="truncate">
+                          Pending review (+{rewardAmount})
+                        </span>
+                        <RewardUnitIcon size={COIN_SIZE} className="shrink-0" />
+                      </span>
+                      <span className="text-right text-[0.78rem] font-medium tracking-tight text-amber-800/85 sm:text-[0.82rem]">
+                        {attemptsRightText}
+                      </span>
+                    </div>
+                  ) : (
+                    <div data-mission-overlay-announcement>
+                      <div
+                        className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-lg px-3 py-2 text-[0.9rem] font-medium"
+                        style={{
+                          backgroundColor: MISSION_SIGNATURE_TINT_BG,
+                          color: MISSION_SIGNATURE_TEXT,
+                        }}
+                      >
+                        <span className="inline-flex min-w-0 items-center gap-1">
+                          <span className="truncate">Grants +{rewardAmount}</span>
+                          <RewardUnitIcon size={COIN_SIZE} className="shrink-0" />
+                        </span>
+                        <span
+                          className="text-right text-[0.78rem] font-medium tracking-tight opacity-90 sm:text-[0.82rem]"
+                          style={{ color: MISSION_SIGNATURE_TEXT }}
+                        >
+                          {attemptsRightText}
+                        </span>
+                      </div>
+                      {showRankUpTeaser ? (
+                        <p className="mt-2 flex items-center justify-center gap-2 text-center text-[0.8rem] font-medium text-zinc-600">
+                          <span>Complete this to reach</span>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={nextRankEmblemUrl!.trim()}
+                            alt=""
+                            className="h-7 w-7 shrink-0 rounded object-contain"
+                          />
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               ) : null}
 
@@ -877,7 +934,14 @@ export function MissionModal({
                     </p>
                   </div>
                   <div className={cardStickyCtaClass}>
-                    <p className="mb-2 text-center text-[0.78rem] font-normal italic leading-relaxed text-zinc-500">
+                    <div
+                      className="mx-auto mb-3 h-px w-full max-w-[18rem]"
+                      style={{
+                        background:
+                          'linear-gradient(to right, transparent, rgba(161,161,170,0.7), transparent)',
+                      }}
+                    />
+                    <p className="mb-4 text-center text-[0.78rem] font-normal italic leading-relaxed text-zinc-500">
                       JPG/PNG/WebP only, up to {prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.
                     </p>
                     <label
@@ -961,7 +1025,14 @@ export function MissionModal({
                     </p>
                   </div>
                   <div className={cardStickyCtaClass}>
-                    <p className="mb-2 text-center text-[0.78rem] font-normal italic leading-relaxed text-zinc-500">
+                    <div
+                      className="mx-auto mb-3 h-px w-full max-w-[18rem]"
+                      style={{
+                        background:
+                          'linear-gradient(to right, transparent, rgba(161,161,170,0.7), transparent)',
+                      }}
+                    />
+                    <p className="mb-4 text-center text-[0.78rem] font-normal italic leading-relaxed text-zinc-500">
                       MP4/WEBM only, up to {prettyMb(MAX_VIDEO_UPLOAD_BYTES)}.
                     </p>
                     <label
@@ -1169,7 +1240,7 @@ export function MissionModal({
                         disabled
                         className={MISSION_PRIMARY_CTA_CLASS}
                       >
-                        Done
+                        Awaiting review
                       </button>
                     ) : (
                       <button

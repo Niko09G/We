@@ -715,7 +715,7 @@ export default function MissionsTablePage({
             </h2>
             {missionSectionProgress ? (
               <span
-                className="shrink-0 inline-flex items-center gap-1.5 text-sm font-semibold tabular-nums tracking-tight text-zinc-600"
+                className="shrink-0 inline-flex items-center gap-1.5 text-base font-semibold tabular-nums tracking-tight text-zinc-600"
                 aria-label={`${missionSectionProgress.done} of ${missionSectionProgress.total} missions completed, ${tablePoints} ${rewardUnitCompactLabel(rewardUnit)}`}
               >
                 {missionSectionProgress.done}/{missionSectionProgress.total} completed ·{' '}
@@ -751,14 +751,6 @@ export default function MissionsTablePage({
                       : m.validation_type === 'text'
                         ? '📝'
                         : '💬'
-                const statusTone = completed || limitReached ? 'completed' : pending ? 'pending' : 'available'
-                const announcementLabel =
-                  statusTone === 'completed'
-                    ? `✓ Mission completed (+${rewardAmount} coins)`
-                    : statusTone === 'pending'
-                      ? `Pending review (+${rewardAmount} coins)`
-                      : `Awards +${rewardAmount} coins`
-
                 const isTableGreetingCard = /post a table greeting/i.test(m.title)
                 const isTrumpetStoryCard =
                   /get alex to explain the trumpet story/i.test(m.title)
@@ -808,17 +800,15 @@ export default function MissionsTablePage({
                       </span>
                     </p>
 
-                    <div className="relative z-10 mt-3">
-                      <span
-                        className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-center text-sm font-medium ${
-                          statusTone === 'completed'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : statusTone === 'pending'
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-[#6231fb] text-white'
-                        }`}
-                      >
-                        {announcementLabel}
+                    {pending && !limitReached ? (
+                      <p className="relative z-10 mt-2 text-left text-xs font-medium text-white/90">
+                        Pending review
+                      </p>
+                    ) : null}
+
+                    <div className="relative z-10 mt-auto w-full pt-4">
+                      <span className="flex w-full items-center justify-center rounded-xl bg-white px-4 py-2.5 text-center text-sm font-semibold text-black">
+                        {completed || limitReached ? 'Done' : 'Start mission'}
                       </span>
                     </div>
                   </button>
@@ -991,14 +981,14 @@ export default function MissionsTablePage({
               const isTableGreetingMission = /post a table greeting/i.test(m.title)
               const isTrumpetStoryMission =
                 /get alex to explain the trumpet story/i.test(m.title)
-              const rankForEmblem =
-                missionCouldReachNextRank && nextRankTarget != null
-                  ? nextRankTarget
-                  : tableRank
               const rankEmblemUrl = resolveRankEmblemUrl(
                 guestEmblems,
-                rankForEmblem ?? null
+                tableRank ?? null
               )
+              const nextRankEmblemUrl =
+                missionCouldReachNextRank && nextRankTarget != null
+                  ? resolveRankEmblemUrl(guestEmblems, nextRankTarget)
+                  : null
               const teamEmblemUrl =
                 guestEmblems.team_emblem_by_table_id?.[tableId] ?? null
 
@@ -1046,6 +1036,7 @@ export default function MissionsTablePage({
                     missionCouldReachNextRank,
                     nextRankTarget,
                   }}
+                  nextRankEmblemUrl={nextRankEmblemUrl}
                   hudEmblems={{
                     teamEmblemUrl,
                     rankEmblemUrl,
