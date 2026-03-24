@@ -1,7 +1,8 @@
 /**
  * Per-mission submission caps (per table). Rejected submissions do not count toward the cap.
- * Legacy: when max_submissions_per_table is null in DB but migration not applied,
- * use allow_multiple_submissions (false → 1, true → unlimited).
+ *
+ * **Effective cap:** a positive integer limits pending+approved rows per table; **null means unlimited**
+ * (admin “Max submissions” empty → `null` in DB, same as product unlimited).
  */
 
 export type MissionLimitFields = {
@@ -16,8 +17,7 @@ export function effectiveMaxSubmissionsPerTable(m: MissionLimitFields): number |
     const n = Math.floor(Number(raw))
     if (n >= 1) return n
   }
-  if (m.allow_multiple_submissions === true) return null
-  return 1
+  return null
 }
 
 /** Auto + (unlimited OR multi-slot) → each insert can auto-approve (repeatable greeting flow). */

@@ -1,8 +1,14 @@
 export const COIN_SIZE = 24
 
-/** Signature brand — text + soft tint backgrounds for announcement strips. */
+/** Announcement strips: strong readable text + very light matching tint (same model as emerald completed). */
 export const MISSION_SIGNATURE_TEXT = '#6231fb'
-export const MISSION_SIGNATURE_TINT_BG = 'rgba(98, 49, 251, 0.11)'
+export const MISSION_SIGNATURE_TINT_BG = 'rgba(98, 49, 251, 0.08)'
+/** Orange “pending” theme — matches Tailwind orange-50 / orange-900 family softness. */
+export const MISSION_PENDING_TEXT_CLASS = 'text-orange-950'
+export const MISSION_PENDING_TINT_CLASS = 'bg-orange-50'
+/** Completed reference (Tailwind emerald-50 + emerald-800). */
+export const MISSION_COMPLETED_TEXT_CLASS = 'text-emerald-800'
+export const MISSION_COMPLETED_TINT_CLASS = 'bg-emerald-50'
 
 export const MISSION_PRIMARY_CTA_CLASS =
   'flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-0 bg-black px-4 py-3.5 text-center text-[0.95rem] font-semibold text-white transition active:scale-[0.99] hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-600'

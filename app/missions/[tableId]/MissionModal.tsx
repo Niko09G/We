@@ -38,8 +38,12 @@ import {
 } from '@/lib/guest-emblem-config'
 import {
   COIN_SIZE,
+  MISSION_COMPLETED_TEXT_CLASS,
+  MISSION_COMPLETED_TINT_CLASS,
   MISSION_INPUT_CLASS,
   MISSION_OVERLAY_CTA_BAR_PAD,
+  MISSION_PENDING_TEXT_CLASS,
+  MISSION_PENDING_TINT_CLASS,
   MISSION_PRIMARY_CTA_CLASS,
   MISSION_SIGNATURE_TEXT,
   MISSION_SIGNATURE_TINT_BG,
@@ -421,10 +425,10 @@ export function MissionModal({
 
   const cardBodyScrollClass =
     'min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] pl-[10px] pr-3 pb-6 pt-2 sm:pr-4 sm:pb-8 sm:pt-2.5'
-  const cardCtaBarClass = `shrink-0 bg-white ${MISSION_OVERLAY_CTA_BAR_PAD}`
+  const cardCtaBarClass = `w-full min-w-0 shrink-0 bg-white ${MISSION_OVERLAY_CTA_BAR_PAD}`
 
   /** Primary action pinned to bottom of card while content scrolls (guest flows). */
-  const cardStickyCtaClass = `sticky bottom-0 z-10 mt-5 -mx-3 bg-white ${MISSION_OVERLAY_CTA_BAR_PAD} sm:-mx-4`
+  const cardStickyCtaClass = `sticky bottom-0 z-10 mt-5 w-full min-w-0 -mx-3 bg-white ${MISSION_OVERLAY_CTA_BAR_PAD} sm:-mx-4`
 
   const inActiveMissionForm =
     missionsEnabled && !completed && !pending && !atSubmissionLimit
@@ -752,7 +756,7 @@ export function MissionModal({
                 <div className="relative shrink-0 bg-white px-4 pb-3 pt-3.5 sm:px-5 sm:pb-3.5 sm:pt-4">
                   {completed || atSubmissionLimit ? (
                     <div
-                      className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-[0.9rem] font-medium text-emerald-800"
+                      className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[0.9rem] font-medium ${MISSION_COMPLETED_TINT_CLASS} ${MISSION_COMPLETED_TEXT_CLASS}`}
                       data-mission-overlay-announcement
                     >
                       <span>✓ Mission completed (+{rewardAmount})</span>
@@ -760,7 +764,7 @@ export function MissionModal({
                     </div>
                   ) : isPendingState ? (
                     <div
-                      className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[0.9rem] font-medium text-amber-800"
+                      className={`grid grid-cols-[1fr_auto] items-center gap-2 rounded-lg px-3 py-2 text-[0.9rem] font-medium ${MISSION_PENDING_TINT_CLASS} ${MISSION_PENDING_TEXT_CLASS}`}
                       data-mission-overlay-announcement
                     >
                       <span className="inline-flex min-w-0 items-center gap-1">
@@ -769,7 +773,9 @@ export function MissionModal({
                         </span>
                         <RewardUnitIcon size={COIN_SIZE} className="shrink-0" />
                       </span>
-                      <span className="text-right text-[0.78rem] font-medium tracking-tight text-amber-800/85 sm:text-[0.82rem]">
+                      <span
+                        className={`text-right text-[0.78rem] font-medium tracking-tight sm:text-[0.82rem] opacity-90 ${MISSION_PENDING_TEXT_CLASS}`}
+                      >
                         {attemptsRightText}
                       </span>
                     </div>
@@ -782,12 +788,12 @@ export function MissionModal({
                           color: MISSION_SIGNATURE_TEXT,
                         }}
                       >
-                        <span className="inline-flex min-w-0 items-center gap-1">
+                        <span className="inline-flex min-w-0 items-center gap-1 font-semibold">
                           <span className="truncate">Grants +{rewardAmount}</span>
                           <RewardUnitIcon size={COIN_SIZE} className="shrink-0" />
                         </span>
                         <span
-                          className="text-right text-[0.78rem] font-medium tracking-tight opacity-90 sm:text-[0.82rem]"
+                          className="text-right text-[0.78rem] font-semibold tracking-tight opacity-95 sm:text-[0.82rem]"
                           style={{ color: MISSION_SIGNATURE_TEXT }}
                         >
                           {attemptsRightText}
@@ -921,8 +927,8 @@ export function MissionModal({
               )}
 
               {isPhotoTwoStep && photoStep === 1 && (
-                <div className="motion-safe:animate-[missionStepIn_0.28s_ease-out_both] flex min-h-[12rem] flex-1 flex-col items-center justify-start text-center">
-                  <div className="w-full px-3 pt-7">
+                <div className="motion-safe:animate-[missionStepIn_0.28s_ease-out_both] flex min-h-[12rem] w-full min-w-0 flex-1 flex-col items-stretch justify-start">
+                  <div className="flex w-full flex-col items-center px-3 pt-7 text-center">
                     <h2
                       id="mission-modal-title"
                       className="text-center text-[1.17rem] font-semibold leading-snug text-zinc-900"
@@ -958,7 +964,7 @@ export function MissionModal({
               {isPhotoTwoStep && photoStep === 2 && (
                 <form
                   onSubmit={handleSubmit}
-                  className="motion-safe:animate-[missionStepIn_0.28s_ease-out_both] flex min-h-0 flex-1 flex-col overflow-hidden"
+                  className="motion-safe:animate-[missionStepIn_0.28s_ease-out_both] flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
                 >
                   <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-6 pt-3 sm:pb-8">
                     <h2 className="text-center text-[1.17rem] font-semibold leading-snug text-zinc-900">
@@ -1012,8 +1018,8 @@ export function MissionModal({
               )}
 
               {isVideoTwoStep && videoStep === 1 && (
-                <div className="motion-safe:animate-[missionStepIn_0.28s_ease-out_both] flex min-h-[12rem] flex-1 flex-col items-center justify-start text-center">
-                  <div className="w-full px-3 pt-7">
+                <div className="motion-safe:animate-[missionStepIn_0.28s_ease-out_both] flex min-h-[12rem] w-full min-w-0 flex-1 flex-col items-stretch justify-start">
+                  <div className="flex w-full flex-col items-center px-3 pt-7 text-center">
                     <h2
                       id="mission-modal-title"
                       className="text-center text-[1.17rem] font-semibold leading-snug text-zinc-900"
@@ -1049,7 +1055,7 @@ export function MissionModal({
               {isVideoTwoStep && videoStep === 2 && (
                 <form
                   onSubmit={handleSubmit}
-                  className="motion-safe:animate-[missionStepIn_0.28s_ease-out_both] flex min-h-0 flex-1 flex-col overflow-hidden"
+                  className="motion-safe:animate-[missionStepIn_0.28s_ease-out_both] flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
                 >
                   <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-6 pt-3 sm:pb-8">
                     <h2 className="text-center text-[1.17rem] font-semibold leading-snug text-zinc-900">
@@ -1105,13 +1111,13 @@ export function MissionModal({
               {(submission_type === 'text' || submission_type === 'signature') && (
                 <form
                   onSubmit={handleSubmit}
-                  className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden"
+                  className="mt-4 flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
                 >
                   <div
-                    className={`min-h-0 flex-1 overflow-y-auto ${submission_type === 'signature' ? 'space-y-2' : 'space-y-3'}`}
+                    className={`min-h-0 flex-1 overflow-y-auto text-center ${submission_type === 'signature' ? 'space-y-2' : 'space-y-3'}`}
                   >
                     {submission_type === 'text' && (
-                      <div className="text-left">
+                      <div className="mx-auto w-full max-w-md">
                         <label htmlFor="mission-text-body" className="sr-only">
                           Message
                         </label>
@@ -1132,23 +1138,23 @@ export function MissionModal({
                     )}
 
                     {submission_type === 'signature' && (
-                      <div className="text-left">
+                      <div className="w-full">
                         {mission.target_person_name ? (
-                          <p className="text-zinc-700">
+                          <p className="text-balance text-zinc-700">
                             Sign for:{' '}
                             <span className="font-medium">{mission.target_person_name}</span>
                           </p>
                         ) : null}
                         {mission.submission_hint ? (
                           <p
-                            className={
-                              mission.target_person_name ? 'mt-1 text-zinc-600' : 'text-zinc-600'
-                            }
+                            className={`text-balance text-zinc-600 ${
+                              mission.target_person_name ? 'mt-1' : ''
+                            }`}
                           >
                             {mission.submission_hint}
                           </p>
                         ) : null}
-                        <div className="relative mt-2 w-full">
+                        <div className="relative mx-auto mt-2 w-full max-w-md">
                           {signatureCueVisible ? (
                             <div
                               className="pointer-events-none absolute inset-0 z-[1] flex flex-col items-center justify-center gap-3 pb-5 pt-2 text-zinc-400"
