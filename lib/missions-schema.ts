@@ -1,7 +1,7 @@
 /**
  * Canonical missions table schema. Use only these columns in code; do not use `name`.
  * DB: id, title, description, points, created_at, validation_type, approval_mode, is_active,
- *     add_to_greetings, allow_multiple_submissions, points_per_submission,
+ *     add_to_greetings, allow_multiple_submissions, max_submissions_per_table, points_per_submission,
  *     target_person_name, submission_hint, header_title, header_image_url, message_required
  */
 export type MissionsTableRow = {
@@ -15,6 +15,8 @@ export type MissionsTableRow = {
   is_active: boolean
   add_to_greetings: boolean
   allow_multiple_submissions: boolean
+  /** null = unlimited; 1 = one submission; N = cap (pending+approved per table). */
+  max_submissions_per_table: number | null
   points_per_submission: number | null
   target_person_name: string | null
   submission_hint: string | null

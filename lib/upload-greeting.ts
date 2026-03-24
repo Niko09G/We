@@ -1,6 +1,16 @@
+import { v4 as uuidv4 } from 'uuid'
+
 import { supabase } from '@/lib/supabase/client'
 
 const BUCKET = 'greetings'
+
+function storagePathFromPublicUrl(publicUrl: string): string | null {
+  const marker = '/storage/v1/object/public/greetings/'
+  const idx = publicUrl.indexOf(marker)
+  if (idx === -1) return null
+  const path = publicUrl.slice(idx + marker.length).split('?')[0]
+  return path || null
+}
 
 export type GreetingInsert = {
   name: string | null
@@ -21,7 +31,7 @@ export async function uploadGreetingImage(
   contentType: string
 ): Promise<string> {
   const ext = contentType === 'image/png' ? 'png' : 'jpg'
-  const path = `${crypto.randomUUID()}.${ext}`
+  const path = `${uuidv4()}.${ext}`
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
@@ -55,4 +65,13 @@ export async function insertGreeting(row: GreetingInsert): Promise<void> {
   if (error) {
     throw new Error(error.message || 'Failed to save greeting.')
   }
+}
+
+/** Best-effort cleanup when greeting DB insert fails after upload succeeded. */
+export async function removeGreetingImageByUrl(publicUrl: string | null | undefined): Promise<void> {
+  const url = typeof publicUrl === 'string' ? publicUrl.trim() : ''
+  if (!url) return
+  const path = storagePathFromPublicUrl(url)
+  if (!path) return
+  await supabase.storage.from(BUCKET).remove([path])
 }

@@ -1,3 +1,5 @@
+import { v4 as uuidv4 } from 'uuid'
+
 import { supabase } from '@/lib/supabase/client'
 import type { ParsedAttendeeRow } from '@/lib/attendees-csv'
 import {
@@ -330,7 +332,7 @@ export async function uploadAttendeePhoto(params: {
       : params.contentType === 'image/webp'
         ? 'webp'
         : 'jpg'
-  const path = `${params.attendeeId}/${crypto.randomUUID()}.${ext}`
+  const path = `${params.attendeeId}/${uuidv4()}.${ext}`
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { compressImage } from '@/lib/image-compress'
 import {
+  removeMissionSubmissionUploadByUrl,
   listTablesForSubmit,
   listActiveMissionsForSubmit,
   uploadMissionSubmissionImage,
@@ -14,16 +15,18 @@ import {
 } from '@/lib/mission-submissions'
 import { getMissionsEnabled } from '@/lib/app-settings'
 import {
+  isAcceptedImageType,
+  MAX_IMAGE_UPLOAD_BYTES,
+  prettyMb,
+} from '@/lib/upload-constraints'
+import type { SubmissionType } from '@/lib/mission-submission-core'
+import {
   missionValidationTypeLabel,
   submissionTypeFromMissionValidation,
 } from '@/lib/mission-validation-type'
+import { createClientRequestId } from '@/lib/client-request-id'
 
 const ACCEPT_IMAGES = 'image/jpeg,image/jpg,image/png,image/webp'
-const ACCEPTED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-
-function isAcceptedImageFile(file: File): boolean {
-  return ACCEPTED_TYPES.includes(file.type)
-}
 
 export default function SubmitPage() {
   const router = useRouter()
@@ -36,6 +39,7 @@ export default function SubmitPage() {
   const [missionId, setMissionId] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [textAnswer, setTextAnswer] = useState('')
 
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -96,8 +100,12 @@ export default function SubmitPage() {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const chosen = e.target.files?.[0]
     if (!chosen) return
-    if (!isAcceptedImageFile(chosen)) {
+    if (!isAcceptedImageType(chosen.type)) {
       setSubmitError('Please choose a JPG, PNG, or WebP image.')
+      return
+    }
+    if (chosen.size > MAX_IMAGE_UPLOAD_BYTES) {
+      setSubmitError(`Image is too large. Max ${prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.`)
       return
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl)
@@ -134,9 +142,13 @@ export default function SubmitPage() {
     setSubmitError(null)
     setSuccess(false)
 
+    let uploadedMediaUrl: string | null = null
     try {
       const mission = missions.find((m) => m.id === missionId)
       const submission_type = submissionTypeFromMissionValidation(mission?.validation_type)
+      if (submission_type === 'beatcoin') {
+        throw new Error('Beatcoin missions are claimed by scanning the QR on the coin.')
+      }
 
       let submission_data: Record<string, unknown> | undefined
       if (submission_type === 'photo') {
@@ -144,11 +156,16 @@ export default function SubmitPage() {
         if (file) {
           const { blob, contentType } = await compressImage(file)
           imageUrl = await uploadMissionSubmissionImage(blob, contentType)
+          uploadedMediaUrl = imageUrl
         }
         submission_data = imageUrl != null ? { image_url: imageUrl } : undefined
       } else if (submission_type === 'signature') {
         // Future: signature capture payload; for now empty pending review
         submission_data = undefined
+      } else if (submission_type === 'text') {
+        const t = textAnswer.trim()
+        if (!t) throw new Error('Please enter your response.')
+        submission_data = { text: t }
       } else {
         submission_data = undefined
       }
@@ -156,18 +173,23 @@ export default function SubmitPage() {
       await insertMissionSubmission({
         table_id: tableId,
         mission_id: missionId,
-        submission_type,
+        submission_type: submission_type as Exclude<SubmissionType, 'beatcoin'>,
         submission_data,
+        client_request_id: createClientRequestId(),
       })
 
       setSuccess(true)
       resetFormAfterSuccess()
     } catch (err) {
+      await removeMissionSubmissionUploadByUrl(uploadedMediaUrl)
       setSubmitError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {
       setSubmitting(false)
     }
   }
+
+  const selectedMission = missions.find((m) => m.id === missionId)
+  const validationType = selectedMission?.validation_type ?? 'photo'
 
   const canSubmit = Boolean(
     tableId &&
@@ -175,11 +197,9 @@ export default function SubmitPage() {
       !submitting &&
       !loadError &&
       !success &&
-      missionsEnabled === true
+      missionsEnabled === true &&
+      (validationType !== 'text' || textAnswer.trim().length > 0)
   )
-
-  const selectedMission = missions.find((m) => m.id === missionId)
-  const validationType = selectedMission?.validation_type ?? 'photo'
 
   return (
     <main className="mx-auto max-w-md px-4 py-10">
@@ -246,7 +266,8 @@ export default function SubmitPage() {
             onChange={(e) => {
               const nextId = e.target.value
               const next = missions.find((m) => m.id === nextId)
-              if (next && next.validation_type !== 'photo') clearFile()
+              if (!next || next.validation_type !== 'photo') clearFile()
+              if (!next || next.validation_type !== 'text') setTextAnswer('')
               setMissionId(nextId)
               setSuccess(false)
             }}
@@ -276,9 +297,33 @@ export default function SubmitPage() {
               {validationType === 'video' && (
                 <> — upload a video for admin review.</>
               )}
+              {validationType === 'text' && (
+                <> — write your answer; no photo or video needed.</>
+              )}
             </p>
           )}
         </div>
+
+        {validationType === 'text' && (
+          <div>
+            <label htmlFor="text-answer" className="block text-sm font-medium text-zinc-700">
+              Your answer
+            </label>
+            <textarea
+              id="text-answer"
+              value={textAnswer}
+              onChange={(e) => {
+                setTextAnswer(e.target.value)
+                setSubmitError(null)
+                setSuccess(false)
+              }}
+              rows={4}
+              className="mt-1 w-full rounded border border-zinc-300 bg-white px-3 py-2 text-sm"
+              placeholder="Write a message"
+              disabled={submitting || missionsEnabled !== true}
+            />
+          </div>
+        )}
 
         {validationType === 'photo' && (
           <div>
@@ -293,6 +338,9 @@ export default function SubmitPage() {
               className="mt-1 block w-full text-sm text-zinc-600"
               disabled={submitting || missionsEnabled !== true}
             />
+            <p className="mt-1 text-xs text-zinc-500">
+              JPG/PNG/WebP only, up to {prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.
+            </p>
             {previewUrl && (
               <div className="mt-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}

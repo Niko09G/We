@@ -11,20 +11,35 @@ type SignaturePadRef = {
 type Props = {
   /** Called when the user finishes a stroke (so parent can enable submit). */
   onStrokeEnd?: () => void
+  /** First contact with the pad (hide placeholders, etc.). */
+  onStrokeStart?: () => void
+  /** After the user clears the pad. */
+  onClear?: () => void
   /** Ref to get blob, clear, and isEmpty. */
   padRef?: React.RefObject<SignaturePadRef | null>
   disabled?: boolean
   className?: string
   /** Height of the canvas in pixels. */
   height?: number
+  /** Classes for the canvas wrapper (border, background). */
+  canvasSurfaceClassName?: string
+  /** Show the default “Clear” control under the pad. */
+  showClearButton?: boolean
+  /** Ink color (use dark on light backgrounds). */
+  strokeColor?: string
 }
 
 export function SignaturePad({
   onStrokeEnd,
+  onStrokeStart,
+  onClear,
   padRef,
   disabled = false,
   className = '',
   height = 200,
+  canvasSurfaceClassName = 'rounded border border-zinc-700 bg-zinc-800/50',
+  showClearButton = true,
+  strokeColor = '#ffffff',
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [hasDrawn, setHasDrawn] = useState(false)
@@ -72,6 +87,7 @@ export function SignaturePad({
       const canvas = canvasRef.current
       const ctx = getContext()
       if (!canvas || !ctx) return
+      onStrokeStart?.()
 
       const rect = canvas.getBoundingClientRect()
       const scaleX = canvas.width / rect.width
@@ -81,12 +97,12 @@ export function SignaturePad({
 
       ctx.beginPath()
       ctx.moveTo(x, y)
-      ctx.strokeStyle = '#fff'
+      ctx.strokeStyle = strokeColor
       ctx.lineWidth = 2
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
     },
-    [disabled, getContext]
+    [disabled, getContext, onStrokeStart, strokeColor]
   )
 
   const handleMove = useCallback(
@@ -154,7 +170,7 @@ export function SignaturePad({
   return (
     <div className={className}>
       <div
-        className="relative overflow-hidden rounded border border-zinc-700 bg-zinc-800/50 touch-none min-w-[200px]"
+        className={`relative touch-none min-w-[200px] overflow-hidden ${canvasSurfaceClassName}`}
         style={{ height }}
       >
         <canvas
@@ -173,16 +189,19 @@ export function SignaturePad({
           height={0}
         />
       </div>
-      <button
-        type="button"
-        onClick={() => {
-          clear()
-        }}
-        disabled={disabled}
-        className="mt-2 text-xs font-medium text-white/70 underline hover:no-underline disabled:opacity-50"
-      >
-        Clear
-      </button>
+      {showClearButton ? (
+        <button
+          type="button"
+          onClick={() => {
+            clear()
+            onClear?.()
+          }}
+          disabled={disabled}
+          className="mt-2 text-base font-medium text-zinc-600 underline hover:no-underline disabled:opacity-50 dark:text-white/70"
+        >
+          Clear
+        </button>
+      ) : null}
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase/client'
 
 function coerceJsonbToBoolean(value: unknown): boolean {
@@ -10,6 +11,18 @@ function coerceJsonbToBoolean(value: unknown): boolean {
 
 export async function getMissionsEnabled(): Promise<boolean> {
   const { data, error } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', 'missions_enabled')
+    .maybeSingle()
+
+  if (error) throw new Error(error.message || 'Failed to load app settings.')
+  return coerceJsonbToBoolean((data as { value: unknown } | null)?.value)
+}
+
+/** Same as getMissionsEnabled but uses an explicit client (e.g. server route). */
+export async function getMissionsEnabledWithClient(supabaseClient: SupabaseClient): Promise<boolean> {
+  const { data, error } = await supabaseClient
     .from('app_settings')
     .select('value')
     .eq('key', 'missions_enabled')

@@ -5,8 +5,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   APPROVAL_MODES,
   VALIDATION_TYPES,
+  adminValidationTypeLabel,
   createMission,
   listMissions,
+  maxSubmissionsDisplayValue,
   updateMission,
   type ApprovalMode,
   type MissionRecord,
@@ -17,11 +19,18 @@ import {
   setMissionAssignmentsForMission,
 } from '@/lib/admin-mission-assignments'
 import { listTablesForAdmin, type AdminTableRow } from '@/lib/admin-tables'
+import {
+  removeMissionImageAssetByPublicUrl,
+  uploadMissionImageAsset,
+} from '@/lib/mission-image-assets'
+import { MAX_IMAGE_UPLOAD_BYTES, prettyMb } from '@/lib/upload-constraints'
 
 function typeIcon(type: string): string {
   if (type === 'photo') return '📷'
   if (type === 'video') return '🎥'
   if (type === 'signature') return '✍️'
+  if (type === 'text') return '📝'
+  if (type === 'beatcoin') return '🪙'
   return '•'
 }
 
@@ -40,6 +49,7 @@ export default function MissionsAdminPage() {
   const [creating, setCreating] = useState(false)
   const [editingMissionId, setEditingMissionId] = useState<string | null>(null)
   const [savingMissionId, setSavingMissionId] = useState<string | null>(null)
+  const [uploadingMissionImageSlot, setUploadingMissionImageSlot] = useState<string | null>(null)
 
   const [createForm, setCreateForm] = useState({
     title: '',
@@ -48,7 +58,7 @@ export default function MissionsAdminPage() {
     validation_type: 'photo' as ValidationType,
     approval_mode: 'auto' as ApprovalMode,
     add_to_greetings: false,
-    allow_multiple_submissions: false,
+    max_submissions_per_table: '' as string,
     points_per_submission: '',
     header_title: '',
     header_image_url: '',
@@ -64,7 +74,7 @@ export default function MissionsAdminPage() {
     validation_type: 'photo' as ValidationType,
     approval_mode: 'auto' as ApprovalMode,
     add_to_greetings: false,
-    allow_multiple_submissions: false,
+    max_submissions_per_table: '' as string,
     points_per_submission: '',
     header_title: '',
     header_image_url: '',
@@ -176,7 +186,7 @@ export default function MissionsAdminPage() {
         validation_type: createForm.validation_type,
         approval_mode: createForm.approval_mode,
         add_to_greetings: createForm.add_to_greetings,
-        allow_multiple_submissions: createForm.allow_multiple_submissions,
+        max_submissions_per_table: createForm.max_submissions_per_table,
         points_per_submission:
           createForm.points_per_submission === ''
             ? null
@@ -195,7 +205,7 @@ export default function MissionsAdminPage() {
         validation_type: 'photo',
         approval_mode: 'auto',
         add_to_greetings: false,
-        allow_multiple_submissions: false,
+        max_submissions_per_table: '',
         points_per_submission: '',
         header_title: '',
         header_image_url: '',
@@ -226,7 +236,7 @@ export default function MissionsAdminPage() {
         ? (m.approval_mode as ApprovalMode)
         : 'auto',
       add_to_greetings: m.add_to_greetings ?? false,
-      allow_multiple_submissions: m.allow_multiple_submissions ?? false,
+      max_submissions_per_table: maxSubmissionsDisplayValue(m),
       points_per_submission:
         m.points_per_submission == null ? '' : String(m.points_per_submission),
       header_title: m.header_title ?? '',
@@ -250,7 +260,7 @@ export default function MissionsAdminPage() {
         validation_type: editForm.validation_type,
         approval_mode: editForm.approval_mode,
         add_to_greetings: editForm.add_to_greetings,
-        allow_multiple_submissions: editForm.allow_multiple_submissions,
+        max_submissions_per_table: editForm.max_submissions_per_table,
         points_per_submission:
           editForm.points_per_submission === ''
             ? null
@@ -269,6 +279,45 @@ export default function MissionsAdminPage() {
       setError(e instanceof Error ? e.message : 'Update failed.')
     } finally {
       setSavingMissionId(null)
+    }
+  }
+
+  async function uploadCreateMissionImage(file: File) {
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      setError(`Mission image is too large. Max ${prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.`)
+      return
+    }
+    setUploadingMissionImageSlot('create')
+    setError(null)
+    try {
+      const previous = createForm.header_image_url || null
+      const publicUrl = await uploadMissionImageAsset(file)
+      await removeMissionImageAssetByPublicUrl(previous)
+      setCreateForm((s) => ({ ...s, header_image_url: publicUrl }))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Mission image upload failed.')
+    } finally {
+      setUploadingMissionImageSlot(null)
+    }
+  }
+
+  async function uploadEditMissionImage(file: File) {
+    if (!editingMissionId) return
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      setError(`Mission image is too large. Max ${prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.`)
+      return
+    }
+    setUploadingMissionImageSlot(`edit:${editingMissionId}`)
+    setError(null)
+    try {
+      const previous = editForm.header_image_url || null
+      const publicUrl = await uploadMissionImageAsset(file)
+      await removeMissionImageAssetByPublicUrl(previous)
+      setEditForm((s) => ({ ...s, header_image_url: publicUrl }))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Mission image upload failed.')
+    } finally {
+      setUploadingMissionImageSlot(null)
     }
   }
 
@@ -471,7 +520,7 @@ export default function MissionsAdminPage() {
             >
               {VALIDATION_TYPES.map((v) => (
                 <option key={v} value={v}>
-                  {v}
+                  {adminValidationTypeLabel(v)}
                 </option>
               ))}
             </select>
@@ -499,14 +548,51 @@ export default function MissionsAdminPage() {
               }
               className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
             />
-            <input
-              placeholder="Header image URL"
-              value={createForm.header_image_url}
-              onChange={(e) =>
-                setCreateForm((s) => ({ ...s, header_image_url: e.target.value }))
-              }
-              className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            />
+            <div className="rounded border border-zinc-300 px-2 py-1.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+              <div className="mb-1 font-medium">Mission image (overlay round image)</div>
+              <div className="flex items-center gap-2">
+                {createForm.header_image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- admin uploaded mission asset preview
+                  <img
+                    src={createForm.header_image_url}
+                    alt=""
+                    className="h-8 w-8 rounded-full border border-zinc-200 object-cover dark:border-zinc-700"
+                  />
+                ) : (
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-zinc-300 text-zinc-400 dark:border-zinc-700">
+                    —
+                  </span>
+                )}
+                <label className="inline-flex cursor-pointer items-center rounded border border-zinc-300 px-2 py-1 text-[11px] font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-800">
+                  {uploadingMissionImageSlot === 'create' ? 'Uploading…' : 'Upload image'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/webp"
+                    className="sr-only"
+                    disabled={uploadingMissionImageSlot === 'create'}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      e.currentTarget.value = ''
+                      if (!file) return
+                      void uploadCreateMissionImage(file)
+                    }}
+                  />
+                </label>
+                {createForm.header_image_url ? (
+                  <button
+                    type="button"
+                    className="text-[11px] text-zinc-500 underline hover:no-underline"
+                    onClick={async () => {
+                      const prev = createForm.header_image_url || null
+                      setCreateForm((s) => ({ ...s, header_image_url: '' }))
+                      await removeMissionImageAssetByPublicUrl(prev)
+                    }}
+                  >
+                    Remove
+                  </button>
+                ) : null}
+              </div>
+            </div>
             <input
               placeholder="Target person name"
               value={createForm.target_person_name}
@@ -546,19 +632,25 @@ export default function MissionsAdminPage() {
               />
               Add to greetings
             </label>
-            <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+            <div className="flex flex-col gap-0.5 text-xs text-zinc-700 dark:text-zinc-300">
+              <label htmlFor="create-max-sub" className="font-medium">
+                Max submissions per table
+              </label>
               <input
-                type="checkbox"
-                checked={createForm.allow_multiple_submissions}
+                id="create-max-sub"
+                type="number"
+                min={1}
+                placeholder="Empty = unlimited"
+                value={createForm.max_submissions_per_table}
                 onChange={(e) =>
-                  setCreateForm((s) => ({
-                    ...s,
-                    allow_multiple_submissions: e.target.checked,
-                  }))
+                  setCreateForm((s) => ({ ...s, max_submissions_per_table: e.target.value }))
                 }
+                className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
               />
-              Multiple submissions
-            </label>
+              <span className="text-[10px] text-zinc-500">
+                Leave empty for unlimited. 1 = one per table; use a number for a cap (e.g. 10).
+              </span>
+            </div>
             <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
               <input
                 type="checkbox"
@@ -654,7 +746,7 @@ export default function MissionsAdminPage() {
                     >
                       {VALIDATION_TYPES.map((v) => (
                         <option key={v} value={v}>
-                          {v}
+                          {adminValidationTypeLabel(v)}
                         </option>
                       ))}
                     </select>
@@ -682,14 +774,51 @@ export default function MissionsAdminPage() {
                       }
                       className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
                     />
-                    <input
-                      placeholder="Header image URL"
-                      value={editForm.header_image_url}
-                      onChange={(e) =>
-                        setEditForm((s) => ({ ...s, header_image_url: e.target.value }))
-                      }
-                      className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    />
+                    <div className="rounded border border-zinc-300 px-2 py-1.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                      <div className="mb-1 font-medium">Mission image (overlay round image)</div>
+                      <div className="flex items-center gap-2">
+                        {editForm.header_image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- admin uploaded mission asset preview
+                          <img
+                            src={editForm.header_image_url}
+                            alt=""
+                            className="h-8 w-8 rounded-full border border-zinc-200 object-cover dark:border-zinc-700"
+                          />
+                        ) : (
+                          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-zinc-300 text-zinc-400 dark:border-zinc-700">
+                            —
+                          </span>
+                        )}
+                        <label className="inline-flex cursor-pointer items-center rounded border border-zinc-300 px-2 py-1 text-[11px] font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-800">
+                          {uploadingMissionImageSlot === `edit:${m.id}` ? 'Uploading…' : 'Upload image'}
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png,image/webp"
+                            className="sr-only"
+                            disabled={uploadingMissionImageSlot === `edit:${m.id}`}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              e.currentTarget.value = ''
+                              if (!file) return
+                              void uploadEditMissionImage(file)
+                            }}
+                          />
+                        </label>
+                        {editForm.header_image_url ? (
+                          <button
+                            type="button"
+                            className="text-[11px] text-zinc-500 underline hover:no-underline"
+                            onClick={async () => {
+                              const prev = editForm.header_image_url || null
+                              setEditForm((s) => ({ ...s, header_image_url: '' }))
+                              await removeMissionImageAssetByPublicUrl(prev)
+                            }}
+                          >
+                            Remove
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
                     <input
                       placeholder="Target person name"
                       value={editForm.target_person_name}
@@ -732,19 +861,25 @@ export default function MissionsAdminPage() {
                       />
                       Add to greetings
                     </label>
-                    <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+                    <div className="flex flex-col gap-0.5 text-xs text-zinc-700 dark:text-zinc-300 sm:col-span-2">
+                      <label className="font-medium">Max submissions per table</label>
                       <input
-                        type="checkbox"
-                        checked={editForm.allow_multiple_submissions}
+                        type="number"
+                        min={1}
+                        placeholder="Empty = unlimited"
+                        value={editForm.max_submissions_per_table}
                         onChange={(e) =>
                           setEditForm((s) => ({
                             ...s,
-                            allow_multiple_submissions: e.target.checked,
+                            max_submissions_per_table: e.target.value,
                           }))
                         }
+                        className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
                       />
-                      Multiple submissions
-                    </label>
+                      <span className="text-[10px] text-zinc-500">
+                        Leave empty for unlimited.
+                      </span>
+                    </div>
                     <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
                       <input
                         type="checkbox"

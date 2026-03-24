@@ -5,8 +5,10 @@ import { usePathname } from 'next/navigation'
 import {
   createMission,
   listMissions,
+  maxSubmissionsDisplayValue,
   updateMission,
   VALIDATION_TYPES,
+  adminValidationTypeLabel,
   APPROVAL_MODES,
   type MissionRecord,
   type ValidationType,
@@ -180,7 +182,7 @@ export default function AdminPage() {
     approval_mode: 'auto' as ApprovalMode,
     is_active: true,
     add_to_greetings: false,
-    allow_multiple_submissions: false,
+    max_submissions_per_table: '' as string,
     points_per_submission: '' as string | number,
     target_person_name: '',
     submission_hint: '',
@@ -196,7 +198,7 @@ export default function AdminPage() {
     approval_mode: 'auto' as ApprovalMode,
     is_active: true,
     add_to_greetings: false,
-    allow_multiple_submissions: false,
+    max_submissions_per_table: '' as string,
     points_per_submission: '' as string | number,
     target_person_name: '',
     submission_hint: '',
@@ -1329,6 +1331,10 @@ export default function AdminPage() {
                       typeof s.submission_data?.video_url === 'string'
                         ? s.submission_data.video_url
                         : null
+                    const textBody =
+                      typeof s.submission_data?.text === 'string'
+                        ? s.submission_data.text
+                        : null
                     const proofUrl = imageUrl ?? signatureImageUrl
                     const isSignatureProof = !!signatureImageUrl && !imageUrl
                     const isPending = s.status === 'pending'
@@ -1554,6 +1560,14 @@ export default function AdminPage() {
                             </button>
                           </div>
                         )}
+                        {textBody && (
+                          <div className="mt-2 rounded border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
+                            <span className="font-medium text-zinc-500 dark:text-zinc-400">
+                              Text ·{' '}
+                            </span>
+                            <span className="whitespace-pre-wrap">{textBody}</span>
+                          </div>
+                        )}
                       </div>
                     )
                   })
@@ -1732,7 +1746,7 @@ export default function AdminPage() {
               >
                 {VALIDATION_TYPES.map((v) => (
                   <option key={v} value={v}>
-                    {v}
+                    {adminValidationTypeLabel(v)}
                   </option>
                 ))}
               </select>
@@ -1772,16 +1786,23 @@ export default function AdminPage() {
                 />
                 Add to greetings
               </label>
-              <label className="flex items-center gap-2 text-xs text-zinc-600">
+              <div className="flex flex-col gap-0.5 text-xs text-zinc-600">
+                <label htmlFor="mm-create-max" className="font-medium">
+                  Max submissions per table
+                </label>
                 <input
-                  type="checkbox"
-                  checked={mmCreate.allow_multiple_submissions}
+                  id="mm-create-max"
+                  type="number"
+                  min={1}
+                  placeholder="Empty = unlimited"
+                  value={mmCreate.max_submissions_per_table}
                   onChange={(e) =>
-                    setMmCreate((s) => ({ ...s, allow_multiple_submissions: e.target.checked }))
+                    setMmCreate((s) => ({ ...s, max_submissions_per_table: e.target.value }))
                   }
+                  className="rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 py-1.5 text-sm w-28"
                 />
-                Multiple submissions
-              </label>
+                <span className="text-[10px] text-zinc-500">Leave empty for unlimited</span>
+              </div>
               <input
                 placeholder="Pts per submission"
                 type="number"
@@ -1861,7 +1882,7 @@ export default function AdminPage() {
                     approval_mode: mmCreate.approval_mode,
                     is_active: mmCreate.is_active,
                     add_to_greetings: mmCreate.add_to_greetings,
-                    allow_multiple_submissions: mmCreate.allow_multiple_submissions,
+                    max_submissions_per_table: mmCreate.max_submissions_per_table,
                     points_per_submission: mmCreate.points_per_submission === '' ? null : Number(mmCreate.points_per_submission) || null,
                     target_person_name: mmCreate.target_person_name.trim() || null,
                     submission_hint: mmCreate.submission_hint.trim() || null,
@@ -1877,7 +1898,7 @@ export default function AdminPage() {
                     approval_mode: 'auto',
                     is_active: true,
                     add_to_greetings: false,
-                    allow_multiple_submissions: false,
+                    max_submissions_per_table: '',
                     points_per_submission: '',
                     target_person_name: '',
                     submission_hint: '',
@@ -1974,7 +1995,7 @@ export default function AdminPage() {
                                 : 'auto') as ApprovalMode,
                               is_active: m.is_active,
                               add_to_greetings: m.add_to_greetings ?? false,
-                              allow_multiple_submissions: m.allow_multiple_submissions ?? false,
+                              max_submissions_per_table: maxSubmissionsDisplayValue(m),
                               points_per_submission: m.points_per_submission ?? '',
                               target_person_name: m.target_person_name ?? '',
                               submission_hint: m.submission_hint ?? '',
@@ -2022,7 +2043,7 @@ export default function AdminPage() {
                             >
                               {VALIDATION_TYPES.map((v) => (
                                 <option key={v} value={v}>
-                                  {v}
+                                  {adminValidationTypeLabel(v)}
                                 </option>
                               ))}
                             </select>
@@ -2068,19 +2089,24 @@ export default function AdminPage() {
                               />
                               Add to greetings
                             </label>
-                            <label className="flex items-center gap-2 text-xs">
+                            <div className="flex flex-col gap-0.5 text-xs sm:col-span-2">
+                              <label className="font-medium text-zinc-600 dark:text-zinc-400">
+                                Max submissions per table
+                              </label>
                               <input
-                                type="checkbox"
-                                checked={mmEdit.allow_multiple_submissions}
+                                type="number"
+                                min={1}
+                                placeholder="Empty = unlimited"
+                                value={mmEdit.max_submissions_per_table}
                                 onChange={(e) =>
                                   setMmEdit((s) => ({
                                     ...s,
-                                    allow_multiple_submissions: e.target.checked,
+                                    max_submissions_per_table: e.target.value,
                                   }))
                                 }
+                                className="rounded border border-zinc-200 dark:border-zinc-600 px-2 py-1.5 text-sm w-28"
                               />
-                              Multiple submissions
-                            </label>
+                            </div>
                             <input
                               type="number"
                               min={0}
@@ -2156,7 +2182,7 @@ export default function AdminPage() {
                                   approval_mode: mmEdit.approval_mode,
                                   is_active: mmEdit.is_active,
                                   add_to_greetings: mmEdit.add_to_greetings,
-                                  allow_multiple_submissions: mmEdit.allow_multiple_submissions,
+                                  max_submissions_per_table: mmEdit.max_submissions_per_table,
                                   points_per_submission: mmEdit.points_per_submission === '' ? null : Number(mmEdit.points_per_submission) || null,
                                   target_person_name: mmEdit.target_person_name.trim() || null,
                                   submission_hint: mmEdit.submission_hint.trim() || null,

@@ -112,6 +112,8 @@ export default function ScoreboardAdminPage() {
       `Reset all leaderboard scores for this table?\n\nThis will remove completions and revert approved mission submissions for this table (history preserved).`
     )
     if (!ok) return
+    const typed = window.prompt('Type RESET to confirm table reset:')
+    if ((typed ?? '').trim().toUpperCase() !== 'RESET') return
 
     setResettingTableId(tableId)
     setSuccess(null)
@@ -132,6 +134,8 @@ export default function ScoreboardAdminPage() {
       'Reset ALL leaderboard scores globally?\n\nThis removes all completions and reverts all approved mission submissions (submission history preserved).'
     )
     if (!ok) return
+    const typed = window.prompt('Type RESET to confirm GLOBAL reset:')
+    if ((typed ?? '').trim().toUpperCase() !== 'RESET') return
 
     setResettingAll(true)
     setSuccess(null)

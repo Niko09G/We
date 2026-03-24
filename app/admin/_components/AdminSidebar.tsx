@@ -11,6 +11,7 @@ type NavItem = {
   key:
     | 'overview'
     | 'missions'
+    | 'tokens'
     | 'tables'
     | 'seating'
     | 'attendees'
@@ -18,11 +19,14 @@ type NavItem = {
     | 'greetings'
     | 'display'
     | 'scoreboard'
+    | 'settings'
+    | 'recovery'
 }
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/admin', label: 'Overview', key: 'overview' },
   { href: '/admin/missions', label: 'Missions', key: 'missions' },
+  { href: '/admin/tokens', label: 'Tokens', key: 'tokens' },
   { href: '/admin/scoreboard', label: 'Score breakdown', key: 'scoreboard' },
   { href: '/admin/tables', label: 'Tables', key: 'tables' },
   { href: '/admin/seating', label: 'Seating', key: 'seating' },
@@ -30,6 +34,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/admin/submissions', label: 'Submissions', key: 'submissions' },
   { href: '/admin/greetings', label: 'Greetings', key: 'greetings' },
   { href: '/admin/display', label: 'Display Controls', key: 'display' },
+  { href: '/admin/settings', label: 'Settings', key: 'settings' },
+  { href: '/admin/recovery', label: 'Recovery', key: 'recovery' },
 ]
 
 function pendingBadgeForPath(pathname: string) {
@@ -44,12 +50,15 @@ export default function AdminSidebar() {
   const activeKey = useMemo(() => {
     if (pathname === '/admin') return 'overview'
     if (pathname.startsWith('/admin/missions')) return 'missions'
+    if (pathname.startsWith('/admin/tokens')) return 'tokens'
     if (pathname.startsWith('/admin/scoreboard')) return 'scoreboard'
     if (pathname.startsWith('/admin/tables')) return 'tables'
     if (pathname.startsWith('/admin/seating')) return 'seating'
     if (pathname.startsWith('/admin/attendees')) return 'attendees'
     if (pathname.startsWith('/admin/submissions')) return 'submissions'
     if (pathname.startsWith('/admin/greetings')) return 'greetings'
+    if (pathname.startsWith('/admin/settings')) return 'settings'
+    if (pathname.startsWith('/admin/recovery')) return 'recovery'
     return 'display'
   }, [pathname])
 

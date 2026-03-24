@@ -3,24 +3,44 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { GreetingsStripSection } from '@/components/guest/GreetingsStripSection'
+import { MissionSocialFeedSection } from '@/components/guest/MissionSocialFeedSection'
 import { MissionsTableHero } from '@/components/guest/MissionsTableHero'
 import { getMissionsEnabled } from '@/lib/app-settings'
 import { fetchLeaderboard, type LeaderboardEntry } from '@/lib/leaderboard'
 import {
+  isAtSubmissionLimit,
+  isRepeatableAutoMission,
+} from '@/lib/mission-limits'
+import {
   normalizeMissionValidationType,
   type MissionValidationType,
 } from '@/lib/mission-validation-type'
-import type { GreetingRow } from '@/lib/greetings-admin'
-import { listReadyGreetingsNewestFirst } from '@/lib/greetings-guest'
 import { supabase } from '@/lib/supabase/client'
+import { RewardAmount } from '@/components/reward/RewardAmount'
+import { RewardUnitIcon } from '@/components/reward/RewardUnitIcon'
+import { useRewardUnit } from '@/components/reward/RewardUnitProvider'
+import { rewardUnitCompactLabel } from '@/lib/reward-unit'
 import { MissionModal, type MissionForModal } from './MissionModal'
+import {
+  fetchGuestMissionFeed,
+  resolveAdviceMissionIdFromRows,
+  resolveFeedMissionIds,
+  resolveGreetingMissionIdFromRows,
+  type GuestMissionFeedItem,
+} from '@/lib/guest-mission-feed'
+import { saveGuestTableContext } from '@/lib/guest-table-context'
+import {
+  fetchGuestEmblemsConfig,
+  resolveRankEmblemUrl,
+  type GuestEmblemsSettingsValue,
+} from '@/lib/guest-emblem-config'
 import {
   MISSION_CARD_BACKGROUNDS,
   MISSION_CARD_SKELETON_BACKGROUND,
+  TABLE_GREETING_ARTWORK_PATH,
+  TRUMPET_STORY_CARD_ARTWORK_PATH,
+  missionGradientAt,
 } from '@/lib/guest-missions-gradients'
-
-const GREETINGS_FEED_LIMIT = 80
 
 type TableIdParams = { tableId: string }
 
@@ -33,6 +53,8 @@ type MissionRow = {
   is_active: boolean
   approval_mode?: 'auto' | 'manual'
   allow_multiple_submissions?: boolean
+  /** null = unlimited (after migration + backfill). */
+  max_submissions_per_table?: number | null
   message_required?: boolean
   target_person_name?: string | null
   submission_hint?: string | null
@@ -58,6 +80,7 @@ export default function MissionsTablePage({
   params: Promise<TableIdParams>
 }) {
   const { tableId } = use(params)
+  const { config: rewardUnit } = useRewardUnit()
   const router = useRouter()
   const questsRef = useRef<HTMLDivElement>(null)
   const carouselRef = useRef<HTMLDivElement>(null)
@@ -88,14 +111,20 @@ export default function MissionsTablePage({
       >
     >(new Map())
   const [selectedMissionId, setSelectedMissionId] = useState<string | null>(null)
+  const [missionModalReset, setMissionModalReset] = useState(0)
+  const [missionOverlayVariant, setMissionOverlayVariant] = useState<
+    'hero-greeting' | 'missions-section'
+  >('missions-section')
   const [modalExistingPhotoUrl, setModalExistingPhotoUrl] = useState<string | null>(null)
   const [modalIsRejected, setModalIsRejected] = useState(false)
   const [modalRejectedNote, setModalRejectedNote] = useState<string | null>(null)
-  const [approvedSubmissionCountByMission, setApprovedSubmissionCountByMission] =
-    useState<Map<string, number>>(new Map())
+  const [submissionSlotsUsedByMission, setSubmissionSlotsUsedByMission] = useState<
+    Map<string, number>
+  >(new Map())
 
-  const [greetingsFeed, setGreetingsFeed] = useState<GreetingRow[]>([])
-  const [greetingsLoading, setGreetingsLoading] = useState(false)
+  const [missionFeedItems, setMissionFeedItems] = useState<GuestMissionFeedItem[]>([])
+  const [missionFeedLoading, setMissionFeedLoading] = useState(false)
+  const [guestEmblems, setGuestEmblems] = useState<GuestEmblemsSettingsValue>({})
 
   const { tablePoints, tableRank, totalTeams } = useMemo(() => {
     const idx = leaderboardRows.findIndex((e) => e.tableId === tableId)
@@ -110,10 +139,31 @@ export default function MissionsTablePage({
     () => leaderboardRows.slice(0, 4),
     [leaderboardRows]
   )
+  const heroRankEmblemUrl = useMemo(
+    () => resolveRankEmblemUrl(guestEmblems, tableRank),
+    [guestEmblems, tableRank]
+  )
+  const heroTeamEmblemUrl = useMemo(
+    () => guestEmblems.team_emblem_by_table_id?.[tableId] ?? null,
+    [guestEmblems, tableId]
+  )
 
   const scrollToQuests = () => {
     questsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+
+  const greetingMissionId = useMemo(() => {
+    return resolveGreetingMissionIdFromRows(missions)
+  }, [missions])
+
+  /** Same IDs as carousel cards — feed loads after missions resolve. */
+  const feedMissionIds = useMemo(
+    () => ({
+      adviceMissionId: resolveAdviceMissionIdFromRows(missions),
+      greetingMissionId: resolveGreetingMissionIdFromRows(missions),
+    }),
+    [missions]
+  )
 
   const scrollMissionCarousel = (dir: -1 | 1) => {
     const el = carouselRef.current
@@ -136,6 +186,27 @@ export default function MissionsTablePage({
     }
   }
 
+  const loadMissionFeed = useCallback(async () => {
+    if (missionsEnabled !== true) {
+      setMissionFeedItems([])
+      return
+    }
+    setMissionFeedLoading(true)
+    try {
+      const resolved = await resolveFeedMissionIds()
+      const adviceId =
+        feedMissionIds.adviceMissionId ?? resolved.adviceMissionId
+      const greetingId =
+        feedMissionIds.greetingMissionId ?? resolved.greetingMissionId
+      const items = await fetchGuestMissionFeed(adviceId, greetingId)
+      setMissionFeedItems(items)
+    } catch {
+      setMissionFeedItems([])
+    } finally {
+      setMissionFeedLoading(false)
+    }
+  }, [missionsEnabled, feedMissionIds])
+
   const refreshTableData = useCallback(() => {
     void (async () => {
       try {
@@ -145,7 +216,7 @@ export default function MissionsTablePage({
         /* keep previous leaderboard */
       }
 
-      const [cRes, pRes, apRes, rRes] = await Promise.all([
+      const [cRes, pRes, slotRes, rRes] = await Promise.all([
         supabase.from('completions').select('mission_id').eq('table_id', tableId),
         supabase
           .from('mission_submissions')
@@ -156,7 +227,7 @@ export default function MissionsTablePage({
           .from('mission_submissions')
           .select('mission_id')
           .eq('table_id', tableId)
-          .eq('status', 'approved'),
+          .in('status', ['pending', 'approved']),
         supabase
           .from('mission_submissions')
           .select('mission_id, review_note, submission_data')
@@ -173,11 +244,11 @@ export default function MissionsTablePage({
         setPendingMissionIds(
           new Set(((pRes.data ?? []) as PendingRow[]).map((r) => r.mission_id))
         )
-      const approvedRows = (apRes.data ?? []) as ApprovedRow[]
-      const approvedMap = new Map<string, number>()
-      for (const r of approvedRows)
-        approvedMap.set(r.mission_id, (approvedMap.get(r.mission_id) ?? 0) + 1)
-      setApprovedSubmissionCountByMission(approvedMap)
+      const slotRows = (slotRes.data ?? []) as ApprovedRow[]
+      const slotMap = new Map<string, number>()
+      for (const r of slotRows)
+        slotMap.set(r.mission_id, (slotMap.get(r.mission_id) ?? 0) + 1)
+      setSubmissionSlotsUsedByMission(slotMap)
 
       const rejectedMap = new Map<
         string,
@@ -207,33 +278,42 @@ export default function MissionsTablePage({
         })
       }
       setRejectedSubmissionByMissionId(rejectedMap)
+      void loadMissionFeed()
     })()
-  }, [tableId])
+  }, [tableId, loadMissionFeed])
 
   useEffect(() => {
-    if (loading || !tableName.trim()) {
-      if (!loading && !tableName.trim()) {
-        setGreetingsFeed([])
-        setGreetingsLoading(false)
-      }
-      return
+    if (missionsEnabled !== true) {
+      setMissionFeedItems([])
+      setMissionFeedLoading(false)
     }
+  }, [missionsEnabled])
+
+  useEffect(() => {
+    if (tableId && tableName.trim()) {
+      saveGuestTableContext(tableId, tableName)
+    }
+  }, [tableId, tableName])
+
+  useEffect(() => {
     let cancelled = false
-    setGreetingsLoading(true)
-    listReadyGreetingsNewestFirst(GREETINGS_FEED_LIMIT)
-      .then((data) => {
-        if (!cancelled) setGreetingsFeed(data)
-      })
-      .catch(() => {
-        if (!cancelled) setGreetingsFeed([])
-      })
-      .finally(() => {
-        if (!cancelled) setGreetingsLoading(false)
-      })
+    void (async () => {
+      try {
+        const cfg = await fetchGuestEmblemsConfig()
+        if (!cancelled) setGuestEmblems(cfg)
+      } catch {
+        if (!cancelled) setGuestEmblems({})
+      }
+    })()
     return () => {
       cancelled = true
     }
-  }, [loading, tableName, tableId])
+  }, [])
+
+  useEffect(() => {
+    if (missionsEnabled !== true || loading) return
+    void loadMissionFeed()
+  }, [missionsEnabled, loading, loadMissionFeed, missions])
 
   useEffect(() => {
     let cancelled = false
@@ -306,13 +386,13 @@ export default function MissionsTablePage({
           setMissions([])
           setCompletedMissionIds(new Set())
           setPendingMissionIds(new Set())
-          setApprovedSubmissionCountByMission(new Map())
+          setSubmissionSlotsUsedByMission(new Map())
           setRejectedSubmissionByMissionId(new Map())
           setLoading(false)
           return
         }
 
-        const [cRes, pRes, apRes, aRes] = await Promise.all([
+        const [cRes, pRes, slotRes, aRes] = await Promise.all([
           supabase.from('completions').select('mission_id').eq('table_id', tableId),
           supabase
             .from('mission_submissions')
@@ -323,7 +403,7 @@ export default function MissionsTablePage({
             .from('mission_submissions')
             .select('mission_id')
             .eq('table_id', tableId)
-            .eq('status', 'approved'),
+            .in('status', ['pending', 'approved']),
           supabase
             .from('mission_assignments')
             .select('mission_id')
@@ -346,8 +426,8 @@ export default function MissionsTablePage({
         if (cRes.error) throw new Error(`completions: ${cRes.error.message}`)
         if (pRes.error)
           throw new Error(`mission_submissions(pending): ${pRes.error.message}`)
-        if (apRes.error)
-          throw new Error(`mission_submissions(approved): ${apRes.error.message}`)
+        if (slotRes.error)
+          throw new Error(`mission_submissions(slots): ${slotRes.error.message}`)
         if (rRes.error)
           throw new Error(`mission_submissions(rejected): ${rRes.error.message}`)
 
@@ -361,7 +441,7 @@ export default function MissionsTablePage({
           const { data: mRes, error: mErr } = await supabase
             .from('missions')
             .select(
-              'id,title,description,points,validation_type,approval_mode,is_active,allow_multiple_submissions,message_required,target_person_name,submission_hint,header_title,header_image_url'
+              'id,title,description,points,validation_type,approval_mode,is_active,allow_multiple_submissions,max_submissions_per_table,message_required,target_person_name,submission_hint,header_title,header_image_url'
             )
             .in('id', assignedMissionIds)
             .eq('is_active', true)
@@ -378,6 +458,7 @@ export default function MissionsTablePage({
             approval_mode?: string | null
             is_active: boolean
             allow_multiple_submissions?: boolean
+            max_submissions_per_table?: number | null
             message_required?: boolean
             target_person_name?: string | null
             submission_hint?: string | null
@@ -397,6 +478,10 @@ export default function MissionsTablePage({
             approval_mode:
               String(m.approval_mode ?? 'manual') === 'auto' ? 'auto' : 'manual',
             allow_multiple_submissions: m.allow_multiple_submissions ?? false,
+            max_submissions_per_table:
+              m.max_submissions_per_table === undefined || m.max_submissions_per_table === null
+                ? null
+                : Math.max(1, Math.floor(Number(m.max_submissions_per_table))),
             message_required: m.message_required ?? false,
             target_person_name: m.target_person_name ?? null,
             submission_hint: m.submission_hint ?? null,
@@ -416,12 +501,12 @@ export default function MissionsTablePage({
         )
         setPendingMissionIds(new Set(pending))
 
-        const approvedRows = (apRes.data ?? []) as ApprovedRow[]
-        const approvedMap = new Map<string, number>()
-        for (const r of approvedRows) {
-          approvedMap.set(r.mission_id, (approvedMap.get(r.mission_id) ?? 0) + 1)
+        const slotRows = (slotRes.data ?? []) as ApprovedRow[]
+        const slotMap = new Map<string, number>()
+        for (const r of slotRows) {
+          slotMap.set(r.mission_id, (slotMap.get(r.mission_id) ?? 0) + 1)
         }
-        setApprovedSubmissionCountByMission(approvedMap)
+        setSubmissionSlotsUsedByMission(slotMap)
 
         const rejectedMap = new Map<
           string,
@@ -473,24 +558,53 @@ export default function MissionsTablePage({
   const statusFor = useMemo(() => {
     const completed = completedMissionIds
     const pending = pendingMissionIds
+    const slots = submissionSlotsUsedByMission
     return (
       missionId: string,
       mission?: MissionRow
-    ): 'available' | 'pending' | 'completed' => {
-      const isRepeatableAuto =
-        mission?.allow_multiple_submissions === true && mission?.approval_mode === 'auto'
-      if (isRepeatableAuto) return 'available'
+    ): 'available' | 'pending' | 'completed' | 'limit_reached' => {
+      const used = slots.get(missionId) ?? 0
+      const repeatable = mission
+        ? isRepeatableAutoMission({
+            approval_mode: mission.approval_mode ?? 'manual',
+            max_submissions_per_table: mission.max_submissions_per_table,
+            allow_multiple_submissions: mission.allow_multiple_submissions,
+          })
+        : false
+      if (repeatable) {
+        if (mission && isAtSubmissionLimit(mission, used)) return 'limit_reached'
+        return 'available'
+      }
       if (completed.has(missionId)) return 'completed'
       if (pending.has(missionId)) return 'pending'
+      if (mission && isAtSubmissionLimit(mission, used)) return 'limit_reached'
       return 'available'
     }
-  }, [completedMissionIds, pendingMissionIds])
+  }, [completedMissionIds, pendingMissionIds, submissionSlotsUsedByMission])
 
-  async function openMissionModal(missionId: string) {
+  const missionSectionProgress = useMemo(() => {
+    if (missions.length === 0) return null
+    const done = missions.filter((m) => {
+      const s = statusFor(m.id, m)
+      return s === 'completed' || s === 'limit_reached'
+    }).length
+    return { done, total: missions.length }
+  }, [missions, statusFor])
+
+  async function openMissionModal(
+    missionId: string,
+    opts?: { skipHydrate?: boolean; fromHero?: boolean }
+  ) {
+    setMissionOverlayVariant(
+      opts?.fromHero === true ? 'hero-greeting' : 'missions-section'
+    )
     setSelectedMissionId(missionId)
     setModalExistingPhotoUrl(null)
     setModalIsRejected(false)
     setModalRejectedNote(null)
+    if (opts?.skipHydrate) {
+      return
+    }
     const mission = missions.find((m) => m.id === missionId)
     const st = statusFor(missionId, mission)
     if (st === 'pending') {
@@ -512,11 +626,17 @@ export default function MissionsTablePage({
       if (typeof url === 'string' && url.length > 0) setModalExistingPhotoUrl(url)
     } else {
       if (st === 'completed') return
+      if (st === 'limit_reached') return
 
-      const isRepeatableAuto =
-        mission?.allow_multiple_submissions === true && mission?.approval_mode === 'auto'
-      const repeatCount = approvedSubmissionCountByMission.get(missionId) ?? 0
-      if (isRepeatableAuto && repeatCount > 0) return
+      const isRepeatableAuto = mission
+        ? isRepeatableAutoMission({
+            approval_mode: mission.approval_mode ?? 'manual',
+            max_submissions_per_table: mission.max_submissions_per_table,
+            allow_multiple_submissions: mission.allow_multiple_submissions,
+          })
+        : false
+      const slotsUsed = submissionSlotsUsedByMission.get(missionId) ?? 0
+      if (isRepeatableAuto && slotsUsed > 0) return
 
       const rejected = rejectedSubmissionByMissionId.get(missionId)
       if (rejected) {
@@ -535,7 +655,7 @@ export default function MissionsTablePage({
   const showMissionUi = missionsEnabled === true && !error
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen w-full min-w-0 max-w-full overflow-x-hidden bg-white">
       <MissionsTableHero
         loading={loading}
         tableName={tableName}
@@ -543,27 +663,38 @@ export default function MissionsTablePage({
         tableRank={tableRank}
         totalTeams={totalTeams}
         tablePoints={tablePoints}
+        heroTeamEmblemUrl={heroTeamEmblemUrl}
+        heroRankEmblemUrl={heroRankEmblemUrl}
         missionsEnabled={missionsEnabled}
         missionCount={missions.length}
         onStartMission={scrollToQuests}
+        onSendGreeting={() => {
+          if (greetingMissionId) {
+            setMissionOverlayVariant('hero-greeting')
+            setMissionModalReset((n) => n + 1)
+            void openMissionModal(greetingMissionId, { skipHydrate: true })
+          } else {
+            scrollToQuests()
+          }
+        }}
       />
 
       {loading && showMissionUi ? (
-        <section className="mx-auto w-full max-w-lg px-5 pt-8" aria-busy="true">
+        <section className="w-full pt-8" aria-busy="true">
           <div className="mb-5 flex items-end justify-between gap-4">
-            <h2 className="text-left text-lg font-semibold leading-snug text-zinc-900">
-              Earn points, complete missions
+            <h2 className="px-5 text-left text-2xl font-semibold leading-snug text-zinc-900">
+              Complete missions
             </h2>
-            <div className="flex shrink-0 gap-1.5">
+            <div className="flex shrink-0 gap-1.5 px-5">
               <div className="h-10 w-10 animate-pulse rounded-full bg-violet-100" />
               <div className="h-10 w-10 animate-pulse rounded-full bg-violet-100" />
             </div>
           </div>
-          <div className="flex gap-4 overflow-hidden pb-2">
+          <div className="flex gap-4 overflow-hidden pb-2 pl-5">
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="h-[min(560px,82vh)] w-[min(300px,78vw)] shrink-0 snap-start animate-pulse rounded-3xl"
+                className="h-[min(420px,62vh)] w-[min(300px,78vw)] shrink-0 snap-start animate-pulse rounded-3xl"
                 style={{ background: MISSION_CARD_SKELETON_BACKGROUND }}
               />
             ))}
@@ -575,94 +706,166 @@ export default function MissionsTablePage({
         <section
           id="table-quests"
           ref={questsRef}
-          className="mx-auto w-full max-w-lg scroll-mt-8 px-5 pt-8 pb-2"
+          className="w-full min-w-0 max-w-full scroll-mt-8 pt-8 pb-2"
         >
-          <div className="mb-5 flex items-end justify-between gap-4">
-            <h2 className="text-left text-lg font-semibold leading-snug text-zinc-900">
-              Earn points, complete missions
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-5 pr-6">
+            <h2 className="text-left text-2xl font-semibold leading-snug text-zinc-900">
+              Complete missions
             </h2>
-            {missions.length > 0 ? (
-              <div className="flex shrink-0 gap-1.5">
-                <button
-                  type="button"
-                  aria-label="Previous mission"
-                  onClick={() => scrollMissionCarousel(-1)}
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-violet-200/90 bg-white text-lg font-medium text-violet-700 transition hover:bg-violet-50 active:scale-95"
-                >
-                  ‹
-                </button>
-                <button
-                  type="button"
-                  aria-label="Next mission"
-                  onClick={() => scrollMissionCarousel(1)}
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-violet-200/90 bg-white text-lg font-medium text-violet-700 transition hover:bg-violet-50 active:scale-95"
-                >
-                  ›
-                </button>
-              </div>
+            {missionSectionProgress ? (
+              <span
+                className="shrink-0 inline-flex items-center gap-1.5 text-sm font-semibold tabular-nums tracking-tight text-zinc-600"
+                aria-label={`${missionSectionProgress.done} of ${missionSectionProgress.total} missions completed, ${tablePoints} ${rewardUnitCompactLabel(rewardUnit)}`}
+              >
+                {missionSectionProgress.done}/{missionSectionProgress.total} completed ·{' '}
+                <RewardUnitIcon size={18} />
+                {tablePoints}
+              </span>
             ) : null}
           </div>
 
           {!missions.length ? (
-            <p className="text-left text-sm font-medium text-violet-800/80">
+            <p className="px-5 pt-3 text-left text-sm font-medium text-violet-800/80">
               No missions for this table yet — check back soon.
             </p>
           ) : (
+            <div className="w-full min-w-0 max-w-full overflow-x-hidden">
             <div
               ref={carouselRef}
-              className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3 pr-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain pb-3 pl-5 pr-6 [scroll-padding-left:1.25rem] [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
             >
               {missions.map((m, i) => {
                 const st = statusFor(m.id, m)
                 const completed = st === 'completed'
                 const pending = st === 'pending'
-                const surface =
-                  MISSION_CARD_BACKGROUNDS[i % MISSION_CARD_BACKGROUNDS.length]
+                const limitReached = st === 'limit_reached'
+                const surface = missionGradientAt(missions, i)
+                const isBeatcoinMission = m.validation_type === 'beatcoin'
+                const beatcoinsFound = submissionSlotsUsedByMission.get(m.id) ?? 0
+                const typeIcon = m.validation_type === 'video'
+                  ? '🎥'
+                  : m.validation_type === 'photo'
+                    ? '📸'
+                    : m.validation_type === 'signature'
+                      ? '🖊️'
+                      : m.validation_type === 'text'
+                        ? '📝'
+                        : '💬'
+                const ctaLabel = isBeatcoinMission
+                  ? `${beatcoinsFound} found`
+                  : completed || limitReached
+                    ? '✓ Mission completed'
+                    : pending
+                      ? 'Pending review'
+                      : 'Select mission'
+
+                const isTableGreetingCard = /post a table greeting/i.test(m.title)
+                const isTrumpetStoryCard =
+                  /get alex to explain the trumpet story/i.test(m.title)
 
                 return (
                   <button
                     key={m.id}
                     type="button"
                     data-mission-card
+                    disabled={limitReached}
                     onClick={() => openMissionModal(m.id)}
-                    className="relative flex h-[min(560px,82vh)] w-[min(300px,78vw)] shrink-0 snap-start flex-col overflow-hidden rounded-3xl p-5 text-left transition active:scale-[0.99]"
-                    style={{ background: surface }}
+                    className={`relative flex h-[min(420px,62vh)] w-[min(300px,78vw)] shrink-0 snap-start flex-col overflow-hidden rounded-3xl p-5 text-left transition active:scale-[0.99] ${limitReached ? 'opacity-95' : ''}`}
+                    style={
+                      isTrumpetStoryCard || isTableGreetingCard
+                        ? undefined
+                        : { background: surface }
+                    }
                   >
+                    {isTrumpetStoryCard ? (
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat"
+                        style={{
+                          backgroundImage: `url(${TRUMPET_STORY_CARD_ARTWORK_PATH})`,
+                        }}
+                      />
+                    ) : isTableGreetingCard ? (
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat"
+                        style={{ backgroundImage: `url(${TABLE_GREETING_ARTWORK_PATH})` }}
+                      />
+                    ) : null}
                     <span
-                      className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-lg leading-none text-zinc-800"
+                      className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-lg leading-none text-zinc-800"
                       aria-hidden
                     >
-                      {completed ? '✓' : pending ? '⏳' : '○'}
+                      {isBeatcoinMission ? <RewardUnitIcon size={22} /> : typeIcon}
                     </span>
 
-                    <h3 className="pr-12 text-left text-lg font-bold leading-snug text-white">
+                    <h3 className="relative z-10 pr-12 text-left text-lg font-bold leading-snug text-white">
                       {m.title}
                     </h3>
-                    <p className="mt-2 text-left text-sm font-semibold tabular-nums text-white/95">
-                      +{m.points} pts
+                    <p className="relative z-10 mt-2 text-left text-sm font-semibold tabular-nums text-white/95">
+                      {isBeatcoinMission ? (
+                        <>
+                          {beatcoinsFound} {rewardUnit.name} found
+                        </>
+                      ) : (
+                        <span className="inline-flex items-center gap-1">
+                          <RewardAmount showPlus amount={m.points} iconSize={16} className="text-white/95" />
+                        </span>
+                      )}
                     </p>
 
-                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-1 pb-6 pt-8">
-                      {completed || pending ? (
-                        <span className="rounded-[9999px] bg-white/92 px-4 py-1.5 text-center text-xs font-medium text-zinc-800">
-                          {completed ? 'Completed' : 'Pending review'}
-                        </span>
-                      ) : null}
+                    <div className="relative z-10 mt-3">
+                      <span
+                        className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-center text-sm font-medium ${
+                          completed || limitReached
+                            ? 'bg-white text-emerald-800'
+                            : pending
+                              ? 'bg-white text-amber-800'
+                              : 'bg-white/92 text-zinc-900'
+                        }`}
+                      >
+                        {pending ? (
+                          <span aria-hidden className="text-base opacity-90">
+                            ⏳
+                          </span>
+                        ) : null}
+                        {ctaLabel}
+                      </span>
                     </div>
                   </button>
                 )
               })}
             </div>
+            </div>
           )}
+          {missions.length > 0 ? (
+            <div className="mt-2 flex items-center justify-center gap-2">
+              <button
+                type="button"
+                aria-label="Previous mission"
+                onClick={() => scrollMissionCarousel(-1)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300 bg-white text-lg font-medium text-zinc-900 transition hover:bg-zinc-50 active:scale-95"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                aria-label="Next mission"
+                onClick={() => scrollMissionCarousel(1)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300 bg-white text-lg font-medium text-zinc-900 transition hover:bg-zinc-50 active:scale-95"
+              >
+                ›
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
-      <div className="mx-auto w-full max-w-lg space-y-6 px-5 pb-28 pt-6">
-        {!loading && !error && tableName.trim() ? (
-          <GreetingsStripSection
-            items={greetingsFeed}
-            loading={greetingsLoading}
-            viewAllHref="/greetings"
+      <div className="mx-auto w-full min-w-0 max-w-lg space-y-6 px-5 pb-28 pt-6">
+        {!loading && !error && missionsEnabled === true && tableName.trim() ? (
+          <MissionSocialFeedSection
+            items={missionFeedItems}
+            loading={missionFeedLoading}
           />
         ) : null}
 
@@ -763,8 +966,9 @@ export default function MissionsTablePage({
                             </span>
                           ) : null}
                         </span>
-                        <span className="shrink-0 font-extrabold tabular-nums text-violet-800">
-                          {row.totalPoints} pts
+                        <span className="inline-flex shrink-0 items-center gap-1 font-extrabold tabular-nums text-violet-800">
+                          <RewardUnitIcon size={14} />
+                          {row.totalPoints}
                         </span>
                       </li>
                     )
@@ -779,6 +983,36 @@ export default function MissionsTablePage({
           ? (() => {
               const m = missions.find((x) => x.id === selectedMissionId)
               if (!m) return null
+              const selectedIdx = missions.findIndex((x) => x.id === selectedMissionId)
+              const hasNav = missions.length > 1 && selectedIdx >= 0
+              const missionGradient = missionGradientAt(
+                missions,
+                selectedIdx >= 0 ? selectedIdx : 0
+              )
+              const nextRankTarget =
+                tableRank != null && tableRank > 1 ? tableRank - 1 : null
+              const teamAbove =
+                tableRank != null && tableRank > 1
+                  ? leaderboardRows[tableRank - 2]
+                  : undefined
+              const missionCouldReachNextRank = Boolean(
+                teamAbove != null &&
+                  tablePoints + m.points >= teamAbove.totalPoints
+              )
+              const isTableGreetingMission = /post a table greeting/i.test(m.title)
+              const isTrumpetStoryMission =
+                /get alex to explain the trumpet story/i.test(m.title)
+              const rankForEmblem =
+                missionCouldReachNextRank && nextRankTarget != null
+                  ? nextRankTarget
+                  : tableRank
+              const rankEmblemUrl = resolveRankEmblemUrl(
+                guestEmblems,
+                rankForEmblem ?? null
+              )
+              const teamEmblemUrl =
+                guestEmblems.team_emblem_by_table_id?.[tableId] ?? null
+
               const missionForModal: MissionForModal = {
                 id: m.id,
                 title: m.title,
@@ -788,9 +1022,15 @@ export default function MissionsTablePage({
                 target_person_name: m.target_person_name ?? null,
                 submission_hint: m.submission_hint ?? null,
                 header_title: m.header_title ?? null,
-                header_image_url: m.header_image_url ?? null,
+                /** Used for circular mission image in white content area. */
+                header_image_url: isTrumpetStoryMission
+                  ? TRUMPET_STORY_CARD_ARTWORK_PATH
+                  : isTableGreetingMission
+                    ? TABLE_GREETING_ARTWORK_PATH
+                    : (m.header_image_url ?? null),
                 approval_mode: m.approval_mode ?? 'manual',
                 allow_multiple_submissions: m.allow_multiple_submissions ?? false,
+                max_submissions_per_table: m.max_submissions_per_table ?? null,
                 message_required: m.message_required ?? false,
               }
               return (
@@ -802,13 +1042,47 @@ export default function MissionsTablePage({
                   tableColor={tableColor}
                   isPending={statusFor(m.id, m) === 'pending'}
                   isCompleted={statusFor(m.id, m) === 'completed'}
+                  atSubmissionLimit={statusFor(m.id, m) === 'limit_reached'}
                   isRejected={modalIsRejected}
                   rejectedNote={modalRejectedNote}
-                  submittedCount={approvedSubmissionCountByMission.get(m.id) ?? 0}
+                  submissionSlotsUsed={submissionSlotsUsedByMission.get(m.id) ?? 0}
                   existingPhotoUrl={modalExistingPhotoUrl}
                   missionsEnabled={missionsEnabled === true}
+                  missionGradient={missionGradient}
+                  rewardHud={{
+                    teamPoints: tablePoints,
+                    rank: tableRank,
+                    totalTeams,
+                    missionRewardPoints: m.points,
+                    missionCouldReachNextRank,
+                    nextRankTarget,
+                  }}
+                  hudEmblems={{
+                    teamEmblemUrl,
+                    rankEmblemUrl,
+                  }}
                   onClose={() => setSelectedMissionId(null)}
+                  onPrev={
+                    missionOverlayVariant === 'hero-greeting' && hasNav
+                      ? () =>
+                          setSelectedMissionId(
+                            missions[
+                              (selectedIdx - 1 + missions.length) % missions.length
+                            ]!.id
+                          )
+                      : undefined
+                  }
+                  onNext={
+                    missionOverlayVariant === 'hero-greeting' && hasNav
+                      ? () =>
+                          setSelectedMissionId(
+                            missions[(selectedIdx + 1) % missions.length]!.id
+                          )
+                      : undefined
+                  }
                   onSuccess={refreshTableData}
+                  resetSignal={missionModalReset}
+                  overlayVariant={missionOverlayVariant}
                 />
               )
             })()

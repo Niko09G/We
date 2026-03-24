@@ -161,7 +161,11 @@ export async function approveMissionSubmission(submissionId: string): Promise<{
           ((tableRow as { color?: string | null } | null)?.color as string | null) ?? null,
         mission_submission_id: submissionId,
       })
-      if (!gErr) greetingCreated = true
+      if (gErr) {
+        if (gErr.code !== '23505') throw new Error(gErr.message || 'Failed to create greeting.')
+      } else {
+        greetingCreated = true
+      }
     }
   }
 

@@ -1,6 +1,8 @@
 import type { PostgrestError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase/client'
 import { deleteMissionGeneratedGreetingsBySubmissionId } from './greetings-admin'
+import { isRepeatableAutoMission } from '@/lib/mission-limits'
+import { adminResetWithArchive } from '@/lib/admin-recovery'
 
 export type ScoreEventKind = 'completion' | 'repeatable_approved_submission'
 
@@ -63,14 +65,14 @@ export async function fetchAdminScoreBreakdown(): Promise<
         .eq('is_archived', false)
         .order('name'),
       supabase.from('missions').select(
-        'id,title,points,allow_multiple_submissions,points_per_submission,approval_mode,validation_type,add_to_greetings'
+        'id,title,points,allow_multiple_submissions,max_submissions_per_table,points_per_submission,approval_mode,validation_type,add_to_greetings'
       ),
       supabase
         .from('completions')
         .select('id,table_id,mission_id,created_at'),
       supabase
         .from('mission_submissions')
-        .select('id,table_id,mission_id,status,approved_at')
+        .select('id,table_id,mission_id,status,approved_at,submission_type,submission_data')
         .eq('status', 'approved'),
     ])
 
@@ -90,6 +92,7 @@ export async function fetchAdminScoreBreakdown(): Promise<
     title: string
     points: number
     allow_multiple_submissions: boolean
+    max_submissions_per_table: number | null
     points_per_submission: number | null
     approval_mode: string
     validation_type: string
@@ -100,18 +103,27 @@ export async function fetchAdminScoreBreakdown(): Promise<
 
   const oneTimeCompletionPoints = new Map<string, number>()
   missions.forEach((m) => {
-    const isRepeatableAuto =
-      m.allow_multiple_submissions === true && m.approval_mode === 'auto'
-    if (!isRepeatableAuto) {
+    if (
+      !isRepeatableAutoMission({
+        approval_mode: m.approval_mode,
+        max_submissions_per_table: m.max_submissions_per_table,
+        allow_multiple_submissions: m.allow_multiple_submissions,
+      })
+    ) {
       oneTimeCompletionPoints.set(m.id, m.points ?? 0)
     }
   })
 
   const repeatableSubmissionPoints = new Map<string, number>()
   missions.forEach((m) => {
-    const isRepeatableAuto =
-      m.allow_multiple_submissions === true && m.approval_mode === 'auto'
-    if (isRepeatableAuto) {
+    if (m.validation_type === 'beatcoin') return
+    if (
+      isRepeatableAutoMission({
+        approval_mode: m.approval_mode,
+        max_submissions_per_table: m.max_submissions_per_table,
+        allow_multiple_submissions: m.allow_multiple_submissions,
+      })
+    ) {
       repeatableSubmissionPoints.set(
         m.id,
         m.points_per_submission != null ? m.points_per_submission : m.points ?? 0
@@ -132,6 +144,8 @@ export async function fetchAdminScoreBreakdown(): Promise<
     mission_id: string
     status: string
     approved_at: string | null
+    submission_type: string | null
+    submission_data: { points_awarded?: number } | null
   }>
 
   const breakdownByTable = new Map<string, TableScoreBreakdown>()
@@ -166,11 +180,19 @@ export async function fetchAdminScoreBreakdown(): Promise<
   }
 
   for (const s of repeatableApproved) {
-    const points = repeatableSubmissionPoints.get(s.mission_id)
-    if (points == null) continue
-
     const mission = missionById.get(s.mission_id)
     if (!mission) continue
+
+    let points: number
+    if (mission.validation_type === 'beatcoin') {
+      const raw = s.submission_data?.points_awarded
+      const n = typeof raw === 'number' ? raw : Number(raw)
+      points = formatPoints(Number.isFinite(n) ? n : 0)
+    } else {
+      const p = repeatableSubmissionPoints.get(s.mission_id)
+      if (p == null) continue
+      points = formatPoints(p)
+    }
 
     const ts = s.approved_at ?? ''
     const table = breakdownByTable.get(s.table_id)
@@ -183,9 +205,14 @@ export async function fetchAdminScoreBreakdown(): Promise<
       tableId: s.table_id,
       missionId: s.mission_id,
       missionTitle: mission.title ?? s.mission_id,
-      points: formatPoints(points),
+      points,
       timestamp: ts,
-      sourceLabel: isGreeting ? 'repeatable greeting mission' : 'approved submission',
+      sourceLabel:
+        mission.validation_type === 'beatcoin'
+          ? 'Beatcoin claim'
+          : isGreeting
+            ? 'repeatable greeting mission'
+            : 'approved submission',
     })
   }
 
@@ -299,103 +326,16 @@ export async function undoAdminScoreEvents(events: ScoreEvent[]): Promise<void> 
 }
 
 export async function resetAdminScoresForTable(tableId: string): Promise<void> {
-  const now = new Date().toISOString()
-
-  const delC = await supabase
-    .from('completions')
-    .delete()
-    .eq('table_id', tableId)
-    .select('id')
-
-  throwIfError('Delete completions for table', delC.error)
-
-  const { data: approvedSubs, error: subErr } = await supabase
-    .from('mission_submissions')
-    .select('id')
-    .eq('table_id', tableId)
-    .eq('status', 'approved')
-  if (subErr)
-    throw new Error(formatSupabaseError('Load approved submissions for table reset', subErr))
-
-  const ids = (approvedSubs ?? []).map((r) => r.id as string)
-  if (ids.length > 0) {
-    const upRes = await supabase
-      .from('mission_submissions')
-      .update({
-        status: 'rejected',
-        approved_at: null,
-        review_note: `Reset table scores by admin on ${now}`,
-      })
-      .in('id', ids)
-      .select('id')
-
-    throwIfError('Reject mission submissions for table reset', upRes.error)
-
-    if (!upRes.data || upRes.data.length !== ids.length) {
-      throw new Error(
-        `Table reset partially failed: expected to revert ${ids.length} submission(s), updated ${upRes.data?.length ?? 0}. Completions for this table were already removed — refresh and retry submissions step if needed.`
-      )
-    }
-
-    for (const sid of ids) {
-      try {
-        await deleteMissionGeneratedGreetingsBySubmissionId(sid)
-      } catch (e) {
-        throw new Error(
-          `Scores reset but greeting cleanup failed for submission ${sid}: ${e instanceof Error ? e.message : String(e)}`
-        )
-      }
-    }
-  }
+  await adminResetWithArchive({
+    scope: 'table_all_progress',
+    table_id: tableId,
+    note: 'Scoreboard: reset all progress for one table',
+  })
 }
 
 export async function resetAdminAllScores(): Promise<void> {
-  const now = new Date().toISOString()
-
-  // PostgREST requires a filter on delete; `created_at` is always set on completions rows.
-  const delC = await supabase
-    .from('completions')
-    .delete()
-    .gte('created_at', '1970-01-01T00:00:00Z')
-    .select('id')
-
-  throwIfError('Delete all completions', delC.error)
-
-  const { data: approvedSubs, error: subErr } = await supabase
-    .from('mission_submissions')
-    .select('id')
-    .eq('status', 'approved')
-  if (subErr)
-    throw new Error(formatSupabaseError('Load all approved submissions for global reset', subErr))
-
-  const ids = (approvedSubs ?? []).map((r) => r.id as string)
-  if (ids.length > 0) {
-    const upRes = await supabase
-      .from('mission_submissions')
-      .update({
-        status: 'rejected',
-        approved_at: null,
-        review_note: `Reset all leaderboard scores by admin on ${now}`,
-      })
-      .in('id', ids)
-      .select('id')
-
-    throwIfError('Reject all mission submissions for global reset', upRes.error)
-
-    if (!upRes.data || upRes.data.length !== ids.length) {
-      throw new Error(
-        `Global reset partially failed: expected to revert ${ids.length} submission(s), updated ${upRes.data?.length ?? 0}. Completions may have been cleared — refresh and inspect.`
-      )
-    }
-
-    for (const sid of ids) {
-      try {
-        await deleteMissionGeneratedGreetingsBySubmissionId(sid)
-      } catch (e) {
-        throw new Error(
-          `Global scores reset but greeting cleanup failed for submission ${sid}: ${e instanceof Error ? e.message : String(e)}`
-        )
-      }
-    }
-  }
+  await adminResetWithArchive({
+    scope: 'event_all_progress',
+    note: 'Scoreboard: reset all event progress',
+  })
 }

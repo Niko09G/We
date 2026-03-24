@@ -1,5 +1,9 @@
 'use client'
 
+import { RewardUnitIcon } from '@/components/reward/RewardUnitIcon'
+import { useRewardUnit } from '@/components/reward/RewardUnitProvider'
+import { rewardUnitCompactLabel } from '@/lib/reward-unit'
+
 type Props = {
   tableName: string
   tableColor: string | null
@@ -17,6 +21,7 @@ export function TableTeamHero({
   rank,
   totalTeams,
 }: Props) {
+  const { config: rewardUnit } = useRewardUnit()
   const accent = tableColor?.trim() || '#a78bfa'
 
   return (
@@ -63,9 +68,10 @@ export function TableTeamHero({
         <div className="mt-5 grid grid-cols-2 gap-3">
           <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-white/50">
-              Points
+              {rewardUnitCompactLabel(rewardUnit)}
             </p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-white">
+            <p className="mt-1 flex items-center gap-2 text-2xl font-bold tabular-nums text-white">
+              <RewardUnitIcon size={26} />
               {Number.isFinite(points) ? points : 0}
             </p>
           </div>

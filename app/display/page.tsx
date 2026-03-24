@@ -1,12 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { RewardUnitIcon } from '@/components/reward/RewardUnitIcon'
+import { useRewardUnit } from '@/components/reward/RewardUnitProvider'
 import { listReadyGreetingsForDisplay, type GreetingRow } from '@/lib/greetings-admin'
 import { fetchLeaderboardBundle, type LeaderboardEntry, type RecentActivityItem } from '@/lib/leaderboard'
+import { rewardUnitCompactLabel } from '@/lib/reward-unit'
 
 const ROTATE_INTERVAL_MS = 10_000
-const POLL_INTERVAL_MS = 20_000
-const LEADERBOARD_POLL_MS = 12_000
+const POLL_INTERVAL_MS = 30_000
+const LEADERBOARD_POLL_MS = 20_000
 
 /** Very subtle row tint from team hex (left accent is main signal). */
 function teamColorTint(hex: string | null): string | null {
@@ -56,6 +59,7 @@ function ImageWithFallback({
 }
 
 export default function DisplayPage() {
+  const { config: rewardUnit } = useRewardUnit()
   const [greetings, setGreetings] = useState<GreetingRow[]>([])
   const [loading, setLoading] = useState(true)
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -99,7 +103,10 @@ export default function DisplayPage() {
   }, [fetchGreetings])
 
   useEffect(() => {
-    const id = setInterval(fetchGreetings, POLL_INTERVAL_MS)
+    const id = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      void fetchGreetings()
+    }, POLL_INTERVAL_MS)
     return () => clearInterval(id)
   }, [fetchGreetings])
 
@@ -172,7 +179,10 @@ export default function DisplayPage() {
   }, [fetchLeaderboardData])
 
   useEffect(() => {
-    const id = setInterval(fetchLeaderboardData, LEADERBOARD_POLL_MS)
+    const id = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      void fetchLeaderboardData()
+    }, LEADERBOARD_POLL_MS)
     return () => clearInterval(id)
   }, [fetchLeaderboardData])
 
@@ -261,7 +271,12 @@ export default function DisplayPage() {
               <tr className="border-b border-zinc-700/80 text-xs font-medium uppercase tracking-wider text-zinc-500">
                 <th className="pb-3 pr-2 pl-1 font-mono">#</th>
                 <th className="pb-3 pr-2">Table</th>
-                <th className="pb-3 pr-2">Pts</th>
+                <th className="pb-3 pr-2">
+                  <span className="inline-flex items-center gap-1">
+                    <RewardUnitIcon size={12} />
+                    <span>{rewardUnitCompactLabel(rewardUnit)}</span>
+                  </span>
+                </th>
                 <th className="pb-3">Completed</th>
               </tr>
             </thead>
@@ -307,8 +322,9 @@ export default function DisplayPage() {
                       </span>
                     </td>
                     <td className={`py-3 pr-2 ${pointsCellClass(rank)}`}>
-                      <span className="inline-flex items-baseline gap-1">
-                        <span>{entry.totalPoints}</span>
+                      <span className="inline-flex items-center gap-1">
+                        <RewardUnitIcon size={14} />
+                        <span className="tabular-nums">{entry.totalPoints}</span>
                         {anim?.delta != null && anim.delta > 0 && (
                           <span
                             className="text-[11px] font-medium text-amber-200/85 tabular-nums animate-[lbPointsPop_1.35s_ease-out]"
@@ -355,8 +371,9 @@ export default function DisplayPage() {
                   <span className="min-w-0 flex-1 truncate font-medium text-zinc-300">
                     {item.tableName}
                   </span>
-                  <span className="shrink-0 tabular-nums font-semibold text-amber-200/90">
+                  <span className="inline-flex shrink-0 items-center gap-0.5 tabular-nums font-semibold text-amber-200/90">
                     +{item.points}
+                    <RewardUnitIcon size={11} />
                   </span>
                 </div>
                 <p className="mt-0.5 truncate text-zinc-500">{item.missionTitle}</p>

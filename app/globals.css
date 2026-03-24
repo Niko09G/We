@@ -19,10 +19,26 @@
   }
 }
 
+/* Lock document width — prevents horizontal rubber-banding from off-screen decor / carousels */
+html {
+  overflow-x: clip;
+  max-width: 100%;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+  overflow-x: clip;
+  max-width: 100%;
+  position: relative;
+}
+
+/* Prevent iOS Safari zoom on focus (inputs < 16px) — guest + admin inputs */
+input,
+textarea,
+select {
+  font-size: 16px;
 }
 
 @keyframes fadeIn {
@@ -90,5 +106,17 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Mission modal: photo/video confirm step */
+@keyframes missionStepIn {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }

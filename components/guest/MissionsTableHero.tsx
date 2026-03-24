@@ -1,6 +1,8 @@
 'use client'
 
 import Link from 'next/link'
+import { GUEST_EMBLEM_PLACEHOLDER_DATA_URL } from '@/lib/guest-emblem-config'
+import { RewardUnitIcon } from '@/components/reward/RewardUnitIcon'
 import { MISSIONS_HERO_BACKGROUND } from '@/lib/guest-missions-gradients'
 
 export type MissionsTableHeroProps = {
@@ -10,9 +12,12 @@ export type MissionsTableHeroProps = {
   tableRank: number | null
   totalTeams: number
   tablePoints: number
+  heroTeamEmblemUrl?: string | null
+  heroRankEmblemUrl?: string | null
   missionsEnabled: boolean | null
   missionCount: number
   onStartMission: () => void
+  onSendGreeting: () => void
 }
 
 /**
@@ -25,27 +30,18 @@ export function MissionsTableHero({
   tableRank,
   totalTeams,
   tablePoints,
+  heroTeamEmblemUrl = null,
+  heroRankEmblemUrl = null,
   missionsEnabled,
   missionCount,
   onStartMission,
+  onSendGreeting,
 }: MissionsTableHeroProps) {
   return (
     <section
-      className="relative isolate h-[100dvh] min-h-[100dvh] max-h-[100dvh] overflow-hidden text-white"
+      className="relative isolate h-[100dvh] min-h-[100dvh] max-h-[100dvh] w-full max-w-full min-w-0 overflow-x-hidden overflow-y-hidden text-white"
       style={{ background: MISSIONS_HERO_BACKGROUND }}
     >
-      <div
-        className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
-        aria-hidden
-      >
-        <div className="absolute left-[3%] top-[10%] h-14 w-14 rotate-[-11deg] rounded-2xl bg-white opacity-[0.12]" />
-        <div className="absolute right-[4%] top-[14%] h-16 w-20 rotate-[9deg] rounded-2xl bg-white opacity-[0.1]" />
-        <div className="absolute left-[2%] top-[48%] h-10 w-24 rotate-[-4deg] rounded-full bg-white opacity-[0.14]" />
-        <div className="absolute right-[2%] top-[44%] h-12 w-12 rotate-[12deg] rounded-xl bg-white opacity-[0.11]" />
-        <div className="absolute bottom-[12%] left-[5%] h-[4.5rem] w-16 rotate-[5deg] rounded-3xl bg-white opacity-[0.12]" />
-        <div className="absolute bottom-[10%] right-[5%] h-11 w-[4rem] rotate-[-8deg] rounded-lg bg-white opacity-[0.1]" />
-      </div>
-
       <nav className="absolute left-0 right-0 top-0 z-20 flex flex-wrap items-center justify-between gap-2 px-5 pt-5">
         <Link
           href="/play"
@@ -80,67 +76,99 @@ export function MissionsTableHero({
             </div>
           ) : tableName.trim() ? (
             <>
-              <p className="flex items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-violet-950/80">
-                <span
-                  className="h-2 w-2 shrink-0 rounded-full ring-2 ring-violet-300/80"
-                  style={{ backgroundColor: tableColor?.trim() || '#fef9c3' }}
-                  aria-hidden
+              <div className="mx-auto mb-4 w-full max-w-xs">
+                <img
+                  src="/hero/hero-main.png"
+                  alt=""
+                  className="mx-auto w-[80%] max-w-[80%] object-contain"
                 />
+              </div>
+              <p className="flex items-center justify-center text-center text-2xl font-semibold leading-snug text-white">
                 {tableName}
               </p>
 
-              <div className="mt-5 flex flex-wrap items-baseline justify-center gap-0.5">
-                <span className="text-[clamp(3rem,12vw,4.5rem)] font-black leading-none tracking-tight text-zinc-900">
-                  {tableRank != null ? `#${tableRank}` : '#—'}
-                </span>
-                {totalTeams > 0 ? (
-                  <span className="translate-y-1 text-xl font-medium text-zinc-600 sm:text-2xl">
-                    /{totalTeams}
-                  </span>
-                ) : null}
+              <div className="mt-5 flex justify-center">
+                <img
+                  src={heroTeamEmblemUrl || heroRankEmblemUrl || GUEST_EMBLEM_PLACEHOLDER_DATA_URL}
+                  alt=""
+                  className="h-[84px] w-[84px] rounded-2xl object-contain"
+                />
               </div>
 
               <div
                 className="mx-auto mt-6 h-px max-w-[14rem]"
                 style={{
                   background:
-                    'linear-gradient(to right, transparent, rgba(24,24,27,0.12), transparent)',
+                    'linear-gradient(to right, transparent, rgba(255,255,255,0.55), transparent)',
                 }}
                 role="presentation"
               />
 
-              <p className="mt-6 text-base font-bold text-zinc-900 sm:text-lg">
-                <span aria-hidden>✨ </span>
-                {Number.isFinite(tablePoints) ? tablePoints : 0} points
+              <div className="mt-5 flex items-center justify-center gap-5">
+                <p className="inline-flex items-center gap-1 text-base font-semibold text-white sm:text-lg">
+                  <img
+                    src={heroRankEmblemUrl || heroTeamEmblemUrl || GUEST_EMBLEM_PLACEHOLDER_DATA_URL}
+                    alt=""
+                    className="h-6 w-6 rounded object-contain opacity-90"
+                  />
+                  <span className="tabular-nums">
+                    {tableRank != null ? `#${tableRank}` : '#—'}
+                  </span>
+                  {totalTeams > 0 ? (
+                    <span className="text-sm font-medium text-white/65">/{totalTeams}</span>
+                  ) : null}
+                </p>
+                <p className="inline-flex items-center gap-1.5 text-base font-bold text-white sm:text-lg">
+                  <RewardUnitIcon size={24} />
+                  <span className="tabular-nums">
+                    {Number.isFinite(tablePoints) ? tablePoints : 0}
+                  </span>
+                </p>
+              </div>
+
+              <p className="mx-auto mt-4 max-w-[22rem] text-sm font-medium leading-relaxed text-white/90">
+                We are Kaypoh Aunties! We see, we hear, we confirm win Bea &amp; Niko&apos;s wedding
+                game.
+                <br />
+                Faster go play!
               </p>
 
-              <p className="mx-auto mt-4 max-w-[22rem] text-sm font-medium leading-relaxed text-zinc-800">
-                Complete missions, and send greetings to the big screen to earn points and
-                win!
-              </p>
+              <div className="mt-6 flex w-full flex-col items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={onStartMission}
+                  className="inline-flex w-full max-w-xs items-center justify-center gap-1.5 rounded-[9999px] bg-white px-6 py-3 text-base font-medium text-black transition active:scale-[0.99] hover:bg-zinc-50"
+                >
+                  <span aria-hidden>🚀</span>
+                  <span>Start mission</span>
+                </button>
+                <Link
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    onSendGreeting()
+                  }}
+                  className="inline-flex w-full max-w-xs items-center justify-center gap-1.5 rounded-[9999px] border border-white/35 bg-white/15 px-6 py-3 text-base font-medium text-white backdrop-blur-sm transition active:scale-[0.99] hover:bg-white/25"
+                >
+                  <span aria-hidden>📷</span>
+                  <span>Send a greeting</span>
+                </Link>
+              </div>
 
-              <div className="mt-6 flex justify-center">
-                {missionsEnabled === true && missionCount > 0 ? (
-                  <button
-                    type="button"
-                    onClick={onStartMission}
-                    className="rounded-[9999px] bg-white px-5 py-2 text-sm font-medium text-black transition active:scale-[0.99] hover:bg-zinc-50"
-                  >
-                    Start mission
-                  </button>
-                ) : missionsEnabled === true && !missionCount && !loading ? (
-                  <p className="text-sm font-medium text-zinc-700">
+              <div className="mt-3">
+                {missionsEnabled === true && !missionCount && !loading ? (
+                  <p className="text-sm font-medium text-white/85">
                     Quests aren’t live yet — check back soon.
                   </p>
                 ) : missionsEnabled === false ? (
-                  <p className="text-sm font-medium text-zinc-700">
+                  <p className="text-sm font-medium text-white/85">
                     Quests open when your hosts unlock them.
                   </p>
                 ) : null}
               </div>
             </>
           ) : !loading ? (
-            <p className="text-sm font-medium text-zinc-800">
+            <p className="text-sm font-medium text-white/90">
               Select a table from the list to get started.
             </p>
           ) : null}

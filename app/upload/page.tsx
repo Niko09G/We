@@ -2,7 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { compressImage } from '@/lib/image-compress'
-import { uploadGreetingImage, insertGreeting } from '@/lib/upload-greeting'
+import {
+  insertGreeting,
+  removeGreetingImageByUrl,
+  uploadGreetingImage,
+} from '@/lib/upload-greeting'
 
 const MAX_MESSAGE_LENGTH = 120
 const MAX_FILE_BYTES = 15 * 1024 * 1024 // 15MB
@@ -76,9 +80,11 @@ export default function UploadPage() {
     setUploadError(null)
     setUploadSuccess(false)
 
+    let uploadedImageUrl: string | null = null
     try {
       const { blob, contentType } = await compressImage(file)
       const imageUrl = await uploadGreetingImage(blob, contentType)
+      uploadedImageUrl = imageUrl
       await insertGreeting({
         name: name.trim() || null,
         message: message.trim(),
@@ -91,6 +97,7 @@ export default function UploadPage() {
       setUploadError(null)
       setUploadSuccess(true)
     } catch (err) {
+      await removeGreetingImageByUrl(uploadedImageUrl)
       setUploadError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {
       setUploading(false)
