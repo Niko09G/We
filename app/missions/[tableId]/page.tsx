@@ -806,7 +806,7 @@ export default function MissionsTablePage({
                       </p>
                     ) : null}
 
-                    <div className="relative z-10 mt-auto w-full pt-4">
+                    <div className="relative z-10 mt-3 w-full">
                       <span className="flex w-full items-center justify-center rounded-xl bg-white px-4 py-2.5 text-center text-sm font-semibold text-black">
                         {completed || limitReached ? 'Done' : 'Start mission'}
                       </span>

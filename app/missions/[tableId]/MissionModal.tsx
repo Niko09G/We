@@ -423,12 +423,11 @@ export function MissionModal({
     ? 'flex min-h-0 flex-1 flex-col items-stretch justify-start overflow-y-auto overflow-x-hidden overscroll-contain px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(1.35rem,calc(env(safe-area-inset-top)+1rem))] sm:px-6'
     : 'flex min-h-0 flex-1 flex-col items-stretch justify-start overflow-y-auto overflow-x-hidden overscroll-contain px-14 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-0 sm:px-16'
 
-  const cardBodyScrollClass =
-    'min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] pl-[10px] pr-3 pb-6 pt-2 sm:pr-4 sm:pb-8 sm:pt-2.5'
-  const cardCtaBarClass = `w-full min-w-0 shrink-0 bg-white ${MISSION_OVERLAY_CTA_BAR_PAD}`
-
-  /** Primary action pinned to bottom of card while content scrolls (guest flows). */
-  const cardStickyCtaClass = `sticky bottom-0 z-10 mt-5 w-full min-w-0 -mx-3 bg-white ${MISSION_OVERLAY_CTA_BAR_PAD} sm:-mx-4`
+  /** Scrollable overlay body only — CTAs live in `overlayCtaBarClass` (same band as Done). */
+  const cardScrollAreaClass =
+    'min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] pl-[10px] pr-3 pb-4 pt-2 sm:pr-4 sm:pt-2.5'
+  /** Full-width footer: matches completed-state Done (not nested under scroll padding). */
+  const overlayCtaBarClass = `w-full min-w-0 shrink-0 bg-white ${MISSION_OVERLAY_CTA_BAR_PAD}`
 
   const inActiveMissionForm =
     missionsEnabled && !completed && !pending && !atSubmissionLimit
@@ -437,12 +436,21 @@ export function MissionModal({
   const isVideoTwoStep =
     submission_type === 'video' && inActiveMissionForm && !isBeatcoinMission
   const showStandardMissionHeader = !isPhotoTwoStep && !isVideoTwoStep
+  /** Same condition as the Done/Awaiting footer — primary CTAs must not duplicate this band. */
+  const showOverlayTerminalFooter =
+    missionsEnabled === false ||
+    completed ||
+    (pending && !success) ||
+    atSubmissionLimit
 
   const missionTitleText = mission.header_title?.trim() || mission.title
-  const missionDescOneLine = (mission.description ?? '')
-    .replace(/\s+/g, ' ')
-    .trim()
   const missionArtworkUrl = mission.header_image_url?.trim() || null
+  const missionDescriptionBody =
+    mission.description != null && mission.description.trim() !== ''
+      ? mission.description
+      : null
+  const missionBodyTextClass =
+    'text-[0.9rem] font-normal leading-relaxed text-zinc-600 whitespace-pre-wrap break-words'
   const circularImageSrc =
     previewUrl ||
     videoPreviewUrl ||
@@ -816,414 +824,443 @@ export function MissionModal({
               ) : null}
 
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div
-                  className={`${cardBodyScrollClass} font-sans text-[0.9rem] font-normal leading-relaxed sm:pt-2 ${
-                    isPhotoTwoStep || isVideoTwoStep ? 'flex min-h-0 flex-col' : ''
-                  }`}
-                >
-                {showStandardMissionHeader ? (
-                  <>
-                    <div className="mt-3 flex justify-center">
-                      {/* eslint-disable-next-line @next/next/no-img-element -- mission artwork / uploaded preview */}
-                      <img
-                        src={circularImageSrc}
-                        alt=""
-                        className="h-[80px] w-[80px] rounded-full border border-zinc-200/90 object-cover"
-                      />
-                    </div>
-                    <h2
-                      id="mission-modal-title"
-                      className="px-5 pt-4 text-center text-[1.2rem] font-semibold leading-snug text-zinc-900 sm:px-7 sm:pt-5"
-                    >
-                      {missionTitleText}
-                    </h2>
-                    <p className="mt-3.5 px-5 break-words text-center text-[0.9rem] font-normal leading-relaxed text-zinc-600 sm:px-7">
-                      {mission.description ?? 'No description.'}
-                    </p>
-                  </>
+                {!showOverlayTerminalFooter && isPhotoTwoStep ? (
+                  <input
+                    id="mission-photo-file"
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/webp"
+                    disabled={!missionsEnabled || submitting}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null
+                      if (f && !isAcceptedImageType(f.type)) {
+                        setSubmitError('Please choose a JPG, PNG, or WebP image.')
+                        e.currentTarget.value = ''
+                        return
+                      }
+                      if (f && f.size > MAX_IMAGE_UPLOAD_BYTES) {
+                        setSubmitError(`Image is too large. Max ${prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.`)
+                        e.currentTarget.value = ''
+                        return
+                      }
+                      setFile(f)
+                      if (previewUrl) URL.revokeObjectURL(previewUrl)
+                      setPreviewUrl(f ? URL.createObjectURL(f) : null)
+                      setSubmitError(null)
+                      if (f) setPhotoStep(2)
+                      else setPhotoStep(1)
+                    }}
+                    className="sr-only"
+                    tabIndex={-1}
+                  />
+                ) : null}
+                {!showOverlayTerminalFooter && isVideoTwoStep ? (
+                  <input
+                    id="mission-video-file"
+                    ref={videoInputRef}
+                    type="file"
+                    accept="video/mp4,video/webm"
+                    disabled={!missionsEnabled || submitting}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null
+                      if (f && !isAcceptedVideoType(f.type)) {
+                        setSubmitError('Please choose an MP4 or WEBM video.')
+                        e.currentTarget.value = ''
+                        return
+                      }
+                      if (f && f.size > MAX_VIDEO_UPLOAD_BYTES) {
+                        setSubmitError(`Video is too large. Max ${prettyMb(MAX_VIDEO_UPLOAD_BYTES)}.`)
+                        e.currentTarget.value = ''
+                        return
+                      }
+                      setVideoFile(f)
+                      setVideoPreviewUrl((prev) => {
+                        if (prev) URL.revokeObjectURL(prev)
+                        return f ? URL.createObjectURL(f) : null
+                      })
+                      setSubmitError(null)
+                      if (f) setVideoStep(2)
+                      else setVideoStep(1)
+                    }}
+                    className="sr-only"
+                    tabIndex={-1}
+                  />
                 ) : null}
 
-          {missionsEnabled === false ? null : completed || pending || atSubmissionLimit ? null : isBeatcoinMission && inActiveMissionForm ? (
-            <>
-              <p className="mt-6 text-center text-[0.95rem] leading-relaxed text-zinc-600">
-                Scan the QR on each physical {rewardUnit.name} to add to your team balance. Each
-                code can only be claimed once — open your camera on the coin, or use the link from
-                your host.
-              </p>
-              <div className={cardStickyCtaClass}>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className={MISSION_PRIMARY_CTA_CLASS}
-                >
-                  Got it
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              {isPhotoTwoStep && (
-                <input
-                  id="mission-photo-file"
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
-                  disabled={!missionsEnabled || submitting}
-                  onChange={(e) => {
-                    const f = e.target.files?.[0] ?? null
-                    if (f && !isAcceptedImageType(f.type)) {
-                      setSubmitError('Please choose a JPG, PNG, or WebP image.')
-                      e.currentTarget.value = ''
-                      return
-                    }
-                    if (f && f.size > MAX_IMAGE_UPLOAD_BYTES) {
-                      setSubmitError(`Image is too large. Max ${prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.`)
-                      e.currentTarget.value = ''
-                      return
-                    }
-                    setFile(f)
-                    if (previewUrl) URL.revokeObjectURL(previewUrl)
-                    setPreviewUrl(f ? URL.createObjectURL(f) : null)
-                    setSubmitError(null)
-                    if (f) setPhotoStep(2)
-                    else setPhotoStep(1)
-                  }}
-                  className="sr-only"
-                  tabIndex={-1}
-                />
-              )}
-
-              {isVideoTwoStep && (
-                <input
-                  id="mission-video-file"
-                  ref={videoInputRef}
-                  type="file"
-                  accept="video/mp4,video/webm"
-                  disabled={!missionsEnabled || submitting}
-                  onChange={(e) => {
-                    const f = e.target.files?.[0] ?? null
-                    if (f && !isAcceptedVideoType(f.type)) {
-                      setSubmitError('Please choose an MP4 or WEBM video.')
-                      e.currentTarget.value = ''
-                      return
-                    }
-                    if (f && f.size > MAX_VIDEO_UPLOAD_BYTES) {
-                      setSubmitError(`Video is too large. Max ${prettyMb(MAX_VIDEO_UPLOAD_BYTES)}.`)
-                      e.currentTarget.value = ''
-                      return
-                    }
-                    setVideoFile(f)
-                    setVideoPreviewUrl((prev) => {
-                      if (prev) URL.revokeObjectURL(prev)
-                      return f ? URL.createObjectURL(f) : null
-                    })
-                    setSubmitError(null)
-                    if (f) setVideoStep(2)
-                    else setVideoStep(1)
-                  }}
-                  className="sr-only"
-                  tabIndex={-1}
-                />
-              )}
-
-              {isPhotoTwoStep && photoStep === 1 && (
-                <div className="motion-safe:animate-[missionStepIn_0.28s_ease-out_both] flex min-h-[12rem] w-full min-w-0 flex-1 flex-col items-stretch justify-start">
-                  <div className="flex w-full flex-col items-center px-3 pt-7 text-center">
-                    <h2
-                      id="mission-modal-title"
-                      className="text-center text-[1.17rem] font-semibold leading-snug text-zinc-900"
-                    >
-                      {missionTitleText}
-                    </h2>
-                    <p className="mt-3 max-w-[20rem] break-words text-center text-[0.9rem] font-normal leading-relaxed text-zinc-600">
-                      {missionDescOneLine || '\u00A0'}
-                    </p>
-                  </div>
-                  <div className={cardStickyCtaClass}>
+                {!showOverlayTerminalFooter &&
+                isPhotoTwoStep &&
+                photoStep === 1 ? (
+                  <>
                     <div
-                      className="mx-auto mb-3 h-px w-full max-w-[18rem]"
-                      style={{
-                        background:
-                          'linear-gradient(to right, transparent, rgba(161,161,170,0.7), transparent)',
-                      }}
-                    />
-                    <p className="mb-4 text-center text-[0.78rem] font-normal italic leading-relaxed text-zinc-500">
-                      JPG/PNG/WebP only, up to {prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.
-                    </p>
-                    <label
-                      htmlFor="mission-photo-file"
-                      className={MISSION_PRIMARY_CTA_CLASS}
+                      className={`motion-safe:animate-[missionStepIn_0.28s_ease-out_both] ${cardScrollAreaClass} flex min-h-[12rem] flex-col font-sans text-[0.9rem] font-normal leading-relaxed`}
                     >
-                      <span aria-hidden>📸</span>
-                      <span>Choose photo</span>
-                    </label>
-                  </div>
-                </div>
-              )}
-
-              {isPhotoTwoStep && photoStep === 2 && (
-                <form
-                  onSubmit={handleSubmit}
-                  className="motion-safe:animate-[missionStepIn_0.28s_ease-out_both] flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
-                >
-                  <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-6 pt-3 sm:pb-8">
-                    <h2 className="text-center text-[1.17rem] font-semibold leading-snug text-zinc-900">
-                      {missionTitleText}
-                    </h2>
-                    {previewUrl ? (
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="relative mx-auto block h-[70px] w-[70px] overflow-hidden rounded-full border border-zinc-200/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4a53fa]/40"
-                        aria-label="Change photo"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={previewUrl}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                        <span className="pointer-events-none absolute inset-0 flex items-end justify-center bg-black/15 pb-1 text-[0.66rem] font-medium leading-tight text-white">
-                          Change
-                        </span>
-                      </button>
-                    ) : null}
-                    <label htmlFor="mission-msg-photo" className="sr-only">
-                      Message
-                    </label>
-                    <input
-                      id="mission-msg-photo"
-                      type="text"
-                      required={mission.message_required === true}
-                      placeholder="Write a message"
-                      value={messageText}
-                      onChange={(e) => {
-                        setMessageText(e.target.value)
-                        setSubmitError(null)
-                      }}
-                      disabled={!missionsEnabled || submitting}
-                      autoComplete="off"
-                      className={MISSION_INPUT_CLASS}
-                    />
-                    {submitError ? (
-                      <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                        {submitError}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className={cardStickyCtaClass}>
-                    {renderPrimaryCta('Publish')}
-                  </div>
-                </form>
-              )}
-
-              {isVideoTwoStep && videoStep === 1 && (
-                <div className="motion-safe:animate-[missionStepIn_0.28s_ease-out_both] flex min-h-[12rem] w-full min-w-0 flex-1 flex-col items-stretch justify-start">
-                  <div className="flex w-full flex-col items-center px-3 pt-7 text-center">
-                    <h2
-                      id="mission-modal-title"
-                      className="text-center text-[1.17rem] font-semibold leading-snug text-zinc-900"
-                    >
-                      {missionTitleText}
-                    </h2>
-                    <p className="mt-3 max-w-[20rem] break-words text-center text-[0.9rem] font-normal leading-relaxed text-zinc-600">
-                      {missionDescOneLine || '\u00A0'}
-                    </p>
-                  </div>
-                  <div className={cardStickyCtaClass}>
-                    <div
-                      className="mx-auto mb-3 h-px w-full max-w-[18rem]"
-                      style={{
-                        background:
-                          'linear-gradient(to right, transparent, rgba(161,161,170,0.7), transparent)',
-                      }}
-                    />
-                    <p className="mb-4 text-center text-[0.78rem] font-normal italic leading-relaxed text-zinc-500">
-                      MP4/WEBM only, up to {prettyMb(MAX_VIDEO_UPLOAD_BYTES)}.
-                    </p>
-                    <label
-                      htmlFor="mission-video-file"
-                      className={MISSION_PRIMARY_CTA_CLASS}
-                    >
-                      <span aria-hidden>🎥</span>
-                      <span>Choose video</span>
-                    </label>
-                  </div>
-                </div>
-              )}
-
-              {isVideoTwoStep && videoStep === 2 && (
-                <form
-                  onSubmit={handleSubmit}
-                  className="motion-safe:animate-[missionStepIn_0.28s_ease-out_both] flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
-                >
-                  <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-6 pt-3 sm:pb-8">
-                    <h2 className="text-center text-[1.17rem] font-semibold leading-snug text-zinc-900">
-                      {missionTitleText}
-                    </h2>
-                    {videoPreviewUrl ? (
-                      <button
-                        type="button"
-                        onClick={() => videoInputRef.current?.click()}
-                        className="relative mx-auto block h-[70px] w-[70px] overflow-hidden rounded-full border border-zinc-200/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4a53fa]/40"
-                        aria-label="Change video"
-                      >
-                        <video
-                          src={videoPreviewUrl}
-                          muted
-                          playsInline
-                          className="h-full w-full object-cover"
-                        />
-                        <span className="pointer-events-none absolute inset-0 flex items-end justify-center bg-black/15 pb-1 text-[0.66rem] font-medium leading-tight text-white">
-                          Change
-                        </span>
-                      </button>
-                    ) : null}
-                    <label htmlFor="mission-msg-video" className="sr-only">
-                      Message
-                    </label>
-                    <input
-                      id="mission-msg-video"
-                      type="text"
-                      required={mission.message_required === true}
-                      placeholder="Write a message"
-                      value={messageText}
-                      onChange={(e) => {
-                        setMessageText(e.target.value)
-                        setSubmitError(null)
-                      }}
-                      disabled={!missionsEnabled || submitting}
-                      autoComplete="off"
-                      className={MISSION_INPUT_CLASS}
-                    />
-                    {submitError ? (
-                      <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                        {submitError}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className={cardStickyCtaClass}>
-                    {renderPrimaryCta('Publish')}
-                  </div>
-                </form>
-              )}
-
-              {(submission_type === 'text' || submission_type === 'signature') && (
-                <form
-                  onSubmit={handleSubmit}
-                  className="mt-4 flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
-                >
-                  <div
-                    className={`min-h-0 flex-1 overflow-y-auto text-center ${submission_type === 'signature' ? 'space-y-2' : 'space-y-3'}`}
-                  >
-                    {submission_type === 'text' && (
-                      <div className="mx-auto w-full max-w-md">
-                        <label htmlFor="mission-text-body" className="sr-only">
-                          Message
-                        </label>
-                        <textarea
-                          id="mission-text-body"
-                          value={messageText}
-                          onChange={(e) => {
-                            setMessageText(e.target.value)
-                            setSubmitError(null)
-                          }}
-                          required
-                          rows={2}
-                          placeholder="Write a message"
-                          disabled={!missionsEnabled || submitting}
-                          className={MISSION_INPUT_CLASS}
-                        />
-                      </div>
-                    )}
-
-                    {submission_type === 'signature' && (
-                      <div className="w-full">
-                        {mission.target_person_name ? (
-                          <p className="text-balance text-zinc-700">
-                            Sign for:{' '}
-                            <span className="font-medium">{mission.target_person_name}</span>
-                          </p>
-                        ) : null}
-                        {mission.submission_hint ? (
+                      <div className="flex w-full flex-col items-center px-3 pt-7 text-center">
+                        <h2
+                          id="mission-modal-title"
+                          className="text-center text-[1.17rem] font-semibold leading-snug text-zinc-900"
+                        >
+                          {missionTitleText}
+                        </h2>
+                        {missionDescriptionBody ? (
                           <p
-                            className={`text-balance text-zinc-600 ${
-                              mission.target_person_name ? 'mt-1' : ''
-                            }`}
+                            className={`mt-3 max-w-[20rem] text-center ${missionBodyTextClass}`}
                           >
-                            {mission.submission_hint}
+                            {missionDescriptionBody}
                           </p>
                         ) : null}
-                        <div className="relative mx-auto mt-2 w-full max-w-md">
-                          {signatureCueVisible ? (
-                            <div
-                              className="pointer-events-none absolute inset-0 z-[1] flex flex-col items-center justify-center gap-3 pb-5 pt-2 text-zinc-400"
-                              aria-hidden
-                            >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className="h-7 w-7 opacity-70"
-                                aria-hidden
-                              >
-                                <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                              </svg>
-                              <div className="h-px w-[min(75%,11rem)] bg-zinc-300/90" />
-                            </div>
-                          ) : null}
-                          <SignaturePad
-                            padRef={signaturePadRef as React.RefObject<{ getBlob: () => Promise<Blob | null>; clear: () => void; isEmpty: () => boolean } | null>}
-                            onStrokeStart={() => setSignatureCueVisible(false)}
-                            onStrokeEnd={() => setHasSignature(true)}
-                            showClearButton={false}
+                      </div>
+                    </div>
+                    <div className={overlayCtaBarClass}>
+                      <div
+                        className="mx-auto mb-3 h-px w-full max-w-[18rem]"
+                        style={{
+                          background:
+                            'linear-gradient(to right, transparent, rgba(161,161,170,0.7), transparent)',
+                        }}
+                      />
+                      <p className="mb-4 text-center text-[0.78rem] font-normal italic leading-relaxed text-zinc-500">
+                        JPG/PNG/WebP only, up to {prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.
+                      </p>
+                      <label
+                        htmlFor="mission-photo-file"
+                        className={MISSION_PRIMARY_CTA_CLASS}
+                      >
+                        <span aria-hidden>📸</span>
+                        <span>Choose photo</span>
+                      </label>
+                    </div>
+                  </>
+                ) : !showOverlayTerminalFooter &&
+                  isPhotoTwoStep &&
+                  photoStep === 2 ? (
+                  <form
+                    onSubmit={handleSubmit}
+                    className="motion-safe:animate-[missionStepIn_0.28s_ease-out_both] flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
+                  >
+                    <div
+                      className={`${cardScrollAreaClass} flex min-h-0 flex-1 flex-col gap-3 px-1 pt-3 font-sans text-[0.9rem] font-normal leading-relaxed`}
+                    >
+                      <h2 className="text-center text-[1.17rem] font-semibold leading-snug text-zinc-900">
+                        {missionTitleText}
+                      </h2>
+                      {previewUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="relative mx-auto block h-[70px] w-[70px] overflow-hidden rounded-full border border-zinc-200/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4a53fa]/40"
+                          aria-label="Change photo"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={previewUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                          <span className="pointer-events-none absolute inset-0 flex items-end justify-center bg-black/15 pb-1 text-[0.66rem] font-medium leading-tight text-white">
+                            Change
+                          </span>
+                        </button>
+                      ) : null}
+                      <label htmlFor="mission-msg-photo" className="sr-only">
+                        Message
+                      </label>
+                      <input
+                        id="mission-msg-photo"
+                        type="text"
+                        required={mission.message_required === true}
+                        placeholder="Write a message"
+                        value={messageText}
+                        onChange={(e) => {
+                          setMessageText(e.target.value)
+                          setSubmitError(null)
+                        }}
+                        disabled={!missionsEnabled || submitting}
+                        autoComplete="off"
+                        className={MISSION_INPUT_CLASS}
+                      />
+                      {submitError ? (
+                        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                          {submitError}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className={overlayCtaBarClass}>
+                      {renderPrimaryCta('Publish')}
+                    </div>
+                  </form>
+                ) : !showOverlayTerminalFooter &&
+                  isVideoTwoStep &&
+                  videoStep === 1 ? (
+                  <>
+                    <div
+                      className={`motion-safe:animate-[missionStepIn_0.28s_ease-out_both] ${cardScrollAreaClass} flex min-h-[12rem] flex-col font-sans text-[0.9rem] font-normal leading-relaxed`}
+                    >
+                      <div className="flex w-full flex-col items-center px-3 pt-7 text-center">
+                        <h2
+                          id="mission-modal-title"
+                          className="text-center text-[1.17rem] font-semibold leading-snug text-zinc-900"
+                        >
+                          {missionTitleText}
+                        </h2>
+                        {missionDescriptionBody ? (
+                          <p
+                            className={`mt-3 max-w-[20rem] text-center ${missionBodyTextClass}`}
+                          >
+                            {missionDescriptionBody}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className={overlayCtaBarClass}>
+                      <div
+                        className="mx-auto mb-3 h-px w-full max-w-[18rem]"
+                        style={{
+                          background:
+                            'linear-gradient(to right, transparent, rgba(161,161,170,0.7), transparent)',
+                        }}
+                      />
+                      <p className="mb-4 text-center text-[0.78rem] font-normal italic leading-relaxed text-zinc-500">
+                        MP4/WEBM only, up to {prettyMb(MAX_VIDEO_UPLOAD_BYTES)}.
+                      </p>
+                      <label
+                        htmlFor="mission-video-file"
+                        className={MISSION_PRIMARY_CTA_CLASS}
+                      >
+                        <span aria-hidden>🎥</span>
+                        <span>Choose video</span>
+                      </label>
+                    </div>
+                  </>
+                ) : !showOverlayTerminalFooter &&
+                  isVideoTwoStep &&
+                  videoStep === 2 ? (
+                  <form
+                    onSubmit={handleSubmit}
+                    className="motion-safe:animate-[missionStepIn_0.28s_ease-out_both] flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
+                  >
+                    <div
+                      className={`${cardScrollAreaClass} flex min-h-0 flex-1 flex-col gap-3 px-1 pt-3 font-sans text-[0.9rem] font-normal leading-relaxed`}
+                    >
+                      <h2 className="text-center text-[1.17rem] font-semibold leading-snug text-zinc-900">
+                        {missionTitleText}
+                      </h2>
+                      {videoPreviewUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => videoInputRef.current?.click()}
+                          className="relative mx-auto block h-[70px] w-[70px] overflow-hidden rounded-full border border-zinc-200/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4a53fa]/40"
+                          aria-label="Change video"
+                        >
+                          <video
+                            src={videoPreviewUrl}
+                            muted
+                            playsInline
+                            className="h-full w-full object-cover"
+                          />
+                          <span className="pointer-events-none absolute inset-0 flex items-end justify-center bg-black/15 pb-1 text-[0.66rem] font-medium leading-tight text-white">
+                            Change
+                          </span>
+                        </button>
+                      ) : null}
+                      <label htmlFor="mission-msg-video" className="sr-only">
+                        Message
+                      </label>
+                      <input
+                        id="mission-msg-video"
+                        type="text"
+                        required={mission.message_required === true}
+                        placeholder="Write a message"
+                        value={messageText}
+                        onChange={(e) => {
+                          setMessageText(e.target.value)
+                          setSubmitError(null)
+                        }}
+                        disabled={!missionsEnabled || submitting}
+                        autoComplete="off"
+                        className={MISSION_INPUT_CLASS}
+                      />
+                      {submitError ? (
+                        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                          {submitError}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className={overlayCtaBarClass}>
+                      {renderPrimaryCta('Publish')}
+                    </div>
+                  </form>
+                ) : !showOverlayTerminalFooter &&
+                  isBeatcoinMission &&
+                  inActiveMissionForm ? (
+                  <>
+                    <div
+                      className={`${cardScrollAreaClass} font-sans text-[0.9rem] font-normal leading-relaxed sm:pt-2`}
+                    >
+                      {missionDescriptionBody ? (
+                        <p
+                          className={`mt-6 px-5 text-center text-[0.95rem] ${missionBodyTextClass}`}
+                        >
+                          {missionDescriptionBody}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className={overlayCtaBarClass}>
+                      <button
+                        type="button"
+                        onClick={onClose}
+                        className={MISSION_PRIMARY_CTA_CLASS}
+                      >
+                        Got it
+                      </button>
+                    </div>
+                  </>
+                ) : !showOverlayTerminalFooter &&
+                  !isBeatcoinMission &&
+                  (submission_type === 'text' || submission_type === 'signature') ? (
+                  <form
+                    onSubmit={handleSubmit}
+                    className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
+                  >
+                    <div
+                      className={`${cardScrollAreaClass} min-h-0 flex-1 overflow-y-auto text-center font-sans text-[0.9rem] font-normal leading-relaxed sm:pt-2 ${submission_type === 'signature' ? 'space-y-2' : 'space-y-3'}`}
+                    >
+                      {submission_type === 'text' && (
+                        <div className="mx-auto w-full max-w-md px-1">
+                          <label htmlFor="mission-text-body" className="sr-only">
+                            Message
+                          </label>
+                          <textarea
+                            id="mission-text-body"
+                            value={messageText}
+                            onChange={(e) => {
+                              setMessageText(e.target.value)
+                              setSubmitError(null)
+                            }}
+                            required
+                            rows={2}
+                            placeholder="Write a message"
                             disabled={!missionsEnabled || submitting}
-                            height={120}
-                            canvasSurfaceClassName="rounded-2xl border border-zinc-200/90 bg-zinc-100"
-                            strokeColor="#18181b"
+                            className={MISSION_INPUT_CLASS}
                           />
                         </div>
-                        {mission.message_required ? (
-                          <input
-                            id="mission-msg-sig"
-                            type="text"
-                            required
-                            placeholder="Write a message (required)"
-                            value={messageText}
-                            onChange={(e) => setMessageText(e.target.value)}
-                            className={`mt-2 ${MISSION_INPUT_CLASS}`}
+                      )}
+
+                      {submission_type === 'signature' && (
+                        <div className="w-full px-1">
+                          {mission.target_person_name ? (
+                            <p className="text-balance text-zinc-700">
+                              Sign for:{' '}
+                              <span className="font-medium">{mission.target_person_name}</span>
+                            </p>
+                          ) : null}
+                          {mission.submission_hint ? (
+                            <p
+                              className={`text-balance text-zinc-600 ${
+                                mission.target_person_name ? 'mt-1' : ''
+                              }`}
+                            >
+                              {mission.submission_hint}
+                            </p>
+                          ) : null}
+                          <div className="relative mx-auto mt-2 w-full max-w-md">
+                            {signatureCueVisible ? (
+                              <div
+                                className="pointer-events-none absolute inset-0 z-[1] flex flex-col items-center justify-center gap-3 pb-5 pt-2 text-zinc-400"
+                                aria-hidden
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="h-7 w-7 opacity-70"
+                                  aria-hidden
+                                >
+                                  <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                                <div className="h-px w-[min(75%,11rem)] bg-zinc-300/90" />
+                              </div>
+                            ) : null}
+                            <SignaturePad
+                              padRef={
+                                signaturePadRef as React.RefObject<{
+                                  getBlob: () => Promise<Blob | null>
+                                  clear: () => void
+                                  isEmpty: () => boolean
+                                } | null>
+                              }
+                              onStrokeStart={() => setSignatureCueVisible(false)}
+                              onStrokeEnd={() => setHasSignature(true)}
+                              showClearButton={false}
+                              disabled={!missionsEnabled || submitting}
+                              height={120}
+                              canvasSurfaceClassName="rounded-2xl border border-zinc-200/90 bg-zinc-100"
+                              strokeColor="#18181b"
+                            />
+                          </div>
+                          {mission.message_required ? (
+                            <input
+                              id="mission-msg-sig"
+                              type="text"
+                              required
+                              placeholder="Write a message (required)"
+                              value={messageText}
+                              onChange={(e) => setMessageText(e.target.value)}
+                              className={`mx-auto mt-2 max-w-md ${MISSION_INPUT_CLASS}`}
+                            />
+                          ) : null}
+                        </div>
+                      )}
+
+                      {submitError ? (
+                        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">
+                          {submitError}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className={overlayCtaBarClass}>
+                      {renderPrimaryCta('Submit')}
+                    </div>
+                  </form>
+                ) : (
+                  <div
+                    className={`${cardScrollAreaClass} font-sans text-[0.9rem] font-normal leading-relaxed sm:pt-2 ${
+                      isPhotoTwoStep || isVideoTwoStep ? 'flex min-h-0 flex-col' : ''
+                    }`}
+                  >
+                    {showStandardMissionHeader ? (
+                      <>
+                        <div className="mt-3 flex justify-center">
+                          {/* eslint-disable-next-line @next/next/no-img-element -- mission artwork / uploaded preview */}
+                          <img
+                            src={circularImageSrc}
+                            alt=""
+                            className="h-[80px] w-[80px] rounded-full border border-zinc-200/90 object-cover"
                           />
+                        </div>
+                        <h2
+                          id="mission-modal-title"
+                          className="px-5 pt-4 text-center text-[1.2rem] font-semibold leading-snug text-zinc-900 sm:px-7 sm:pt-5"
+                        >
+                          {missionTitleText}
+                        </h2>
+                        {missionDescriptionBody ? (
+                          <p
+                            className={`mt-3.5 px-5 text-center sm:px-7 ${missionBodyTextClass}`}
+                          >
+                            {missionDescriptionBody}
+                          </p>
                         ) : null}
-                      </div>
-                    )}
-
-                    {submitError && (
-                      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">
-                        {submitError}
-                      </div>
-                    )}
-
+                      </>
+                    ) : null}
                   </div>
-                  <div className={cardStickyCtaClass}>
-                    {renderPrimaryCta('Submit')}
-                  </div>
-                </form>
-              )}
+                )}
 
-            </>
-          )}
-
-                </div>
-
-                {(missionsEnabled === false ||
-                  completed ||
-                  (pending && !success) ||
-                  atSubmissionLimit) && (
-                  <div className={cardCtaBarClass}>
+                {showOverlayTerminalFooter ? (
+                  <div className={overlayCtaBarClass}>
                     {missionsEnabled === false ? (
                       <button
                         type="button"
@@ -1260,7 +1297,7 @@ export function MissionModal({
                       </button>
                     )}
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
           </div>

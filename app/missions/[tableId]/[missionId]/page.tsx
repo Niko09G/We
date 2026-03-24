@@ -387,9 +387,11 @@ export default function MissionDetailPage({
                   <div className="text-lg font-semibold text-white">
                     {mission.title}
                   </div>
-                  <div className="mt-2 text-xs text-white/70 line-clamp-3">
-                    {mission.description ?? '—'}
-                  </div>
+                  {mission.description != null && mission.description.trim() !== '' ? (
+                    <div className="mt-2 text-xs text-white/70 line-clamp-3 whitespace-pre-wrap">
+                      {mission.description}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="shrink-0 text-right">
                   <div className="text-sm font-semibold text-white">
