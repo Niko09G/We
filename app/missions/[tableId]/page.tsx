@@ -29,6 +29,7 @@ import {
   type GuestMissionFeedItem,
 } from '@/lib/guest-mission-feed'
 import { saveGuestTableContext } from '@/lib/guest-table-context'
+import { COIN_SIZE } from '@/lib/mission-ui'
 import {
   fetchGuestEmblemsConfig,
   resolveRankEmblemUrl,
@@ -718,7 +719,7 @@ export default function MissionsTablePage({
                 aria-label={`${missionSectionProgress.done} of ${missionSectionProgress.total} missions completed, ${tablePoints} ${rewardUnitCompactLabel(rewardUnit)}`}
               >
                 {missionSectionProgress.done}/{missionSectionProgress.total} completed ·{' '}
-                <RewardUnitIcon size={18} />
+                <RewardUnitIcon size={COIN_SIZE} />
                 {tablePoints}
               </span>
             ) : null}
@@ -740,8 +741,7 @@ export default function MissionsTablePage({
                 const pending = st === 'pending'
                 const limitReached = st === 'limit_reached'
                 const surface = missionGradientAt(missions, i)
-                const isBeatcoinMission = m.validation_type === 'beatcoin'
-                const beatcoinsFound = submissionSlotsUsedByMission.get(m.id) ?? 0
+                const rewardAmount = Math.max(0, Number(m.points) || 0)
                 const typeIcon = m.validation_type === 'video'
                   ? '🎥'
                   : m.validation_type === 'photo'
@@ -751,13 +751,13 @@ export default function MissionsTablePage({
                       : m.validation_type === 'text'
                         ? '📝'
                         : '💬'
-                const ctaLabel = isBeatcoinMission
-                  ? `${beatcoinsFound} found`
-                  : completed || limitReached
-                    ? '✓ Mission completed'
-                    : pending
-                      ? 'Pending review'
-                      : 'Select mission'
+                const statusTone = completed || limitReached ? 'completed' : pending ? 'pending' : 'available'
+                const announcementLabel =
+                  statusTone === 'completed'
+                    ? `✓ Mission completed (+${rewardAmount} coins)`
+                    : statusTone === 'pending'
+                      ? `Pending review (+${rewardAmount} coins)`
+                      : `Awards +${rewardAmount} coins`
 
                 const isTableGreetingCard = /post a table greeting/i.test(m.title)
                 const isTrumpetStoryCard =
@@ -796,40 +796,29 @@ export default function MissionsTablePage({
                       className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-lg leading-none text-zinc-800"
                       aria-hidden
                     >
-                      {isBeatcoinMission ? <RewardUnitIcon size={22} /> : typeIcon}
+                      {m.validation_type === 'beatcoin' ? <RewardUnitIcon size={COIN_SIZE} /> : typeIcon}
                     </span>
 
                     <h3 className="relative z-10 pr-12 text-left text-lg font-bold leading-snug text-white">
                       {m.title}
                     </h3>
                     <p className="relative z-10 mt-2 text-left text-sm font-semibold tabular-nums text-white/95">
-                      {isBeatcoinMission ? (
-                        <>
-                          {beatcoinsFound} {rewardUnit.name} found
-                        </>
-                      ) : (
-                        <span className="inline-flex items-center gap-1">
-                          <RewardAmount showPlus amount={m.points} iconSize={16} className="text-white/95" />
-                        </span>
-                      )}
+                      <span className="inline-flex items-center gap-1">
+                        <RewardAmount showPlus amount={rewardAmount} iconSize={COIN_SIZE} className="text-white/95" />
+                      </span>
                     </p>
 
                     <div className="relative z-10 mt-3">
                       <span
                         className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-center text-sm font-medium ${
-                          completed || limitReached
-                            ? 'bg-white text-emerald-800'
-                            : pending
-                              ? 'bg-white text-amber-800'
-                              : 'bg-white/92 text-zinc-900'
+                          statusTone === 'completed'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : statusTone === 'pending'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-[#6231fb] text-white'
                         }`}
                       >
-                        {pending ? (
-                          <span aria-hidden className="text-base opacity-90">
-                            ⏳
-                          </span>
-                        ) : null}
-                        {ctaLabel}
+                        {announcementLabel}
                       </span>
                     </div>
                   </button>
@@ -967,7 +956,7 @@ export default function MissionsTablePage({
                           ) : null}
                         </span>
                         <span className="inline-flex shrink-0 items-center gap-1 font-extrabold tabular-nums text-violet-800">
-                          <RewardUnitIcon size={14} />
+                          <RewardUnitIcon size={COIN_SIZE} />
                           {row.totalPoints}
                         </span>
                       </li>

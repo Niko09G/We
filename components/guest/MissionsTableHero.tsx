@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { GUEST_EMBLEM_PLACEHOLDER_DATA_URL } from '@/lib/guest-emblem-config'
+import { COIN_SIZE } from '@/lib/mission-ui'
 import { RewardUnitIcon } from '@/components/reward/RewardUnitIcon'
 import { MISSIONS_HERO_BACKGROUND } from '@/lib/guest-missions-gradients'
 
@@ -119,7 +120,7 @@ export function MissionsTableHero({
                   ) : null}
                 </p>
                 <p className="inline-flex items-center gap-1.5 text-base font-bold text-white sm:text-lg">
-                  <RewardUnitIcon size={24} />
+                  <RewardUnitIcon size={COIN_SIZE} />
                   <span className="tabular-nums">
                     {Number.isFinite(tablePoints) ? tablePoints : 0}
                   </span>

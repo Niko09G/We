@@ -4,6 +4,12 @@ import { createServiceRoleClient, isServiceRoleConfigured } from '@/lib/supabase
 
 export const runtime = 'nodejs'
 
+/** Temporary: verify env at runtime (remove after debugging). */
+function logServiceRoleKeyDebug() {
+  console.log('SERVICE ROLE KEY EXISTS:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
+  console.log('KEY LENGTH:', process.env.SUPABASE_SERVICE_ROLE_KEY?.length)
+}
+
 type TokenRow = {
   id: string
   token: string
@@ -16,6 +22,7 @@ type TokenRow = {
 
 /** GET: list all tokens with mission title + redeemed table name (service role). */
 export async function GET() {
+  logServiceRoleKeyDebug()
   if (!isServiceRoleConfigured()) {
     return NextResponse.json(
       {
@@ -89,6 +96,7 @@ function randomTokenString(): string {
 
 /** POST: generate a batch of tokens. Body: { quantity, points, mission_id } */
 export async function POST(req: Request) {
+  logServiceRoleKeyDebug()
   if (!isServiceRoleConfigured()) {
     return NextResponse.json(
       {
