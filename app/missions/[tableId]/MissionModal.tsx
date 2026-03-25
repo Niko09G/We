@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { compressImage } from '@/lib/image-compress'
 import {
   isAcceptedImageType,
@@ -53,15 +53,19 @@ import { MissionSubmitConfetti } from '@/components/guest/MissionSubmitConfetti'
 
 type RewardFlightCoin = {
   id: string
+  role: 'lead' | 'support'
   iconUrl: string
   startX: number
   startY: number
+  /** Lead: HUD target center. Support: unused (0). */
   endX: number
   endY: number
+  /** Support burst offset in px; lead uses 0. */
+  burstX: number
+  burstY: number
   rotateDeg: number
   scaleStart: number
   scaleEnd: number
-  curveY: number
   delayMs: number
 }
 
@@ -177,8 +181,9 @@ export function MissionModal({
   const [confettiFire, setConfettiFire] = useState(0)
   const [rewardFlights, setRewardFlights] = useState<RewardFlightCoin[]>([])
   const [rewardFlightActive, setRewardFlightActive] = useState(false)
-  const [rewardAbsorbing, setRewardAbsorbing] = useState(false)
   const [rewardCounterValue, setRewardCounterValue] = useState<number | null>(null)
+  /** HUD points before this submission’s reward; avoids refetch jumping the count before the flight. */
+  const [rewardDisplayBase, setRewardDisplayBase] = useState<number | null>(null)
   const [rewardClaimSummaryVisible, setRewardClaimSummaryVisible] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
@@ -191,8 +196,19 @@ export function MissionModal({
   const missionOverlayRewardHeadlineRef = useRef<HTMLParagraphElement>(null)
   const rewardHudBadgeRef = useRef<HTMLSpanElement>(null)
   const missionOverlayCoinCountValueRef = useRef<HTMLSpanElement>(null)
+  const flightImgRefs = useRef<Map<string, HTMLImageElement>>(new Map())
+  const rewardHudRef = useRef(rewardHud)
+  const rewardDisplayBaseRef = useRef<number | null>(null)
+  rewardHudRef.current = rewardHud
+  rewardDisplayBaseRef.current = rewardDisplayBase
 
-  const MAX_REWARD_FLIGHT_COINS = 5
+  const REWARD_LEAD_FLIGHT_MS = 820
+  const REWARD_SUPPORT_FLIGHT_MS = 700
+  const REWARD_COIN_STAGGER_MS = 58
+  const REWARD_COUNTER_TICK_MS = 480
+  const MAX_SUPPORT_COINS = 3
+  /** Slightly smaller than HUD coin; keeps motion light on small screens. */
+  const REWARD_FLIGHT_COIN_PX = 18
 
   const normalizedVt = normalizeMissionValidationType(mission.validation_type)
   const isBeatcoinMission = normalizedVt === 'beatcoin'
@@ -231,8 +247,8 @@ export function MissionModal({
     setConfettiFire(0)
     setRewardFlights([])
     setRewardFlightActive(false)
-    setRewardAbsorbing(false)
     setRewardCounterValue(null)
+    setRewardDisplayBase(null)
     setRewardClaimSummaryVisible(false)
     signaturePadRef.current?.clear()
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -261,8 +277,8 @@ export function MissionModal({
     setConfettiFire(0)
     setRewardFlights([])
     setRewardFlightActive(false)
-    setRewardAbsorbing(false)
     setRewardCounterValue(null)
+    setRewardDisplayBase(null)
     setRewardClaimSummaryVisible(false)
     signaturePadRef.current?.clear()
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -356,8 +372,8 @@ export function MissionModal({
     setConfettiFire(0)
     setRewardFlights([])
     setRewardFlightActive(false)
-    setRewardAbsorbing(false)
     setRewardCounterValue(null)
+    setRewardDisplayBase(null)
     setRewardClaimSummaryVisible(false)
     signaturePadRef.current?.clear()
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -415,6 +431,7 @@ export function MissionModal({
       })
 
       setSuccess(true)
+      if (rewardHud) setRewardDisplayBase(rewardHud.teamPoints)
       setConfettiFire((n) => n + 1)
       if (isRepeatableAuto && result.autoApproved) {
         setPending(false)
@@ -506,7 +523,9 @@ export function MissionModal({
     () => rewardUnitAnimationAltIconUrls(rewardUnit),
     [rewardUnit]
   )
-  const displayedTeamPoints = rewardCounterValue ?? rewardHud?.teamPoints ?? 0
+  const displayedTeamPoints =
+    rewardCounterValue ??
+    (rewardDisplayBase != null ? rewardDisplayBase : (rewardHud?.teamPoints ?? 0))
 
   const rewardAmount = Math.max(
     0,
@@ -526,77 +545,235 @@ export function MissionModal({
     rewardHud?.nextRankTarget != null &&
     (typeof nextRankEmblemUrl === 'string' && nextRankEmblemUrl.trim().length > 0)
 
-  async function runRewardClaimAnimation() {
+  function runRewardClaimAnimation() {
     if (!rewardHud) return
-    if (rewardFlightActive || rewardAbsorbing) return
+    if (rewardFlightActive) return
     const from = claimRewardBtnRef.current?.getBoundingClientRect()
     const to = missionOverlayCoinCountRef.current?.getBoundingClientRect()
+    const base = rewardDisplayBase ?? rewardHud.teamPoints
+    const gain = rewardHud.missionRewardPoints
+    const target = base + gain
+
     if (!from || !to || animationAltIcons.length === 0) {
-      const target = rewardHud.teamPoints + rewardHud.missionRewardPoints
       setRewardCounterValue(target)
+      setRewardDisplayBase(null)
       setRewardClaimSummaryVisible(true)
       return
     }
 
-    const coinCount = Math.min(MAX_REWARD_FLIGHT_COINS, animationAltIcons.length)
     const startX = from.left + from.width / 2
     const startY = from.top + from.height / 2
     const endX = to.left + to.width / 2
     const endY = to.top + to.height / 2
+    const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const supportCount = Math.min(MAX_SUPPORT_COINS, Math.max(2, animationAltIcons.length - 1))
 
-    const coins: RewardFlightCoin[] = Array.from({ length: coinCount }, (_, i) => ({
-      id: `${Date.now()}-${i}`,
-      iconUrl: animationAltIcons[i % animationAltIcons.length]!,
+    const coins: RewardFlightCoin[] = []
+    coins.push({
+      id: `${runId}-lead`,
+      role: 'lead',
+      iconUrl: animationAltIcons[0]!,
       startX,
       startY,
       endX,
       endY,
-      rotateDeg: Math.round((Math.random() - 0.5) * 36),
-      scaleStart: 0.94 + Math.random() * 0.2,
-      scaleEnd: 0.6 + Math.random() * 0.1,
-      curveY: -24 - Math.random() * 24,
-      delayMs: i * 45,
-    }))
+      burstX: 0,
+      burstY: 0,
+      rotateDeg: 12 + Math.random() * 14,
+      scaleStart: 1,
+      scaleEnd: 0.66 + Math.random() * 0.06,
+      delayMs: 0,
+    })
+
+    let iconPick = 1
+    for (let i = 0; i < supportCount; i++) {
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * (Math.PI * 0.72)
+      const dist = 68 + Math.random() * 48
+      coins.push({
+        id: `${runId}-s${i}`,
+        role: 'support',
+        iconUrl: animationAltIcons[iconPick % animationAltIcons.length]!,
+        startX,
+        startY,
+        endX: 0,
+        endY: 0,
+        burstX: Math.cos(angle) * dist,
+        burstY: Math.sin(angle) * dist,
+        rotateDeg: (Math.random() - 0.5) * 40,
+        scaleStart: 0.84 + Math.random() * 0.1,
+        scaleEnd: 0.22 + Math.random() * 0.1,
+        delayMs: REWARD_COIN_STAGGER_MS * (i + 1),
+      })
+      iconPick += 1
+    }
 
     setRewardFlights(coins)
     setRewardFlightActive(true)
-    window.requestAnimationFrame(() => setRewardAbsorbing(true))
+  }
 
-    const base = rewardHud.teamPoints
-    const gain = rewardHud.missionRewardPoints
-    const counterDurationMs = 520
-    const startMs = performance.now()
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - startMs) / counterDurationMs)
-      const eased = 1 - Math.pow(1 - t, 3)
-      setRewardCounterValue(Math.round(base + gain * eased))
-      if (t < 1) window.requestAnimationFrame(tick)
-    }
-    window.requestAnimationFrame(tick)
+  useLayoutEffect(() => {
+    if (rewardFlights.length === 0) return
 
-    window.setTimeout(() => {
+    let cancelled = false
+    let landed = false
+    const animations: Animation[] = []
+
+    const onLeadCoinLanded = () => {
+      if (cancelled || landed) return
+      landed = true
+
+      const hud = rewardHudRef.current
+      if (!hud) {
+        setRewardFlightActive(false)
+        setRewardFlights([])
+        return
+      }
+      const b = rewardDisplayBaseRef.current ?? hud.teamPoints
+      const g = hud.missionRewardPoints
+      const finalVal = b + g
+      const counterMs = REWARD_COUNTER_TICK_MS
+      const startMs = performance.now()
+
+      const tick = (now: number) => {
+        if (cancelled) return
+        const t = Math.min(1, (now - startMs) / counterMs)
+        const eased = 1 - (1 - t) ** 3
+        setRewardCounterValue(Math.round(b + (finalVal - b) * eased))
+        if (t < 1) requestAnimationFrame(tick)
+        else {
+          setRewardCounterValue(finalVal)
+          setRewardDisplayBase(null)
+          setRewardClaimSummaryVisible(true)
+        }
+      }
+      requestAnimationFrame(tick)
+
       const hudEl = rewardHudBadgeRef.current
       if (hudEl?.animate) {
         hudEl.animate(
           [
             { transform: 'scale(1)' },
-            { transform: 'scale(1.08)' },
-            { transform: 'scale(0.98)' },
+            { transform: 'scale(1.09)' },
+            { transform: 'scale(0.97)' },
             { transform: 'scale(1)' },
           ],
-          { duration: 280, easing: 'ease-out' }
+          { duration: 300, easing: 'ease-out' }
         )
       }
-    }, 470)
+    }
 
-    window.setTimeout(() => {
+    const lead = rewardFlights.find((c) => c.role === 'lead')
+    const supports = rewardFlights.filter((c) => c.role === 'support')
+    const flightMap = flightImgRefs.current
+
+    if (lead) {
+      const el = flightMap.get(lead.id)
+      if (el) {
+        const dx = lead.endX - lead.startX
+        const dy = lead.endY - lead.startY
+        const nx = -dy * 0.38
+        const ny = dx * 0.2
+        const mx = dx * 0.48 + nx
+        const my = dy * 0.48 + ny
+        const anim = el.animate(
+          [
+            {
+              transform: `translate(0px,0px) rotate(0deg) scale(${lead.scaleStart})`,
+              opacity: 1,
+            },
+            {
+              transform: `translate(${mx}px,${my}px) rotate(${lead.rotateDeg * 0.42}deg) scale(${(lead.scaleStart + lead.scaleEnd) * 0.52})`,
+              opacity: 1,
+            },
+            {
+              transform: `translate(${dx}px,${dy}px) rotate(${lead.rotateDeg}deg) scale(${lead.scaleEnd})`,
+              opacity: 0.18,
+            },
+            {
+              transform: `translate(${dx}px,${dy}px) rotate(${lead.rotateDeg}deg) scale(${lead.scaleEnd * 0.72})`,
+              opacity: 0,
+            },
+          ],
+          {
+            duration: REWARD_LEAD_FLIGHT_MS,
+            delay: lead.delayMs,
+            easing: 'cubic-bezier(0.22, 0.65, 0.36, 1)',
+            fill: 'forwards',
+          }
+        )
+        animations.push(anim)
+        void anim.finished
+          .then(() => {
+            if (!cancelled) onLeadCoinLanded()
+          })
+          .catch(() => {
+            /* animation cancelled */
+          })
+      } else {
+        window.setTimeout(() => {
+          if (!cancelled) onLeadCoinLanded()
+        }, REWARD_LEAD_FLIGHT_MS + lead.delayMs)
+      }
+    } else {
+      onLeadCoinLanded()
+    }
+
+    for (const c of supports) {
+      const el = flightMap.get(c.id)
+      if (!el) continue
+      const anim = el.animate(
+        [
+          {
+            transform: `translate(0px,0px) rotate(0deg) scale(${c.scaleStart})`,
+            opacity: 0.96,
+          },
+          {
+            transform: `translate(${c.burstX * 0.32}px,${c.burstY * 0.32}px) rotate(${c.rotateDeg * 0.28}deg) scale(${c.scaleStart * 0.94})`,
+            opacity: 0.72,
+            offset: 0.42,
+          },
+          {
+            transform: `translate(${c.burstX}px,${c.burstY}px) rotate(${c.rotateDeg}deg) scale(${c.scaleEnd})`,
+            opacity: 0,
+          },
+        ],
+        {
+          duration: REWARD_SUPPORT_FLIGHT_MS,
+          delay: c.delayMs,
+          easing: 'cubic-bezier(0.33, 0, 0.19, 1)',
+          fill: 'forwards',
+        }
+      )
+      animations.push(anim)
+    }
+
+    const maxEnd = Math.max(
+      REWARD_LEAD_FLIGHT_MS + (lead?.delayMs ?? 0),
+      ...supports.map((c) => REWARD_SUPPORT_FLIGHT_MS + c.delayMs),
+      0
+    )
+    const clearFlightsAt = Math.max(
+      maxEnd + 120,
+      REWARD_LEAD_FLIGHT_MS + REWARD_COUNTER_TICK_MS + 200
+    )
+    const clearTimer = window.setTimeout(() => {
+      if (cancelled) return
       setRewardFlights([])
       setRewardFlightActive(false)
-      setRewardAbsorbing(false)
-      setRewardCounterValue(base + gain)
-      setRewardClaimSummaryVisible(true)
-    }, 760)
-  }
+    }, clearFlightsAt)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(clearTimer)
+      for (const a of animations) {
+        try {
+          a.cancel()
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }, [rewardFlights])
 
   function handleBackdropDismiss(e: React.MouseEvent<HTMLDivElement>) {
     if (e.target === e.currentTarget) onClose()
@@ -616,7 +793,7 @@ export function MissionModal({
         <button
           ref={claimRewardBtnRef}
           type="button"
-          onClick={() => void runRewardClaimAnimation()}
+          onClick={() => runRewardClaimAnimation()}
           disabled={rewardFlightActive}
           className={MISSION_PRIMARY_CTA_CLASS}
         >
@@ -912,7 +1089,7 @@ export function MissionModal({
                           <button
                             ref={claimRewardBtnRef}
                             type="button"
-                            onClick={() => void runRewardClaimAnimation()}
+                            onClick={() => runRewardClaimAnimation()}
                             disabled={rewardFlightActive}
                             className={MISSION_PRIMARY_CTA_CLASS}
                           >
@@ -1468,25 +1645,22 @@ export function MissionModal({
           {rewardFlights.map((coin) => (
             <img
               key={coin.id}
+              ref={(el) => {
+                if (el) flightImgRefs.current.set(coin.id, el)
+                else flightImgRefs.current.delete(coin.id)
+              }}
+              data-reward-flight={coin.id}
               src={coin.iconUrl}
               alt=""
               aria-hidden
-            className="pointer-events-none fixed z-[80] object-contain will-change-transform will-change-opacity"
+              className="pointer-events-none fixed z-[80] object-contain will-change-transform"
               style={{
-              width: `${COIN_SIZE}px`,
-              height: `${COIN_SIZE}px`,
-                left: coin.startX,
-                top: coin.startY,
-                transform: rewardAbsorbing
-                  ? `translate(${coin.endX - coin.startX}px, ${
-                      coin.endY - coin.startY + coin.curveY
-                    }px) rotate(${coin.rotateDeg}deg) scale(${coin.scaleEnd})`
-                  : `translate(0px, 0px) rotate(${coin.rotateDeg * 0.35}deg) scale(${coin.scaleStart})`,
-                opacity: rewardAbsorbing ? 0.08 : 0.98,
-                transitionProperty: 'transform, opacity',
-                transitionDuration: '620ms, 620ms',
-                transitionTimingFunction: 'cubic-bezier(0.2,0.75,0.2,1), ease-in',
-                transitionDelay: `${coin.delayMs}ms`,
+                width: `${REWARD_FLIGHT_COIN_PX}px`,
+                height: `${REWARD_FLIGHT_COIN_PX}px`,
+                left: coin.startX - REWARD_FLIGHT_COIN_PX / 2,
+                top: coin.startY - REWARD_FLIGHT_COIN_PX / 2,
+                transform: 'translate(0px, 0px)',
+                opacity: 0.98,
               }}
             />
           ))}
