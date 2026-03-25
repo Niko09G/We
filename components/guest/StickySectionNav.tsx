@@ -14,6 +14,9 @@ export type StickySectionNavItem = {
 const ACTIVE_GRADIENT =
   'linear-gradient(to right, #17a3d6, #3869e9, #5f32f3)'
 
+/** Ignore observer hand-off during programmatic smooth scroll unless strict manual override. */
+const CLICK_LOCK_MS = 650
+
 export function StickySectionNav({
   items,
   heroContainerId,
@@ -27,8 +30,10 @@ export function StickySectionNav({
   const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const [activeSection, setActiveSection] = useState<string>(items[0]?.id ?? '')
   const activeSectionRef = useRef(activeSection)
-  /** While set, click-initiated scroll is in progress; observer must not override to another section. */
+  /** Click target: observer may not switch away until cleared. */
   const pendingSectionRef = useRef<string | null>(null)
+  /** Until this time (performance.now()), ignore observer updates except strict manual override. */
+  const clickLockUntilRef = useRef<number>(0)
   const [show, setShow] = useState(false)
   const [overlayActive, setOverlayActive] = useState(false)
   const [showLeftFade, setShowLeftFade] = useState(false)
@@ -95,11 +100,14 @@ export function StickySectionNav({
     if (targets.length === 0) return
 
     const ratios = new Map<string, number>()
-    /** Pending section is "arrived" when it fills the observer root band enough. */
-    const PENDING_CLEAR_RATIO = 0.28
-    /** If user scrolls manually, another section can steal focus when clearly ahead of pending. */
-    const MANUAL_OVERRIDE_MIN = 0.32
-    const MANUAL_OVERRIDE_MARGIN = 0.06
+    /** After lock: pending clears only when target is clearly in the observer band. */
+    const PENDING_CLEAR_RATIO = 0.48
+    /** During lock: require obvious dominance to break click priority (no flip-flops). */
+    const MANUAL_OVERRIDE_LOCKED_MIN = 0.58
+    const MANUAL_OVERRIDE_LOCKED_MARGIN = 0.22
+    /** After lock: user scrolled elsewhere — strong but not as extreme as locked. */
+    const MANUAL_OVERRIDE_MIN = 0.4
+    const MANUAL_OVERRIDE_MARGIN = 0.14
 
     const io = new IntersectionObserver(
       (entries) => {
@@ -120,17 +128,37 @@ export function StickySectionNav({
 
         const pending = pendingSectionRef.current
         if (pending) {
+          const now = performance.now()
+          const lockActive = now < clickLockUntilRef.current
           const pendingRatio = ratios.get(pending) ?? 0
+
+          const strictManualBreak =
+            bestId !== pending &&
+            bestRatio >= MANUAL_OVERRIDE_LOCKED_MIN &&
+            bestRatio > pendingRatio + MANUAL_OVERRIDE_LOCKED_MARGIN
+          const relaxedManualBreak =
+            !lockActive &&
+            bestId !== pending &&
+            bestRatio >= MANUAL_OVERRIDE_MIN &&
+            bestRatio > pendingRatio + MANUAL_OVERRIDE_MARGIN
+
+          if (lockActive) {
+            if (strictManualBreak) {
+              pendingSectionRef.current = null
+              clickLockUntilRef.current = 0
+              if (bestId && bestId !== activeSectionRef.current) {
+                setActiveSection(bestId)
+              }
+            }
+            return
+          }
+
           if (pendingRatio >= PENDING_CLEAR_RATIO) {
             pendingSectionRef.current = null
             if (activeSectionRef.current === pending) {
               return
             }
-          } else if (
-            bestId !== pending &&
-            bestRatio >= MANUAL_OVERRIDE_MIN &&
-            bestRatio > pendingRatio + MANUAL_OVERRIDE_MARGIN
-          ) {
+          } else if (relaxedManualBreak) {
             pendingSectionRef.current = null
             if (bestId && bestId !== activeSectionRef.current) {
               setActiveSection(bestId)
@@ -263,6 +291,7 @@ export function StickySectionNav({
                 type="button"
                 onClick={() => {
                   pendingSectionRef.current = item.id
+                  clickLockUntilRef.current = performance.now() + CLICK_LOCK_MS
                   setActiveSection(item.id)
                   const target = document.getElementById(item.targetId)
                   if (target) {
