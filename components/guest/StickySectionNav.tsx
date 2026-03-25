@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 export type StickySectionNavItem = {
   id: string
@@ -11,130 +11,102 @@ export type StickySectionNavItem = {
   iconAlt: string
 }
 
+const ACTIVE_GRADIENT =
+  'linear-gradient(to right, #17a3d6, #3869e9, #5f32f3)'
+
 export function StickySectionNav({
   items,
   heroContainerId,
   highlightColor,
 }: {
   items: StickySectionNavItem[]
-  /** Menu appears after this element scrolls out of view. */
+  /** Menu appears shortly after the hero starts being scrolled away. */
   heroContainerId: string
-  /** Active pill color (team theme for now). */
+  /** Kept for future theming; currently not used for the gradient bubble. */
   highlightColor: string
 }) {
-  const [show, setShow] = useState(false)
-  const [activeId, setActiveId] = useState<string>(items[0]?.id ?? '')
+  const outerRef = useRef<HTMLDivElement>(null)
+  const rowRef = useRef<HTMLDivElement>(null)
+  const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
+  const [show, setShow] = useState(false)
+  const [overlayActive, setOverlayActive] = useState(false)
+
+  const [activeId, setActiveId] = useState<string>(items[0]?.id ?? '')
   const activeIdRef = useRef(activeId)
   useEffect(() => {
     activeIdRef.current = activeId
   }, [activeId])
 
-  const manualActiveUntilRef = useRef<number>(0)
-  const railRef = useRef<HTMLDivElement>(null)
-  const heroRef = useRef<HTMLElement | null>(null)
-  const targetElsRef = useRef<Array<{ id: string; el: HTMLElement }>>([])
-  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(false)
+  const [tx, setTx] = useState(0) // controlled dock translation
+  const txRef = useRef(0)
+  useEffect(() => {
+    txRef.current = tx
+  }, [tx])
 
-  // Must match the fade overlay width (in px) so the clicked item never sits under the fade.
-  const FADE_OVERLAY_PX = 56
-  // Extra padding inside the fade-safe window.
-  const KEEP_READABLE_PADDING_PX = 10
-  // Gradient for the active highlight pill.
-  const ACTIVE_GRADIENT =
-    'linear-gradient(to right, #17a3d6, #3869e9, #5f32f3)'
+  // Fades show when there is overflow on that side.
+  const [leftOverflow, setLeftOverflow] = useState(false)
+  const [rightOverflow, setRightOverflow] = useState(false)
 
-  const scrollTo = useCallback((targetId: string) => {
-    const el = document.getElementById(targetId)
-    if (!el) return
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  // Animated highlight (glides independently of button background).
+  const [highlight, setHighlight] = useState<{
+    left: number
+    top: number
+    width: number
+    height: number
+  } | null>(null)
+
+  // Recalculate highlight position after DOM changes.
+  const measureHighlight = useCallback(() => {
+    const outer = outerRef.current
+    if (!outer) return
+    const btn = btnRefs.current[activeIdRef.current]
+    if (!btn) return
+
+    const outerRect = outer.getBoundingClientRect()
+    const btnRect = btn.getBoundingClientRect()
+
+    setHighlight({
+      left: btnRect.left - outerRect.left,
+      top: btnRect.top - outerRect.top,
+      width: btnRect.width,
+      height: btnRect.height,
+    })
   }, [])
 
-  const scrollRailToItem = useCallback(
-    (id: string, behavior: ScrollBehavior) => {
-      const rail = railRef.current
-      const btn = buttonRefs.current[id]
-      if (!rail || !btn) return
+  useLayoutEffect(() => {
+    // Measure after initial render and whenever active/tx changes.
+    measureHighlight()
+  }, [measureHighlight, activeId, tx])
 
-      const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth)
-      const clientWidth = rail.clientWidth
-      const idx = items.findIndex((x) => x.id === id)
-      if (idx < 0) return
+  // Overlay/lightbox suppression: hide nav if any aria-modal dialog exists.
+  useEffect(() => {
+    const compute = () => {
+      const exists = Boolean(document.querySelector('[aria-modal="true"]'))
+      setOverlayActive(exists)
+    }
+    compute()
 
-      // Desired set: active + immediate neighbors (when possible).
-      const desiredIdxs = [idx - 1, idx, idx + 1].filter(
-        (n) => n >= 0 && n < items.length
-      )
+    const mo = new MutationObserver(() => compute())
+    mo.observe(document.body, { childList: true, subtree: true })
 
-      const leftFadePx = idx > 1 ? FADE_OVERLAY_PX : 0
-      const rightFadePx = idx < items.length - 2 ? FADE_OVERLAY_PX : 0
+    return () => mo.disconnect()
+  }, [])
 
-      const safeL = leftFadePx + KEEP_READABLE_PADDING_PX
-      const safeR = clientWidth - rightFadePx - KEEP_READABLE_PADDING_PX
-
-      const solveForSet = (indices: number[]) => {
-        // Constraints:
-        // itemLeft  >= x + safeL  -> x <= itemLeft - safeL
-        // itemRight <= x + safeR -> x >= itemRight - safeR
-        let lower = -Infinity
-        let upper = Infinity
-
-        for (const i of indices) {
-          const el = buttonRefs.current[items[i]!.id]
-          if (!el) continue
-          const itemLeft = el.offsetLeft
-          const itemRight = itemLeft + el.offsetWidth
-          lower = Math.max(lower, itemRight - safeR)
-          upper = Math.min(upper, itemLeft - safeL)
-        }
-
-        // Intersect with [0, maxScroll].
-        lower = Math.max(0, lower)
-        upper = Math.min(maxScroll, upper)
-        if (lower > upper) return null
-
-        const activeBtn = buttonRefs.current[id]
-        if (!activeBtn) return null
-        const activeLeft = activeBtn.offsetLeft
-        const activeRight = activeLeft + activeBtn.offsetWidth
-        const activeCenter = (activeLeft + activeRight) / 2
-        const safeCenter = (safeL + safeR) / 2
-        const ideal = activeCenter - safeCenter
-
-        return Math.max(lower, Math.min(upper, ideal))
-      }
-
-      const next =
-        solveForSet(desiredIdxs) ??
-        solveForSet([idx]) ??
-        rail.scrollLeft
-
-      const clamped = Math.max(0, Math.min(maxScroll, next))
-      if (Math.abs(clamped - rail.scrollLeft) < 0.5) return
-      rail.scrollTo({ left: clamped, behavior })
-    },
-    [items]
-  )
-
-  // Menu appears when the hero has been scrolled past a bit.
+  // Menu appearance: show once the hero has been scrolled away ~20-30%.
   useEffect(() => {
     const heroEl = document.getElementById(heroContainerId)
-    heroRef.current = heroEl
     if (!heroEl) {
       setShow(true)
       return
     }
 
-    const VISIBILITY_PROGRESS_THRESHOLD = 0.22 // ~20-30% past hero
+    const VISIBILITY_PROGRESS_THRESHOLD = 0.22
 
     let raf = 0
     const update = () => {
       raf = 0
-      const el = heroRef.current
-      if (!el) return
-      const rect = el.getBoundingClientRect()
+      const rect = heroEl.getBoundingClientRect()
       const h = rect.height || 1
       const progress = (-rect.top) / h
       setShow(progress >= VISIBILITY_PROGRESS_THRESHOLD)
@@ -148,6 +120,7 @@ export function StickySectionNav({
     update()
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('resize', onScroll)
+
     return () => {
       if (raf) window.cancelAnimationFrame(raf)
       window.removeEventListener('scroll', onScroll)
@@ -155,41 +128,31 @@ export function StickySectionNav({
     }
   }, [heroContainerId])
 
-  // Build target section list after mount.
+  // Active section detection based on scroll position.
   useEffect(() => {
-    targetElsRef.current = items
+    const targets = items
       .map((i) => {
         const el = document.getElementById(i.targetId)
-        if (!el) return null
-        return { id: i.id, el }
+        return el ? { id: i.id, el } : null
       })
       .filter((x): x is { id: string; el: HTMLElement } => Boolean(x))
 
-    // Reset active to first available target.
-    setActiveId(items[0]?.id ?? '')
-  }, [items])
-
-  // Active section detection: choose the section whose top is closest to a “focus line”.
-  useEffect(() => {
     let raf = 0
+    const focusLine = () => window.innerHeight * 0.48
+
     const updateActive = () => {
       raf = 0
-      if (Date.now() < manualActiveUntilRef.current) return
+      const line = focusLine()
 
-      const targets = targetElsRef.current
-      if (targets.length === 0) return
-
-      const focusLine = window.innerHeight * 0.48
       let bestId: string | null = null
       let bestDist = Number.POSITIVE_INFINITY
 
       for (const t of targets) {
         const rect = t.el.getBoundingClientRect()
-        // Only consider items near the viewport.
         if (rect.bottom < 0 || rect.top > window.innerHeight) continue
-        const dist = Math.abs(rect.top - focusLine)
-        if (dist < bestDist) {
-          bestDist = dist
+        const d = Math.abs(rect.top - line)
+        if (d < bestDist) {
+          bestDist = d
           bestId = t.id
         }
       }
@@ -205,104 +168,234 @@ export function StickySectionNav({
     updateActive()
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('resize', onScroll)
+
     return () => {
       if (raf) window.cancelAnimationFrame(raf)
       window.removeEventListener('scroll', onScroll)
       window.removeEventListener('resize', onScroll)
     }
+  }, [items])
+
+  const scrollToSection = useCallback((targetId: string) => {
+    const el = document.getElementById(targetId)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
 
-  // Horizontal overflow detection for the menu rail.
-  useEffect(() => {
-    const el = railRef.current
-    if (!el) return
+  // Controlled dock translation:
+  // - never depends on raw horizontal scrolling
+  // - always ensures active is fully visible and keeps neighbors fully visible when possible
+  const repositionDockForActive = useCallback(() => {
+    const outer = outerRef.current
+    const row = rowRef.current
+    if (!outer || !row) return
 
-    let raf = 0
-    const updateOverflow = () => {
-      raf = 0
-      const rail = railRef.current
-      if (!rail) return
-      const maxScroll = rail.scrollWidth - rail.clientWidth
-      const hasOverflow = maxScroll > 1
-      if (!hasOverflow) {
-        setCanScrollLeft(false)
-        setCanScrollRight(false)
+    const outerWidth = outer.clientWidth
+    if (outerWidth <= 0) return
+
+    const FADE_PX = 56
+    const INNER_PAD_PX = 8 // breathing room inside safe window
+
+    // Measure content bounds from buttons (offsetLeft unaffected by transform).
+    const measured = items
+      .map((it) => {
+        const btn = btnRefs.current[it.id]
+        if (!btn) return null
+        return { id: it.id, left: btn.offsetLeft, width: btn.offsetWidth }
+      })
+      .filter((x): x is { id: string; left: number; width: number } => Boolean(x))
+
+    if (measured.length === 0) return
+
+    const byId = new Map(measured.map((m) => [m.id, m]))
+    const activeIdx = items.findIndex((x) => x.id === activeIdRef.current)
+
+    // Content width and translation bounds.
+    const contentLeft = Math.min(...measured.map((m) => m.left))
+    const contentRight = Math.max(...measured.map((m) => m.left + m.width))
+    const contentWidth = contentRight - contentLeft
+
+    const minTx = Math.min(0, outerWidth - contentWidth) // most negative (right aligned)
+    const maxTx = 0 // left aligned
+
+    // Safe viewport where items must fully fit.
+    const safeL = FADE_PX + INNER_PAD_PX
+    const safeR = outerWidth - FADE_PX - INNER_PAD_PX
+
+    // Desired indices based on the required rules.
+    const baseDesiredIdxs = (() => {
+      if (activeIdx <= 0) return [0, 1] // Missions active → Feed visible
+      if (activeIdx === 1) return [0, 1, 2] // Feed active → Missions + Seat Finder visible
+      if (activeIdx === 2) return [1, 2, 3] // Seat Finder active → Feed + Leaderboard visible
+      return [2, 3] // Leaderboard active → Seat Finder visible
+    })().filter((n) => n >= 0 && n < items.length)
+
+    const computeLowerUpper = (indices: number[]) => {
+      let lower = -Infinity
+      let upper = Infinity
+
+      for (const di of indices) {
+        const it = items[di]!
+        const m = byId.get(it.id)
+        if (!m) continue
+
+        // ScreenLeft = m.left - contentLeft + tx
+        // Ensure ScreenLeft >= safeL  -> tx >= safeL - (m.left - contentLeft)
+        // Ensure ScreenRight <= safeR -> tx <= safeR - (m.left - contentLeft + m.width)
+        const localLeft = m.left - contentLeft
+        const localRight = localLeft + m.width
+
+        lower = Math.max(lower, safeL - localLeft)
+        upper = Math.min(upper, safeR - localRight)
+      }
+
+      if (!Number.isFinite(lower)) lower = minTx
+      if (!Number.isFinite(upper)) upper = maxTx
+
+      return { lower, upper }
+    }
+
+    let desiredIdxs = baseDesiredIdxs
+    let lowerUpper = computeLowerUpper(desiredIdxs)
+
+    // If the “neighbors fully visible” constraints can’t all be satisfied,
+    // fall back to active-only so the active item is never cut off.
+    if (lowerUpper.lower > lowerUpper.upper) {
+      desiredIdxs = [activeIdx].filter((n) => n >= 0 && n < items.length)
+      lowerUpper = computeLowerUpper(desiredIdxs)
+    }
+
+    // Keep active roughly centered inside the safe window (within constraints).
+    const active = items[activeIdx] ? byId.get(items[activeIdx]!.id) : undefined
+    if (!active) {
+      setTx(0)
+      return
+    }
+
+    const activeLocalLeft = active.left - contentLeft
+    const activeLocalCenter = activeLocalLeft + active.width / 2
+    const safeCenter = (safeL + safeR) / 2
+    const idealTx = safeCenter - activeLocalCenter
+
+    const chosen = Math.max(lowerUpper.lower, Math.min(lowerUpper.upper, idealTx))
+    const clamped = Math.max(minTx, Math.min(maxTx, chosen))
+    const finalTx = Number.isFinite(clamped) ? clamped : 0
+
+    setTx(finalTx)
+
+    // Fade visibility from tx bounds.
+    const shiftedRightEdge = contentWidth + finalTx
+    const rightOverflowNow = shiftedRightEdge > outerWidth + 0.5
+    const leftOverflowNow = finalTx < -0.5
+
+    setLeftOverflow(leftOverflowNow)
+    setRightOverflow(rightOverflowNow)
+  }, [items])
+
+  // Reposition whenever active changes or on resize.
+  useEffect(() => {
+    repositionDockForActive()
+
+    const onResize = () => repositionDockForActive()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [repositionDockForActive, activeId])
+
+  // Controlled dock also needs to respond immediately to click.
+  const onNavClick = useCallback(
+    (id: string, targetId: string) => {
+      if (id === activeIdRef.current) {
+        scrollToSection(targetId)
         return
       }
-      // Use slightly larger thresholds to avoid “fade on” at rest.
-      setCanScrollLeft(rail.scrollLeft > 10)
-      setCanScrollRight(rail.scrollLeft < maxScroll - 10)
-    }
 
-    const onScroll = () => {
-      if (raf) return
-      raf = window.requestAnimationFrame(updateOverflow)
-    }
+      setActiveId(id)
+      // Reposition immediately based on new activeId.
+      // (Effect runs immediately too, but this removes perceptible lag.)
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      requestAnimationFrame(() => repositionDockForActive())
+      scrollToSection(targetId)
+    },
+    [repositionDockForActive, scrollToSection]
+  )
 
-    updateOverflow()
-    el.addEventListener('scroll', onScroll, { passive: true })
-    const ro = new ResizeObserver(() => updateOverflow())
-    ro.observe(el)
-
-    return () => {
-      if (raf) window.cancelAnimationFrame(raf)
-      el.removeEventListener('scroll', onScroll)
-      ro.disconnect()
-    }
-  }, [items])
+  const visible = show && !overlayActive
 
   return (
     <div
+      ref={outerRef}
       className={`fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-[60] w-[min(26rem,calc(100vw-1.25rem))] -translate-x-1/2 transition-all duration-300 ease-out ${
-        show ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
+        visible
+          ? 'translate-y-0 opacity-100 pointer-events-auto'
+          : 'translate-y-8 opacity-0 pointer-events-none'
       }`}
-      aria-hidden={!show}
+      aria-hidden={!visible}
     >
       <nav
-        className="relative mx-auto h-[72px] overflow-hidden rounded-[9999px] border border-zinc-200 bg-white p-1 shadow-[0_16px_34px_rgba(0,0,0,0.14)] backdrop-blur-sm"
+        className="relative h-[72px] overflow-hidden rounded-[9999px] border border-zinc-200 bg-white p-1 shadow-[0_16px_34px_rgba(0,0,0,0.14)] backdrop-blur-sm"
         aria-label="Section navigation"
       >
-        {/* Internal fades (both sides) */}
-        {canScrollLeft ? (
+        {/* LEFT fade: shown when there is overflow hidden on the left */}
+        {leftOverflow ? (
           <div
-            className="pointer-events-none absolute left-0 top-0 bottom-0 z-[2] rounded-r-[9999px]"
-            style={{ width: FADE_OVERLAY_PX }}
+            className="pointer-events-none absolute left-0 top-0 bottom-0 z-[1] rounded-r-[9999px]"
+            style={{ width: 56 }}
             aria-hidden
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/92 to-transparent" />
-          </div>
-        ) : null}
-        {canScrollRight ? (
-          <div
-            className="pointer-events-none absolute right-0 top-0 bottom-0 z-[2] rounded-l-[9999px]"
-            style={{ width: FADE_OVERLAY_PX }}
-            aria-hidden
-          >
-            <div className="absolute inset-0 bg-gradient-to-l from-white/95 via-white/92 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-white/98 via-white/92 to-transparent" />
           </div>
         ) : null}
 
-        {/* Quiet arrow hints (no bubble) */}
-        {canScrollLeft ? (
+        {/* RIGHT fade */}
+        {rightOverflow ? (
           <div
-            className="pointer-events-none absolute left-3 top-1/2 z-[4] -translate-y-1/2"
+            className="pointer-events-none absolute right-0 top-0 bottom-0 z-[1] rounded-l-[9999px]"
+            style={{ width: 56 }}
             aria-hidden
           >
+            <div className="absolute inset-0 bg-gradient-to-l from-white/98 via-white/92 to-transparent" />
+          </div>
+        ) : null}
+
+        {/* Quiet arrows on top of fade areas */}
+        {leftOverflow ? (
+          <div className="pointer-events-none absolute left-3 top-1/2 z-[3] -translate-y-1/2" aria-hidden>
             <span className="text-[28px] font-medium text-zinc-600/95">‹</span>
           </div>
         ) : null}
-        {canScrollRight ? (
-          <div
-            className="pointer-events-none absolute right-3 top-1/2 z-[4] -translate-y-1/2"
-            aria-hidden
-          >
+        {rightOverflow ? (
+          <div className="pointer-events-none absolute right-3 top-1/2 z-[3] -translate-y-1/2" aria-hidden>
             <span className="text-[28px] font-medium text-zinc-600/95">›</span>
           </div>
         ) : null}
 
+        {/* Active highlight bubble (glides) */}
+        {highlight ? (
+          <div
+            aria-hidden
+            style={{
+              left: highlight.left,
+              top: highlight.top,
+              width: highlight.width,
+              height: highlight.height,
+              borderRadius: 9999,
+              backgroundImage: ACTIVE_GRADIENT,
+              transition:
+                'left 220ms ease, top 220ms ease, width 220ms ease, height 220ms ease',
+            }}
+            className="absolute z-[2]"
+          />
+        ) : null}
+
+        {/* Dock row */}
         <div
-          ref={railRef}
-          className="relative flex h-full w-full items-center gap-2 overflow-x-auto overscroll-x-contain overflow-y-hidden py-0 px-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [touch-action:pan-y]"
+          ref={rowRef}
+          className="relative flex h-full items-center gap-2 px-0"
+          style={{
+            transform: `translateX(${tx}px)`,
+            transition: 'transform 220ms ease',
+            touchAction: 'pan-y',
+          }}
         >
           {items.map((item) => {
             const isActive = item.id === activeId
@@ -310,22 +403,17 @@ export function StickySectionNav({
               <button
                 key={item.id}
                 ref={(el) => {
-                  buttonRefs.current[item.id] = el
+                  btnRefs.current[item.id] = el
                 }}
                 type="button"
-                onClick={() => {
-                  setActiveId(item.id)
-                  manualActiveUntilRef.current = Date.now() + 800
-                  scrollRailToItem(item.id, 'smooth')
-                  scrollTo(item.targetId)
-                }}
-                className="group relative z-[5] flex h-14 min-w-[6.25rem] flex-col items-center justify-center gap-1 rounded-full px-2 text-[11px] font-semibold transition-colors"
-                style={
-                  isActive
-                    ? { backgroundImage: ACTIVE_GRADIENT, color: '#ffffff' }
-                    : { color: '#000000', backgroundColor: 'transparent' }
-                }
+                onClick={() => onNavClick(item.id, item.targetId)}
                 aria-current={isActive ? 'true' : undefined}
+                className={`relative z-[4] flex h-14 min-w-[6.25rem] flex-col items-center justify-center gap-1 rounded-full px-2 text-[11px] font-semibold transition-colors ${
+                  isActive ? 'text-white' : 'text-[#000]'
+                }`}
+                style={{
+                  backgroundColor: 'transparent',
+                }}
               >
                 <img
                   src={isActive ? item.activeIconSrc : item.inactiveIconSrc}
