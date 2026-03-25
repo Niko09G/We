@@ -27,6 +27,8 @@ export function StickySectionNav({
   const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const [activeSection, setActiveSection] = useState<string>(items[0]?.id ?? '')
   const activeSectionRef = useRef(activeSection)
+  /** While set, click-initiated scroll is in progress; observer must not override to another section. */
+  const pendingSectionRef = useRef<string | null>(null)
   const [show, setShow] = useState(false)
   const [overlayActive, setOverlayActive] = useState(false)
   const [showLeftFade, setShowLeftFade] = useState(false)
@@ -93,6 +95,12 @@ export function StickySectionNav({
     if (targets.length === 0) return
 
     const ratios = new Map<string, number>()
+    /** Pending section is "arrived" when it fills the observer root band enough. */
+    const PENDING_CLEAR_RATIO = 0.28
+    /** If user scrolls manually, another section can steal focus when clearly ahead of pending. */
+    const MANUAL_OVERRIDE_MIN = 0.32
+    const MANUAL_OVERRIDE_MARGIN = 0.06
+
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
@@ -109,6 +117,30 @@ export function StickySectionNav({
             bestId = id
           }
         }
+
+        const pending = pendingSectionRef.current
+        if (pending) {
+          const pendingRatio = ratios.get(pending) ?? 0
+          if (pendingRatio >= PENDING_CLEAR_RATIO) {
+            pendingSectionRef.current = null
+            if (activeSectionRef.current === pending) {
+              return
+            }
+          } else if (
+            bestId !== pending &&
+            bestRatio >= MANUAL_OVERRIDE_MIN &&
+            bestRatio > pendingRatio + MANUAL_OVERRIDE_MARGIN
+          ) {
+            pendingSectionRef.current = null
+            if (bestId && bestId !== activeSectionRef.current) {
+              setActiveSection(bestId)
+            }
+            return
+          } else {
+            return
+          }
+        }
+
         if (bestId && bestId !== activeSectionRef.current) {
           setActiveSection(bestId)
         }
@@ -230,6 +262,7 @@ export function StickySectionNav({
                 }}
                 type="button"
                 onClick={() => {
+                  pendingSectionRef.current = item.id
                   setActiveSection(item.id)
                   const target = document.getElementById(item.targetId)
                   if (target) {
