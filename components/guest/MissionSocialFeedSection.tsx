@@ -134,32 +134,57 @@ function AdviceCard({
   onOpen: () => void
   shape: CellShape
 }) {
+  const maxChars =
+    shape === 'wide' ? 160 : shape === 'tall' ? 110 : shape === 'square' ? 125 : 115
   const excerpt =
-    item.advice.length > 120 ? `${item.advice.slice(0, 117).trim()}…` : item.advice
+    item.advice.length > maxChars
+      ? `${item.advice.slice(0, Math.max(0, maxChars - 3)).trim()}…`
+      : item.advice
 
-  // Keep tall cards from feeling awkwardly dense.
+  // Keep “tall” quote posts from feeling like an awkward text column.
   const lines =
     shape === 'tall'
-      ? 'line-clamp-5'
+      ? 'line-clamp-4'
       : shape === 'wide'
-        ? 'line-clamp-3'
-        : 'line-clamp-4'
+        ? 'line-clamp-4'
+        : shape === 'square'
+          ? 'line-clamp-3'
+          : 'line-clamp-3'
+
+  const textClass =
+    shape === 'tall' || shape === 'wide'
+      ? 'text-[11px] sm:text-[12px]'
+      : 'text-[10.5px] sm:text-[11.5px]'
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="group flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-2xl bg-zinc-900 text-left transition active:scale-[0.98] motion-safe:hover:opacity-95"
+      className="group relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-2xl bg-zinc-800/60 text-left ring-1 ring-white/10 transition active:scale-[0.98] motion-safe:hover:opacity-95"
     >
-      <div className="flex min-h-0 flex-1 flex-col px-2 pb-1.5 pt-2">
+      <div className="relative flex min-h-0 flex-1 flex-col px-3 pb-2 pt-3">
+        <div
+          className="pointer-events-none absolute left-3 top-2 z-0 select-none font-serif text-[64px] leading-none text-white/10"
+          aria-hidden
+        >
+          &quot;
+        </div>
         <p
-          className={`${lines} text-[10px] font-medium leading-snug tracking-tight text-white sm:text-[11px]`}
+          className={`relative z-10 ${lines} ${textClass} font-semibold leading-snug tracking-tight text-white/90`}
         >
           {excerpt}
         </p>
       </div>
-      <div className="shrink-0 border-t border-white/10 px-2 py-1">
-        <p className="truncate text-[8px] font-medium text-white/55">{item.tableName}</p>
+      <div className="shrink-0 px-3 pb-3 pt-1">
+        <div className="flex items-center gap-2">
+          <span
+            className="h-2 w-2 shrink-0 rounded-full bg-white/20"
+            aria-hidden
+          />
+          <p className="truncate text-[9px] font-semibold text-white/55">
+            {item.tableName}
+          </p>
+        </div>
       </div>
     </button>
   )
@@ -351,11 +376,22 @@ function FeedLightbox({
               />
             )
           ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 py-6 text-center">
-              <p className="text-balance text-lg font-medium leading-snug text-zinc-900 sm:text-xl">
-                “{item.advice}”
-              </p>
-              <p className="text-xs font-medium text-zinc-500">{item.tableName}</p>
+            <div className="absolute inset-0 px-7 py-7">
+              <div
+                className="pointer-events-none absolute left-5 top-4 z-0 select-none font-serif text-[92px] leading-none text-zinc-900/5"
+                aria-hidden
+              >
+                &quot;
+              </div>
+              <div className="relative z-10 flex h-full flex-col justify-between">
+                <p className="text-balance line-clamp-6 text-lg font-semibold leading-snug tracking-tight text-zinc-900 sm:text-xl">
+                  “{item.advice}”
+                </p>
+                <div className="mt-4 flex items-center gap-2">
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-zinc-900/20" aria-hidden />
+                  <p className="truncate text-xs font-semibold text-zinc-600">{item.tableName}</p>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -381,7 +417,7 @@ function FeedLightbox({
             type="button"
             onClick={goPrev}
             disabled={items.length < 2}
-            className="flex h-11 min-w-[3rem] items-center justify-center rounded-full border border-zinc-200/90 bg-white px-4 text-lg font-medium text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-40"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-zinc-200/90 bg-white text-lg font-medium text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-40 active:scale-[0.98]"
             aria-label="Previous"
           >
             ‹
@@ -393,20 +429,29 @@ function FeedLightbox({
             type="button"
             onClick={goNext}
             disabled={items.length < 2}
-            className="flex h-11 min-w-[3rem] items-center justify-center rounded-full border border-zinc-200/90 bg-white px-4 text-lg font-medium text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-40"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-zinc-200/90 bg-white text-lg font-medium text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-40 active:scale-[0.98]"
             aria-label="Next"
           >
             ›
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="mx-auto rounded-full border border-zinc-200 bg-white px-5 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-        >
-          Close
-        </button>
+        <div className="mt-2 flex w-full shrink-0 flex-col items-center gap-1.5 px-4 pb-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onClose()
+            }}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-black text-2xl font-normal leading-none text-white transition hover:bg-zinc-800 active:scale-[0.98]"
+            aria-label="Close"
+          >
+            <span aria-hidden className="leading-none translate-y-[1px]">
+              ×
+            </span>
+          </button>
+          <span className="text-sm font-medium text-black">Close</span>
+        </div>
       </div>
     </div>
   )
