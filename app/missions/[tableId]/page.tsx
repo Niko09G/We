@@ -683,27 +683,6 @@ export default function MissionsTablePage({
 
   const navHighlightColor = (tableColor?.trim() || '#8b5cf6') as string
 
-  const NavIcon = ({
-    label,
-  }: {
-    label: string
-  }) => (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      className="h-4 w-4"
-      aria-hidden
-    >
-      <path
-        d="M6 7.5h12M6 12h12M6 16.5h12"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <title>{label}</title>
-    </svg>
-  )
-
   return (
     <main className="min-h-screen w-full min-w-0 max-w-full overflow-x-hidden bg-white">
       <div id="section-hero">
@@ -1159,29 +1138,33 @@ export default function MissionsTablePage({
             id: 'missions',
             label: 'Missions',
             targetId: 'missions',
-            activeIcon: <NavIcon label="Missions" />,
-            inactiveIcon: <NavIcon label="Missions" />,
+            activeIconSrc: '/nav/MissionW.svg',
+            inactiveIconSrc: '/nav/MissionC.svg',
+            iconAlt: 'Missions',
           },
           {
             id: 'feed',
             label: 'Feed',
             targetId: 'feed',
-            activeIcon: <NavIcon label="Feed" />,
-            inactiveIcon: <NavIcon label="Feed" />,
+            activeIconSrc: '/nav/HeartW.svg',
+            inactiveIconSrc: '/nav/HeartC.svg',
+            iconAlt: 'Feed',
           },
           {
             id: 'seat',
             label: 'Seat Finder',
             targetId: 'seat-finder',
-            activeIcon: <NavIcon label="Seat finder" />,
-            inactiveIcon: <NavIcon label="Seat finder" />,
+            activeIconSrc: '/nav/PinW.svg',
+            inactiveIconSrc: '/nav/PinC.svg',
+            iconAlt: 'Seat Finder',
           },
           {
             id: 'leaderboard',
             label: 'Leaderboard',
             targetId: 'leaderboard',
-            activeIcon: <NavIcon label="Leaderboard" />,
-            inactiveIcon: <NavIcon label="Leaderboard" />,
+            activeIconSrc: '/nav/BarW.svg',
+            inactiveIconSrc: '/nav/BarC.svg',
+            iconAlt: 'Leaderboard',
           },
         ]}
       />

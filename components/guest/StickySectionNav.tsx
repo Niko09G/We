@@ -6,8 +6,9 @@ export type StickySectionNavItem = {
   id: string
   label: string
   targetId: string
-  activeIcon: React.ReactNode
-  inactiveIcon: React.ReactNode
+  activeIconSrc: string
+  inactiveIconSrc: string
+  iconAlt: string
 }
 
 export function StickySectionNav({
@@ -33,16 +34,44 @@ export function StickySectionNav({
   const railRef = useRef<HTMLDivElement>(null)
   const heroRef = useRef<HTMLElement | null>(null)
   const targetElsRef = useRef<Array<{ id: string; el: HTMLElement }>>([])
-  const [overflow, setOverflow] = useState(false)
-  const [atEnd, setAtEnd] = useState(true)
+  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
 
-  const overflowMaskEnabled = useMemo(() => overflow && !atEnd, [overflow, atEnd])
+  const FADE_WIDTH = 52
 
   const scrollTo = useCallback((targetId: string) => {
     const el = document.getElementById(targetId)
     if (!el) return
     el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
+
+  const scrollRailToItem = useCallback(
+    (id: string, behavior: ScrollBehavior) => {
+      const rail = railRef.current
+      const btn = buttonRefs.current[id]
+      if (!rail || !btn) return
+
+      const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth)
+      const visibleLeft = rail.scrollLeft + FADE_WIDTH
+      const visibleRight = rail.scrollLeft + rail.clientWidth - FADE_WIDTH
+      const btnLeft = btn.offsetLeft
+      const btnRight = btn.offsetLeft + btn.offsetWidth
+
+      let next = rail.scrollLeft
+      if (btnLeft < visibleLeft) {
+        next = btnLeft - FADE_WIDTH + 6
+      } else if (btnRight > visibleRight) {
+        next = btnRight - rail.clientWidth + FADE_WIDTH - 6
+      } else {
+        return
+      }
+
+      next = Math.max(0, Math.min(maxScroll, next))
+      rail.scrollTo({ left: next, behavior })
+    },
+    []
+  )
 
   // Menu appears when the hero has been scrolled past a bit.
   useEffect(() => {
@@ -150,8 +179,13 @@ export function StickySectionNav({
       if (!rail) return
       const maxScroll = rail.scrollWidth - rail.clientWidth
       const hasOverflow = maxScroll > 1
-      setOverflow(hasOverflow)
-      setAtEnd(!hasOverflow || rail.scrollLeft >= maxScroll - 4)
+      if (!hasOverflow) {
+        setCanScrollLeft(false)
+        setCanScrollRight(false)
+        return
+      }
+      setCanScrollLeft(rail.scrollLeft > 4)
+      setCanScrollRight(rail.scrollLeft < maxScroll - 4)
     }
 
     const onScroll = () => {
@@ -179,9 +213,33 @@ export function StickySectionNav({
       aria-hidden={!show}
     >
       <nav
-        className="relative mx-auto rounded-[9999px] border border-zinc-200 bg-white/95 p-2 shadow-[0_10px_28px_rgba(0,0,0,0.10)] backdrop-blur"
+        className="relative mx-auto overflow-hidden rounded-[9999px] border border-zinc-200 bg-white p-2 shadow-[0_10px_26px_rgba(0,0,0,0.08)] backdrop-blur-sm"
         aria-label="Section navigation"
       >
+        {/* Internal fades (both sides) */}
+        {canScrollLeft ? (
+          <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-14" aria-hidden>
+            <div className="absolute inset-0 bg-gradient-to-r from-white to-transparent" />
+          </div>
+        ) : null}
+        {canScrollRight ? (
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-14" aria-hidden>
+            <div className="absolute inset-0 bg-gradient-to-l from-white to-transparent" />
+          </div>
+        ) : null}
+
+        {/* Quiet arrow hints (no bubble) */}
+        {canScrollLeft ? (
+          <div className="pointer-events-none absolute left-3 top-1/2 z-[1] -translate-y-1/2" aria-hidden>
+            <span className="text-[22px] font-medium text-zinc-400">‹</span>
+          </div>
+        ) : null}
+        {canScrollRight ? (
+          <div className="pointer-events-none absolute right-3 top-1/2 z-[1] -translate-y-1/2" aria-hidden>
+            <span className="text-[22px] font-medium text-zinc-400">›</span>
+          </div>
+        ) : null}
+
         <div
           ref={railRef}
           className="flex max-w-full items-center gap-2 overflow-x-auto overscroll-x-contain py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
@@ -191,47 +249,35 @@ export function StickySectionNav({
             return (
               <button
                 key={item.id}
+                ref={(el) => {
+                  buttonRefs.current[item.id] = el
+                }}
                 type="button"
                 onClick={() => {
                   setActiveId(item.id)
-                  manualActiveUntilRef.current = Date.now() + 650
+                  manualActiveUntilRef.current = Date.now() + 800
+                  scrollRailToItem(item.id, 'smooth')
                   scrollTo(item.targetId)
                 }}
-                className="group relative flex min-w-[5.75rem] flex-col items-center justify-center gap-1 rounded-[9999px] px-2 py-2.5 text-[11px] font-semibold transition-transform active:scale-[0.98]"
+                className="group flex h-14 min-w-[5.75rem] flex-col items-center justify-center gap-1 rounded-full px-2 text-[11px] font-semibold transition-colors"
                 style={
                   isActive
                     ? { backgroundColor: highlightColor, color: '#ffffff' }
-                    : { color: highlightColor }
+                    : { color: highlightColor, backgroundColor: 'transparent' }
                 }
                 aria-current={isActive ? 'true' : undefined}
               >
-                <span className="inline-flex h-6 w-6 items-center justify-center" aria-hidden>
-                  {isActive ? item.activeIcon : item.inactiveIcon}
-                </span>
+                <img
+                  src={isActive ? item.activeIconSrc : item.inactiveIconSrc}
+                  alt={item.iconAlt}
+                  className="h-6 w-6 object-contain"
+                  draggable={false}
+                />
                 <span className="leading-none">{item.label}</span>
               </button>
             )
           })}
         </div>
-
-        {overflowMaskEnabled ? (
-          <>
-            <div
-              className="pointer-events-none absolute inset-y-0 right-0 w-14"
-              aria-hidden
-            >
-              <div className="absolute inset-0 bg-gradient-to-l from-white/95 to-transparent" />
-            </div>
-            <div
-              className="pointer-events-none absolute right-3 top-1/2 z-[1] -translate-y-1/2"
-              aria-hidden
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/85 text-zinc-500 shadow-sm">
-                ›
-              </span>
-            </div>
-          </>
-        ) : null}
       </nav>
     </div>
   )
