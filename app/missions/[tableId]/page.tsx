@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MissionSocialFeedSection } from '@/components/guest/MissionSocialFeedSection'
+import { StickySectionNav } from '@/components/guest/StickySectionNav'
 import { MissionsTableHero } from '@/components/guest/MissionsTableHero'
 import { getMissionsEnabled } from '@/lib/app-settings'
 import { fetchLeaderboard, type LeaderboardEntry } from '@/lib/leaderboard'
@@ -680,30 +681,55 @@ export default function MissionsTablePage({
 
   const showMissionUi = missionsEnabled === true && !error
 
+  const navHighlightColor = (tableColor?.trim() || '#8b5cf6') as string
+
+  const NavIcon = ({
+    label,
+  }: {
+    label: string
+  }) => (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-4 w-4"
+      aria-hidden
+    >
+      <path
+        d="M6 7.5h12M6 12h12M6 16.5h12"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <title>{label}</title>
+    </svg>
+  )
+
   return (
     <main className="min-h-screen w-full min-w-0 max-w-full overflow-x-hidden bg-white">
-      <MissionsTableHero
-        loading={loading}
-        tableName={tableName}
-        tableColor={tableColor}
-        tableRank={tableRank}
-        totalTeams={totalTeams}
-        tablePoints={tablePoints}
-        heroTeamEmblemUrl={heroTeamEmblemUrl}
-        heroRankEmblemUrl={heroRankEmblemUrl}
-        missionsEnabled={missionsEnabled}
-        missionCount={missions.length}
-        onStartMission={scrollToQuests}
-        onSendGreeting={() => {
-          if (greetingMissionId) {
-            setMissionOverlayVariant('hero-greeting')
-            setMissionModalReset((n) => n + 1)
-            void openMissionModal(greetingMissionId, { skipHydrate: true })
-          } else {
-            scrollToQuests()
-          }
-        }}
-      />
+      <div id="section-hero">
+        <MissionsTableHero
+          loading={loading}
+          tableName={tableName}
+          tableColor={tableColor}
+          tableRank={tableRank}
+          totalTeams={totalTeams}
+          tablePoints={tablePoints}
+          heroTeamEmblemUrl={heroTeamEmblemUrl}
+          heroRankEmblemUrl={heroRankEmblemUrl}
+          missionsEnabled={missionsEnabled}
+          missionCount={missions.length}
+          onStartMission={scrollToQuests}
+          onSendGreeting={() => {
+            if (greetingMissionId) {
+              setMissionOverlayVariant('hero-greeting')
+              setMissionModalReset((n) => n + 1)
+              void openMissionModal(greetingMissionId, { skipHydrate: true })
+            } else {
+              scrollToQuests()
+            }
+          }}
+        />
+      </div>
 
       {loading && showMissionUi ? (
         <section className="w-full pt-8" aria-busy="true">
@@ -730,7 +756,7 @@ export default function MissionsTablePage({
 
       {showMissionUi && !loading ? (
         <section
-          id="table-quests"
+          id="missions"
           ref={questsRef}
           className="w-full min-w-0 max-w-full scroll-mt-8 pt-8 pb-2"
         >
@@ -903,13 +929,15 @@ export default function MissionsTablePage({
         </section>
       ) : null}
 
-      <div className="mx-auto w-full min-w-0 max-w-lg space-y-6 px-5 pb-28 pt-6">
-        {!loading && !error && missionsEnabled === true && tableName.trim() ? (
-          <MissionSocialFeedSection
-            items={missionFeedItems}
-            loading={missionFeedLoading}
-          />
-        ) : null}
+      <div className="mx-auto w-full min-w-0 max-w-lg space-y-8 px-5 pb-28 pt-6">
+        <section id="feed" className="scroll-mt-8">
+          {!loading && !error && missionsEnabled === true && tableName.trim() ? (
+            <MissionSocialFeedSection
+              items={missionFeedItems}
+              loading={missionFeedLoading}
+            />
+          ) : null}
+        </section>
 
         {missionsEnabled === false ? (
           <div className="rounded-3xl border-2 border-amber-200 bg-amber-50 px-5 py-5 text-center">
@@ -941,85 +969,72 @@ export default function MissionsTablePage({
           </div>
         ) : null}
 
-        {!loading && !error && missionsEnabled === true ? (
-          <>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Link
-                href="/upload"
-                className="flex items-center gap-3 rounded-3xl border-2 border-violet-200/80 bg-white p-4 transition active:scale-[0.99] hover:border-violet-300"
-              >
-                <span className="text-2xl" aria-hidden>
-                  💌
-                </span>
-                <div className="min-w-0">
-                  <p className="font-extrabold text-violet-950">Greeting</p>
-                  <p className="text-xs font-medium text-violet-600/80">Photo or message</p>
-                </div>
-              </Link>
-              <Link
-                href="/seat"
-                className="flex items-center gap-3 rounded-3xl border-2 border-teal-200/80 bg-white p-4 transition active:scale-[0.99] hover:border-teal-300"
-              >
-                <span className="text-2xl" aria-hidden>
-                  🪑
-                </span>
-                <div className="min-w-0">
-                  <p className="font-extrabold text-teal-950">Seat finder</p>
-                  <p className="text-xs font-medium text-teal-700/80">Your assignment</p>
-                </div>
-              </Link>
-            </div>
+        <section id="seat-finder" className="scroll-mt-8">
+          <h2 className="text-left text-2xl font-semibold leading-snug text-zinc-900">
+            Find your seat
+          </h2>
+          <div className="mt-3 rounded-3xl border border-zinc-200 bg-white p-6">
+            <div className="h-10" aria-hidden />
+          </div>
+        </section>
 
-            {leaderboardPreview.length > 0 ? (
-              <section className="rounded-3xl border-2 border-violet-100 bg-white/90 p-5">
-                <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-sm font-extrabold text-violet-950">Leaderboard snapshot</h2>
-                  <Link
-                    href="/display"
-                    className="text-xs font-bold text-violet-600 underline-offset-2 hover:underline"
-                  >
-                    Full board
-                  </Link>
-                </div>
-                <ul className="mt-4 space-y-2">
-                  {leaderboardPreview.map((row, i) => {
-                    const isYou = row.tableId === tableId
-                    return (
-                      <li
-                        key={row.tableId}
-                        className={`flex items-center justify-between gap-2 rounded-2xl border px-3 py-2.5 text-xs ${
-                          isYou
-                            ? 'border-violet-300 bg-violet-50'
-                            : 'border-violet-100 bg-violet-50/40'
-                        }`}
-                      >
-                        <span className="flex min-w-0 items-center gap-2 font-bold text-violet-950">
-                          <span className="tabular-nums text-violet-400">{i + 1}.</span>
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-violet-200"
-                            style={{
-                              backgroundColor: row.tableColor || '#8b5cf6',
-                            }}
-                          />
-                          <span className="truncate">{row.tableName}</span>
-                          {isYou ? (
-                            <span className="shrink-0 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-extrabold text-white">
-                              You
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="inline-flex shrink-0 items-center gap-1 font-extrabold tabular-nums text-violet-800">
-                          <RewardUnitIcon size={COIN_SIZE} />
-                          {row.totalPoints}
-                        </span>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </section>
-            ) : null}
-          </>
-        ) : null}
+        <section id="leaderboard" className="scroll-mt-8">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-left text-2xl font-semibold leading-snug text-zinc-900">
+              Leaderboard
+            </h2>
+            <Link
+              href="/display"
+              className="shrink-0 text-xs font-bold text-violet-700 underline-offset-2 hover:underline"
+            >
+              Full board
+            </Link>
+          </div>
+
+          {leaderboardPreview.length > 0 ? (
+            <div className="mt-3 rounded-3xl border-2 border-violet-100 bg-white/90 p-5">
+              <ul className="space-y-2">
+                {leaderboardPreview.map((row, i) => {
+                  const isYou = row.tableId === tableId
+                  return (
+                    <li
+                      key={row.tableId}
+                      className={`flex items-center justify-between gap-2 rounded-2xl border px-3 py-2.5 text-xs ${
+                        isYou
+                          ? 'border-violet-300 bg-violet-50'
+                          : 'border-violet-100 bg-violet-50/40'
+                      }`}
+                    >
+                      <span className="flex min-w-0 items-center gap-2 font-bold text-violet-950">
+                        <span className="tabular-nums text-violet-400">{i + 1}.</span>
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-violet-200"
+                          style={{
+                            backgroundColor: row.tableColor || '#8b5cf6',
+                          }}
+                        />
+                        <span className="truncate">{row.tableName}</span>
+                        {isYou ? (
+                          <span className="shrink-0 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-extrabold text-white">
+                            You
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="inline-flex shrink-0 items-center gap-1 font-extrabold tabular-nums text-violet-800">
+                        <RewardUnitIcon size={COIN_SIZE} />
+                        {row.totalPoints}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          ) : (
+            <div className="mt-3 rounded-3xl border border-zinc-200 bg-white p-5">
+              <p className="text-sm font-medium text-zinc-600">No leaderboard data yet.</p>
+            </div>
+          )}
+        </section>
 
         {selectedMissionId
           ? (() => {
@@ -1134,12 +1149,42 @@ export default function MissionsTablePage({
             })()
           : null}
 
-        {showMissionUi && !loading && !error ? (
-          <p className="pb-6 text-center text-xs font-medium text-violet-400">
-            Need a different table? Tap <span className="font-bold text-violet-600">Switch table</span> in the hero.
-          </p>
-        ) : null}
       </div>
+
+      <StickySectionNav
+        heroContainerId="section-hero"
+        highlightColor={navHighlightColor}
+        items={[
+          {
+            id: 'missions',
+            label: 'Missions',
+            targetId: 'missions',
+            activeIcon: <NavIcon label="Missions" />,
+            inactiveIcon: <NavIcon label="Missions" />,
+          },
+          {
+            id: 'feed',
+            label: 'Feed',
+            targetId: 'feed',
+            activeIcon: <NavIcon label="Feed" />,
+            inactiveIcon: <NavIcon label="Feed" />,
+          },
+          {
+            id: 'seat',
+            label: 'Seat Finder',
+            targetId: 'seat-finder',
+            activeIcon: <NavIcon label="Seat finder" />,
+            inactiveIcon: <NavIcon label="Seat finder" />,
+          },
+          {
+            id: 'leaderboard',
+            label: 'Leaderboard',
+            targetId: 'leaderboard',
+            activeIcon: <NavIcon label="Leaderboard" />,
+            inactiveIcon: <NavIcon label="Leaderboard" />,
+          },
+        ]}
+      />
     </main>
   )
 }
