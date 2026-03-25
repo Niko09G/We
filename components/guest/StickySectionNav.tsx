@@ -38,7 +38,9 @@ export function StickySectionNav({
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
 
-  const FADE_WIDTH = 52
+  // Must match the fade overlay width (in px) so the clicked item never sits under the fade.
+  const FADE_OVERLAY_PX = 56
+  const KEEP_CLEAR_MARGIN_PX = 52
 
   const scrollTo = useCallback((targetId: string) => {
     const el = document.getElementById(targetId)
@@ -53,21 +55,26 @@ export function StickySectionNav({
       if (!rail || !btn) return
 
       const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth)
-      const visibleLeft = rail.scrollLeft + FADE_WIDTH
-      const visibleRight = rail.scrollLeft + rail.clientWidth - FADE_WIDTH
-      const btnLeft = btn.offsetLeft
-      const btnRight = btn.offsetLeft + btn.offsetWidth
 
-      let next = rail.scrollLeft
-      if (btnLeft < visibleLeft) {
-        next = btnLeft - FADE_WIDTH + 6
-      } else if (btnRight > visibleRight) {
-        next = btnRight - rail.clientWidth + FADE_WIDTH - 6
-      } else {
-        return
+      // Use bounding boxes so padding/insets don’t affect the math.
+      const railRect = rail.getBoundingClientRect()
+      const btnRect = btn.getBoundingClientRect()
+
+      const leftLimit = railRect.left + KEEP_CLEAR_MARGIN_PX
+      const rightLimit = railRect.right - KEEP_CLEAR_MARGIN_PX
+
+      let delta = 0
+      if (btnRect.left < leftLimit) {
+        // Scroll left decreases scrollLeft; this delta will be negative.
+        delta += btnRect.left - leftLimit
+      } else if (btnRect.right > rightLimit) {
+        // Scroll right increases scrollLeft; this delta will be positive.
+        delta += btnRect.right - rightLimit
       }
 
-      next = Math.max(0, Math.min(maxScroll, next))
+      if (delta === 0) return
+
+      const next = Math.max(0, Math.min(maxScroll, rail.scrollLeft + delta))
       rail.scrollTo({ left: next, behavior })
     },
     []
@@ -184,8 +191,9 @@ export function StickySectionNav({
         setCanScrollRight(false)
         return
       }
-      setCanScrollLeft(rail.scrollLeft > 4)
-      setCanScrollRight(rail.scrollLeft < maxScroll - 4)
+      // Use slightly larger thresholds to avoid “fade on” at rest.
+      setCanScrollLeft(rail.scrollLeft > 10)
+      setCanScrollRight(rail.scrollLeft < maxScroll - 10)
     }
 
     const onScroll = () => {
@@ -213,36 +221,44 @@ export function StickySectionNav({
       aria-hidden={!show}
     >
       <nav
-        className="relative mx-auto overflow-hidden rounded-[9999px] border border-zinc-200 bg-white p-2 shadow-[0_10px_26px_rgba(0,0,0,0.08)] backdrop-blur-sm"
+        className="relative mx-auto h-[64px] overflow-hidden rounded-[9999px] border border-zinc-200 bg-white p-1 shadow-[0_10px_26px_rgba(0,0,0,0.06)] backdrop-blur-sm"
         aria-label="Section navigation"
       >
         {/* Internal fades (both sides) */}
         {canScrollLeft ? (
-          <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-14" aria-hidden>
+          <div
+            className="pointer-events-none absolute left-0 top-0 bottom-0 z-[6]"
+            style={{ width: FADE_OVERLAY_PX }}
+            aria-hidden
+          >
             <div className="absolute inset-0 bg-gradient-to-r from-white to-transparent" />
           </div>
         ) : null}
         {canScrollRight ? (
-          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-14" aria-hidden>
+          <div
+            className="pointer-events-none absolute right-0 top-0 bottom-0 z-[6]"
+            style={{ width: FADE_OVERLAY_PX }}
+            aria-hidden
+          >
             <div className="absolute inset-0 bg-gradient-to-l from-white to-transparent" />
           </div>
         ) : null}
 
         {/* Quiet arrow hints (no bubble) */}
         {canScrollLeft ? (
-          <div className="pointer-events-none absolute left-3 top-1/2 z-[1] -translate-y-1/2" aria-hidden>
-            <span className="text-[22px] font-medium text-zinc-400">‹</span>
+          <div className="pointer-events-none absolute left-3 top-1/2 z-[3] -translate-y-1/2" aria-hidden>
+            <span className="text-[26px] font-medium text-zinc-400/80">‹</span>
           </div>
         ) : null}
         {canScrollRight ? (
-          <div className="pointer-events-none absolute right-3 top-1/2 z-[1] -translate-y-1/2" aria-hidden>
-            <span className="text-[22px] font-medium text-zinc-400">›</span>
+          <div className="pointer-events-none absolute right-3 top-1/2 z-[3] -translate-y-1/2" aria-hidden>
+            <span className="text-[26px] font-medium text-zinc-400/80">›</span>
           </div>
         ) : null}
 
         <div
           ref={railRef}
-          className="flex max-w-full items-center gap-2 overflow-x-auto overscroll-x-contain py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          className="relative flex h-full w-full items-center gap-2 overflow-x-auto overscroll-x-contain py-0 px-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         >
           {items.map((item) => {
             const isActive = item.id === activeId
@@ -259,7 +275,7 @@ export function StickySectionNav({
                   scrollRailToItem(item.id, 'smooth')
                   scrollTo(item.targetId)
                 }}
-                className="group flex h-14 min-w-[5.75rem] flex-col items-center justify-center gap-1 rounded-full px-2 text-[11px] font-semibold transition-colors"
+                className="group relative flex h-14 min-w-[5.75rem] flex-col items-center justify-center gap-1 rounded-full px-2 text-[11px] font-semibold transition-colors"
                 style={
                   isActive
                     ? { backgroundColor: highlightColor, color: '#ffffff' }
