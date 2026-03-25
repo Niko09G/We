@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 export type StickySectionNavItem = {
   id: string
@@ -47,37 +47,6 @@ export function StickySectionNav({
   // Fades show when there is overflow on that side.
   const [leftOverflow, setLeftOverflow] = useState(false)
   const [rightOverflow, setRightOverflow] = useState(false)
-
-  // Animated highlight (glides independently of button background).
-  const [highlight, setHighlight] = useState<{
-    left: number
-    top: number
-    width: number
-    height: number
-  } | null>(null)
-
-  // Recalculate highlight position after DOM changes.
-  const measureHighlight = useCallback(() => {
-    const outer = outerRef.current
-    if (!outer) return
-    const btn = btnRefs.current[activeIdRef.current]
-    if (!btn) return
-
-    const outerRect = outer.getBoundingClientRect()
-    const btnRect = btn.getBoundingClientRect()
-
-    setHighlight({
-      left: btnRect.left - outerRect.left,
-      top: btnRect.top - outerRect.top,
-      width: btnRect.width,
-      height: btnRect.height,
-    })
-  }, [])
-
-  useLayoutEffect(() => {
-    // Measure after initial render and whenever active/tx changes.
-    measureHighlight()
-  }, [measureHighlight, activeId, tx])
 
   // Overlay/lightbox suppression: hide nav if any aria-modal dialog exists.
   useEffect(() => {
@@ -369,22 +338,6 @@ export function StickySectionNav({
           </div>
         ) : null}
 
-        {/* Active highlight bubble (glides) */}
-        {highlight ? (
-          <div
-            aria-hidden
-            style={{
-              left: highlight.left,
-              top: highlight.top,
-              width: highlight.width,
-              height: highlight.height,
-              borderRadius: 9999,
-              backgroundImage: ACTIVE_GRADIENT,
-            }}
-            className="absolute z-[2]"
-          />
-        ) : null}
-
         {/* Dock row */}
         <div
           ref={rowRef}
@@ -409,6 +362,7 @@ export function StickySectionNav({
                   isActive ? 'text-white' : 'text-[#000]'
                 }`}
                 style={{
+                  backgroundImage: isActive ? ACTIVE_GRADIENT : 'none',
                   backgroundColor: 'transparent',
                 }}
               >
