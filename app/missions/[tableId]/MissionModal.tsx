@@ -17,7 +17,10 @@ import {
   uploadMissionSubmissionSignatureImage,
   type SubmissionType,
 } from '@/lib/mission-submissions'
-import { effectiveMaxSubmissionsPerTable } from '@/lib/mission-limits'
+import {
+  effectiveMaxSubmissionsPerTable,
+  guestMissionDisplayReward,
+} from '@/lib/mission-limits'
 import {
   normalizeMissionValidationType,
   submissionTypeFromMissionValidation,
@@ -71,6 +74,8 @@ export type MissionForModal = {
   title: string
   description: string | null
   points: number
+  /** Per-attempt reward when mission is repeatable auto; omitted/null uses `points`. */
+  points_per_submission?: number | null
   validation_type: MissionValidationType
   target_person_name?: string | null
   submission_hint?: string | null
@@ -84,14 +89,13 @@ export type MissionForModal = {
   success_message?: string | null
 }
 
-/** Team standing + mission reward coins (guest overlay HUD). */
+/** Team standing (guest overlay HUD). Mission reward amounts use `guestMissionDisplayReward(mission)` in the modal. */
 export type MissionRewardHud = {
   /** Displayed as coin balance (🪙); same source as table points for now. */
   teamPoints: number
   /** 1-based rank, or null if not on leaderboard yet. */
   rank: number | null
   totalTeams: number
-  missionRewardPoints: number
   /** True when this mission’s reward could move the team up at least one place (vs team directly above). */
   missionCouldReachNextRank: boolean
   /** Leaderboard position above the team’s current rank (e.g. rank 5 → next target 4). Null if N/A. */
@@ -196,6 +200,7 @@ export function MissionModal({
   const flightImgRefs = useRef<Map<string, HTMLImageElement>>(new Map())
   const rewardHudRef = useRef(rewardHud)
   const rewardDisplayBaseRef = useRef<number | null>(null)
+  const missionRewardDisplayRef = useRef(0)
   rewardHudRef.current = rewardHud
   rewardDisplayBaseRef.current = rewardDisplayBase
 
@@ -518,10 +523,24 @@ export function MissionModal({
     rewardCounterValue ??
     (rewardDisplayBase != null ? rewardDisplayBase : (rewardHud?.teamPoints ?? 0))
 
-  const rewardAmount = Math.max(
-    0,
-    Number(mission.points) || Number(rewardHud?.missionRewardPoints) || 0
+  const missionRewardDisplay = useMemo(
+    () =>
+      guestMissionDisplayReward({
+        points: mission.points,
+        points_per_submission: mission.points_per_submission ?? null,
+        approval_mode: mission.approval_mode,
+        max_submissions_per_table: mission.max_submissions_per_table,
+        allow_multiple_submissions: mission.allow_multiple_submissions,
+      }),
+    [
+      mission.allow_multiple_submissions,
+      mission.approval_mode,
+      mission.max_submissions_per_table,
+      mission.points,
+      mission.points_per_submission,
+    ]
   )
+  missionRewardDisplayRef.current = missionRewardDisplay
   const isPendingState = pending && !success
   const maxSubmissionsCap = effectiveMaxSubmissionsPerTable({
     max_submissions_per_table: mission.max_submissions_per_table,
@@ -542,7 +561,7 @@ export function MissionModal({
     const from = claimRewardBtnRef.current?.getBoundingClientRect()
     const to = missionOverlayCoinCountRef.current?.getBoundingClientRect()
     const base = rewardDisplayBase ?? rewardHud.teamPoints
-    const gain = rewardHud.missionRewardPoints
+    const gain = missionRewardDisplay
     const target = base + gain
 
     if (!from || !to || animationAltIcons.length === 0) {
@@ -620,7 +639,7 @@ export function MissionModal({
         return
       }
       const b = rewardDisplayBaseRef.current ?? hud.teamPoints
-      const g = hud.missionRewardPoints
+      const g = missionRewardDisplayRef.current
       const finalVal = b + g
       const counterMs = REWARD_COUNTER_TICK_MS
       const startMs = performance.now()
@@ -775,7 +794,7 @@ export function MissionModal({
       if (rewardClaimSummaryVisible) {
         return (
           <div className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-200/80 bg-emerald-50 px-4 py-3 text-center text-[0.92rem] font-medium text-emerald-800">
-            <span>✓ Mission completed (+{rewardAmount})</span>
+            <span>✓ Mission completed (+{missionRewardDisplay})</span>
             <RewardUnitIcon size={COIN_SIZE} />
           </div>
         )
@@ -788,7 +807,7 @@ export function MissionModal({
           disabled={rewardFlightActive}
           className={MISSION_PRIMARY_CTA_CLASS}
         >
-          {rewardFlightActive ? 'Claiming…' : `Claim +${rewardHud.missionRewardPoints}`}
+          {rewardFlightActive ? 'Claiming…' : `Claim +${missionRewardDisplay}`}
           <RewardUnitIcon size={COIN_SIZE} />
         </button>
       )
@@ -946,7 +965,7 @@ export function MissionModal({
                             data-mission-overlay-reward-headline
                             className={`inline-flex items-center gap-0.5 tabular-nums leading-none text-emerald-400/85 ${hudGradientStatsClass}`}
                           >
-                            <span data-mission-overlay-reward-amount>(+{rewardAmount})</span>
+                            <span data-mission-overlay-reward-amount>(+{missionRewardDisplay})</span>
                             <RewardUnitIcon size={COIN_SIZE} />
                           </span>
                         ) : null}
@@ -980,7 +999,7 @@ export function MissionModal({
                       className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[0.9rem] font-medium ${MISSION_COMPLETED_TINT_CLASS} ${MISSION_COMPLETED_TEXT_CLASS}`}
                       data-mission-overlay-announcement
                     >
-                      <span>✓ Mission completed (+{rewardAmount})</span>
+                      <span>✓ Mission completed (+{missionRewardDisplay})</span>
                       <RewardUnitIcon size={COIN_SIZE} />
                     </div>
                   ) : isPendingState ? (
@@ -990,7 +1009,7 @@ export function MissionModal({
                     >
                       <span className="inline-flex min-w-0 items-center gap-1">
                         <span className="truncate">
-                          Pending review (+{rewardAmount})
+                          Pending review (+{missionRewardDisplay})
                         </span>
                         <RewardUnitIcon size={COIN_SIZE} className="shrink-0" />
                       </span>
@@ -1010,7 +1029,7 @@ export function MissionModal({
                         }}
                       >
                         <span className="inline-flex min-w-0 items-center gap-1 font-semibold">
-                          <span className="truncate">Grants +{rewardAmount}</span>
+                          <span className="truncate">Grants +{missionRewardDisplay}</span>
                           <RewardUnitIcon size={COIN_SIZE} className="shrink-0" />
                         </span>
                         <span
@@ -1086,7 +1105,7 @@ export function MissionModal({
                           >
                             {rewardFlightActive
                               ? 'Claiming…'
-                              : `Claim +${rewardHud.missionRewardPoints}`}
+                              : `Claim +${missionRewardDisplay}`}
                             <RewardUnitIcon size={COIN_SIZE} />
                           </button>
                           <button

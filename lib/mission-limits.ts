@@ -30,6 +30,34 @@ export function isRepeatableAutoMission(
   )
 }
 
+export type GuestMissionRewardInput = MissionLimitFields & {
+  points: number
+  points_per_submission?: number | null
+  approval_mode?: string | null
+}
+
+/**
+ * Single reward value for guest cards, overlay, claim animation, and announcements.
+ * Non-repeatable: `points` only. Repeatable auto (`isRepeatableAutoMission`): `points_per_submission ?? points`.
+ */
+export function guestMissionDisplayReward(m: GuestMissionRewardInput): number {
+  const base = Math.max(0, Math.floor(Number(m.points) || 0))
+  if (
+    isRepeatableAutoMission({
+      approval_mode: m.approval_mode,
+      max_submissions_per_table: m.max_submissions_per_table,
+      allow_multiple_submissions: m.allow_multiple_submissions,
+    })
+  ) {
+    const pps = m.points_per_submission
+    if (pps != null && pps !== undefined && Number.isFinite(Number(pps))) {
+      return Math.max(0, Math.floor(Number(pps)))
+    }
+    return base
+  }
+  return base
+}
+
 /** DB flag kept for backwards compatibility: true when more than one slot is allowed. */
 export function allowMultipleSubmissionsFlag(m: MissionLimitFields): boolean {
   const max = effectiveMaxSubmissionsPerTable(m)

@@ -8,6 +8,7 @@ import { MissionsTableHero } from '@/components/guest/MissionsTableHero'
 import { getMissionsEnabled } from '@/lib/app-settings'
 import { fetchLeaderboard, type LeaderboardEntry } from '@/lib/leaderboard'
 import {
+  guestMissionDisplayReward,
   isAtSubmissionLimit,
   isRepeatableAutoMission,
 } from '@/lib/mission-limits'
@@ -50,6 +51,7 @@ type MissionRow = {
   title: string
   description: string | null
   points: number
+  points_per_submission?: number | null
   validation_type: MissionValidationType
   is_active: boolean
   approval_mode?: 'auto' | 'manual'
@@ -447,7 +449,7 @@ export default function MissionsTablePage({
           const { data: mRes, error: mErr } = await supabase
             .from('missions')
             .select(
-              'id,title,description,points,validation_type,approval_mode,is_active,allow_multiple_submissions,max_submissions_per_table,message_required,target_person_name,submission_hint,header_title,header_image_url,card_theme_index,card_cover_image_url,success_message,card_cta_label,card_completed_label'
+              'id,title,description,points,points_per_submission,validation_type,approval_mode,is_active,allow_multiple_submissions,max_submissions_per_table,message_required,target_person_name,submission_hint,header_title,header_image_url,card_theme_index,card_cover_image_url,success_message,card_cta_label,card_completed_label'
             )
             .in('id', assignedMissionIds)
             .eq('is_active', true)
@@ -460,6 +462,7 @@ export default function MissionsTablePage({
             title: string
             description: string | null
             points: number
+            points_per_submission?: number | null
             validation_type: string | null
             approval_mode?: string | null
             is_active: boolean
@@ -482,6 +485,10 @@ export default function MissionsTablePage({
             title: m.title as string,
             description: m.description ?? null,
             points: Number(m.points) || 0,
+            points_per_submission:
+              m.points_per_submission == null || m.points_per_submission === undefined
+                ? null
+                : Math.max(0, Math.floor(Number(m.points_per_submission))),
             validation_type: normalizeMissionValidationType(
               m.validation_type as string | null | undefined
             ),
@@ -759,7 +766,7 @@ export default function MissionsTablePage({
                 const pending = st === 'pending'
                 const limitReached = st === 'limit_reached'
                 const surface = guestMissionSurfaceGradient(m, missions, i)
-                const rewardAmount = Math.max(0, Number(m.points) || 0)
+                const rewardAmount = guestMissionDisplayReward(m)
                 const typeIcon = m.validation_type === 'video'
                   ? '🎥'
                   : m.validation_type === 'photo'
@@ -1031,9 +1038,10 @@ export default function MissionsTablePage({
                 tableRank != null && tableRank > 1
                   ? leaderboardRows[tableRank - 2]
                   : undefined
+              const missionRewardGuest = guestMissionDisplayReward(m)
               const missionCouldReachNextRank = Boolean(
                 teamAbove != null &&
-                  tablePoints + m.points >= teamAbove.totalPoints
+                  tablePoints + missionRewardGuest >= teamAbove.totalPoints
               )
               const isTableGreetingMission = /post a table greeting/i.test(m.title)
               const isTrumpetStoryMission =
@@ -1054,6 +1062,7 @@ export default function MissionsTablePage({
                 title: m.title,
                 description: m.description,
                 points: m.points,
+                points_per_submission: m.points_per_submission ?? null,
                 validation_type: m.validation_type,
                 target_person_name: m.target_person_name ?? null,
                 submission_hint: m.submission_hint ?? null,
@@ -1090,7 +1099,6 @@ export default function MissionsTablePage({
                     teamPoints: tablePoints,
                     rank: tableRank,
                     totalTeams,
-                    missionRewardPoints: m.points,
                     missionCouldReachNextRank,
                     nextRankTarget,
                   }}

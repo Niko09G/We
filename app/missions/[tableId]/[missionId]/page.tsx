@@ -30,6 +30,7 @@ import {
 import { RewardAmount } from '@/components/reward/RewardAmount'
 import { SignaturePad } from '@/components/SignaturePad'
 import { createClientRequestId } from '@/lib/client-request-id'
+import { guestMissionDisplayReward } from '@/lib/mission-limits'
 
 type Params = { tableId: string; missionId: string }
 
@@ -38,8 +39,12 @@ type MissionRow = {
   title: string
   description: string | null
   points: number
+  points_per_submission?: number | null
   validation_type: MissionValidationType
   is_active?: boolean
+  approval_mode?: 'auto' | 'manual'
+  allow_multiple_submissions?: boolean
+  max_submissions_per_table?: number | null
   target_person_name?: string | null
   submission_hint?: string | null
 }
@@ -112,7 +117,9 @@ export default function MissionDetailPage({
             .maybeSingle(),
           supabase
             .from('missions')
-            .select('id,title,description,points,validation_type,is_active,target_person_name,submission_hint')
+            .select(
+              'id,title,description,points,points_per_submission,validation_type,is_active,approval_mode,allow_multiple_submissions,max_submissions_per_table,target_person_name,submission_hint'
+            )
             .eq('id', missionId)
             .maybeSingle(),
           supabase
@@ -183,15 +190,27 @@ export default function MissionDetailPage({
           row.validation_type as string | null | undefined
         )
         const isActive = (row as any).is_active ?? true
+        const r = row as Record<string, unknown>
+        const ppsRaw = r.points_per_submission
+        const maxRaw = r.max_submissions_per_table
         setMission({
           id: row.id as string,
           title: row.title as string,
           description: (row.description as string | null) ?? null,
           points: Number(row.points) || 0,
+          points_per_submission:
+            ppsRaw == null ? null : Math.max(0, Math.floor(Number(ppsRaw))),
           validation_type: normalized,
           is_active: isActive,
-          target_person_name: (row as Record<string, unknown>).target_person_name as string | null ?? null,
-          submission_hint: (row as Record<string, unknown>).submission_hint as string | null ?? null,
+          approval_mode:
+            String(r.approval_mode ?? 'manual') === 'auto' ? 'auto' : 'manual',
+          allow_multiple_submissions: r.allow_multiple_submissions === true,
+          max_submissions_per_table:
+            maxRaw === null || maxRaw === undefined
+              ? null
+              : Math.max(1, Math.floor(Number(maxRaw))),
+          target_person_name: r.target_person_name as string | null ?? null,
+          submission_hint: r.submission_hint as string | null ?? null,
         })
 
         const isCompleted = (cRes.data ?? []).length > 0
@@ -399,7 +418,11 @@ export default function MissionDetailPage({
                 </div>
                 <div className="shrink-0 text-right">
                   <div className="text-sm font-semibold text-white">
-                    <RewardAmount amount={mission.points} iconSize={16} className="text-white" />
+                    <RewardAmount
+                      amount={guestMissionDisplayReward(mission)}
+                      iconSize={16}
+                      className="text-white"
+                    />
                   </div>
                   <div className="mt-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-white/80">
                     {missionValidationTypeLabel(mission.validation_type)}
