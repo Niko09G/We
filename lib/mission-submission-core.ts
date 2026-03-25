@@ -133,8 +133,10 @@ export async function executeMissionSubmission(
     max_submissions_per_table: mRow.max_submissions_per_table as number | null | undefined,
     allow_multiple_submissions: mRow.allow_multiple_submissions === true,
   })
+  const approvalMode = String(mRow.approval_mode ?? 'manual')
+  const isAutoApprove = approvalMode === 'auto'
   const isRepeatableAuto = isRepeatableAutoMission({
-    approval_mode: String(mRow.approval_mode ?? 'manual'),
+    approval_mode: approvalMode,
     max_submissions_per_table: mRow.max_submissions_per_table as number | null | undefined,
     allow_multiple_submissions: mRow.allow_multiple_submissions === true,
   })
@@ -177,7 +179,7 @@ export async function executeMissionSubmission(
   }
 
   const nowIso = new Date().toISOString()
-  const insertStatus = isRepeatableAuto ? 'approved' : 'pending'
+  const insertStatus = isAutoApprove ? 'approved' : 'pending'
   const { data: inserted, error } = await supabase
     .from('mission_submissions')
     .insert({
@@ -186,7 +188,7 @@ export async function executeMissionSubmission(
       status: insertStatus,
       submission_type: input.submission_type,
       submission_data: input.submission_data ?? null,
-      approved_at: isRepeatableAuto ? nowIso : null,
+      approved_at: isAutoApprove ? nowIso : null,
       client_request_id: input.client_request_id?.trim() || null,
     })
     .select('id')
@@ -197,8 +199,18 @@ export async function executeMissionSubmission(
     throw new Error(error.message || 'Failed to save submission.')
   }
 
+  if (isAutoApprove && effectiveMax === 1) {
+    const { error: compErr } = await supabase.from('completions').insert({
+      table_id: input.table_id,
+      mission_id: input.mission_id,
+    })
+    if (compErr && compErr.code !== '23505') {
+      throw new Error(compErr.message || 'Failed to record completion.')
+    }
+  }
+
   if (
-    isRepeatableAuto &&
+    isAutoApprove &&
     input.submission_type === 'photo' &&
     (mission as Record<string, unknown>).add_to_greetings === true
   ) {
@@ -226,18 +238,25 @@ export async function executeMissionSubmission(
     }
   }
 
-  if (isRepeatableAuto) {
-    const { count, error: cErr } = await supabase
-      .from('mission_submissions')
-      .select('id', { count: 'exact', head: true })
-      .eq('table_id', input.table_id)
-      .eq('mission_id', input.mission_id)
-      .eq('status', 'approved')
-    if (cErr) throw new Error(cErr.message || 'Failed to read submission count.')
+  if (isAutoApprove) {
+    if (isRepeatableAuto) {
+      const { count, error: cErr } = await supabase
+        .from('mission_submissions')
+        .select('id', { count: 'exact', head: true })
+        .eq('table_id', input.table_id)
+        .eq('mission_id', input.mission_id)
+        .eq('status', 'approved')
+      if (cErr) throw new Error(cErr.message || 'Failed to read submission count.')
+      return {
+        autoApproved: true,
+        repeatable: true,
+        approvedCount: typeof count === 'number' ? count : undefined,
+        missionSubmissionId: inserted?.id as string | undefined,
+      }
+    }
     return {
       autoApproved: true,
-      repeatable: true,
-      approvedCount: typeof count === 'number' ? count : undefined,
+      repeatable: false,
       missionSubmissionId: inserted?.id as string | undefined,
     }
   }

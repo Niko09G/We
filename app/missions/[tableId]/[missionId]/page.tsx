@@ -272,7 +272,7 @@ export default function MissionDetailPage({
         submission_data = undefined
       }
 
-      await insertMissionSubmission({
+      const submitResult = await insertMissionSubmission({
         table_id: tableId,
         mission_id: missionId,
         submission_type: submission_type as SubmissionType,
@@ -280,10 +280,14 @@ export default function MissionDetailPage({
         client_request_id: createClientRequestId(),
       })
 
-      // Stay in the same “paused” state; progress is updated after admin approval/completion.
       setSuccess(true)
-      setPending(true)
-      setCompleted(false)
+      if (submitResult.autoApproved) {
+        setPending(false)
+        setCompleted(true)
+      } else {
+        setPending(true)
+        setCompleted(false)
+      }
       setExistingPhotoUrl(submission_type === 'photo' ? submittedPhotoUrl : null)
       clearFile()
       setTextAnswer('')

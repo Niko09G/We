@@ -17,10 +17,7 @@ import {
   uploadMissionSubmissionSignatureImage,
   type SubmissionType,
 } from '@/lib/mission-submissions'
-import {
-  effectiveMaxSubmissionsPerTable,
-  isRepeatableAutoMission,
-} from '@/lib/mission-limits'
+import { effectiveMaxSubmissionsPerTable } from '@/lib/mission-limits'
 import {
   normalizeMissionValidationType,
   submissionTypeFromMissionValidation,
@@ -313,12 +310,6 @@ export function MissionModal({
     (submission_type !== 'video' || (!!videoFile && videoStep === 2)) &&
     (submission_type !== 'signature' || hasSignature)
 
-  const isRepeatableAuto = isRepeatableAutoMission({
-    approval_mode: mission.approval_mode ?? 'manual',
-    max_submissions_per_table: mission.max_submissions_per_table,
-    allow_multiple_submissions: mission.allow_multiple_submissions,
-  })
-
   const showInlineSuccess = success && missionsEnabled && !isBeatcoinMission
   const successBodyText =
     mission.success_message != null && mission.success_message.trim() !== ''
@@ -433,7 +424,7 @@ export function MissionModal({
       setSuccess(true)
       if (rewardHud) setRewardDisplayBase(rewardHud.teamPoints)
       setConfettiFire((n) => n + 1)
-      if (isRepeatableAuto && result.autoApproved) {
+      if (result.autoApproved) {
         setPending(false)
         setCompleted(false)
         setRejected(false)

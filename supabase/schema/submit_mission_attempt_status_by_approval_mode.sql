@@ -1,20 +1,8 @@
--- Hardening for bursty event usage:
--- 1) Idempotency key on mission_submissions
--- 2) Duplicate mission-greeting guard
--- 3) Atomic mission submit RPC with per table/mission advisory lock
+-- Fix: initial submission status follows missions.approval_mode only.
+-- auto → approved (+ approved_at); manual → pending
+-- One-shot auto (effective max = 1): also insert completions so guest UI / leaderboard stay correct.
 --
--- Run manually in Supabase SQL Editor.
-
-alter table public.mission_submissions
-  add column if not exists client_request_id text;
-
-create unique index if not exists mission_submissions_client_request_unique
-  on public.mission_submissions (table_id, mission_id, client_request_id)
-  where (client_request_id is not null and btrim(client_request_id) <> '');
-
-create unique index if not exists greetings_one_row_per_mission_submission
-  on public.greetings (mission_submission_id)
-  where (mission_submission_id is not null and source_type = 'mission');
+-- Run in Supabase SQL Editor after mission_submission_hardening.sql.
 
 create or replace function public.submit_mission_attempt(
   p_table_id uuid,
@@ -43,7 +31,6 @@ declare
   v_message text;
   v_text text;
 begin
-  -- Serialize writes for this table+mission to avoid check-then-insert races.
   perform pg_advisory_xact_lock(hashtextextended(p_table_id::text || ':' || p_mission_id::text, 0));
 
   select value into v_setting from public.app_settings where key = 'missions_enabled' limit 1;
@@ -237,4 +224,3 @@ $$;
 
 grant execute on function public.submit_mission_attempt(uuid, uuid, text, jsonb, text)
   to anon, authenticated;
-
