@@ -40,7 +40,8 @@ export function StickySectionNav({
 
   // Must match the fade overlay width (in px) so the clicked item never sits under the fade.
   const FADE_OVERLAY_PX = 56
-  const KEEP_CLEAR_MARGIN_PX = 52
+  // Extra padding inside the fade-safe window.
+  const KEEP_READABLE_PADDING_PX = 10
 
   const scrollTo = useCallback((targetId: string) => {
     const el = document.getElementById(targetId)
@@ -56,28 +57,41 @@ export function StickySectionNav({
 
       const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth)
 
-      // Use bounding boxes so padding/insets don’t affect the math.
       const railRect = rail.getBoundingClientRect()
       const btnRect = btn.getBoundingClientRect()
 
-      const leftLimit = railRect.left + KEEP_CLEAR_MARGIN_PX
-      const rightLimit = railRect.right - KEEP_CLEAR_MARGIN_PX
+      // Fade masks are only visible when there is hidden content on that side.
+      const leftMaskPx = canScrollLeft ? FADE_OVERLAY_PX : 0
+      const rightMaskPx = canScrollRight ? FADE_OVERLAY_PX : 0
 
-      let delta = 0
-      if (btnRect.left < leftLimit) {
-        // Scroll left decreases scrollLeft; this delta will be negative.
-        delta += btnRect.left - leftLimit
-      } else if (btnRect.right > rightLimit) {
-        // Scroll right increases scrollLeft; this delta will be positive.
-        delta += btnRect.right - rightLimit
-      }
+      // Visible window (in scrollLeft coordinates) that the active button should stay within.
+      const leftBound =
+        rail.scrollLeft + leftMaskPx + KEEP_READABLE_PADDING_PX
+      const rightBound =
+        rail.scrollLeft +
+        rail.clientWidth -
+        rightMaskPx -
+        KEEP_READABLE_PADDING_PX
 
-      if (delta === 0) return
+      const btnLeft = rail.scrollLeft + (btnRect.left - railRect.left)
+      const btnRight = rail.scrollLeft + (btnRect.right - railRect.left)
+      const btnCenter = (btnLeft + btnRight) / 2
+      const targetCenter = (leftBound + rightBound) / 2
 
-      const next = Math.max(0, Math.min(maxScroll, rail.scrollLeft + delta))
+      // Center the active item inside the fade-safe window.
+      let next = rail.scrollLeft + (btnCenter - targetCenter)
+      next = Math.max(0, Math.min(maxScroll, next))
+
+      // Secondary clamp: ensure it doesn't remain under a mask.
+      const afterBtnLeft = next + (btnRect.left - railRect.left)
+      const afterBtnRight = next + (btnRect.right - railRect.left)
+      if (afterBtnLeft < leftBound) next += leftBound - afterBtnLeft
+      if (afterBtnRight > rightBound) next += rightBound - afterBtnRight
+      next = Math.max(0, Math.min(maxScroll, next))
+
       rail.scrollTo({ left: next, behavior })
     },
-    []
+    [canScrollLeft, canScrollRight]
   )
 
   // Menu appears when the hero has been scrolled past a bit.
@@ -221,13 +235,13 @@ export function StickySectionNav({
       aria-hidden={!show}
     >
       <nav
-        className="relative mx-auto h-[64px] overflow-hidden rounded-[9999px] border border-zinc-200 bg-white p-1 shadow-[0_10px_26px_rgba(0,0,0,0.06)] backdrop-blur-sm"
+        className="relative mx-auto h-[68px] overflow-hidden rounded-[9999px] border border-zinc-200 bg-white p-1 shadow-[0_10px_28px_rgba(0,0,0,0.10)] backdrop-blur-sm"
         aria-label="Section navigation"
       >
         {/* Internal fades (both sides) */}
         {canScrollLeft ? (
           <div
-            className="pointer-events-none absolute left-0 top-0 bottom-0 z-[6]"
+            className="pointer-events-none absolute left-0 top-0 bottom-0 z-[2]"
             style={{ width: FADE_OVERLAY_PX }}
             aria-hidden
           >
@@ -236,7 +250,7 @@ export function StickySectionNav({
         ) : null}
         {canScrollRight ? (
           <div
-            className="pointer-events-none absolute right-0 top-0 bottom-0 z-[6]"
+            className="pointer-events-none absolute right-0 top-0 bottom-0 z-[2]"
             style={{ width: FADE_OVERLAY_PX }}
             aria-hidden
           >
@@ -246,19 +260,25 @@ export function StickySectionNav({
 
         {/* Quiet arrow hints (no bubble) */}
         {canScrollLeft ? (
-          <div className="pointer-events-none absolute left-3 top-1/2 z-[3] -translate-y-1/2" aria-hidden>
-            <span className="text-[26px] font-medium text-zinc-400/80">‹</span>
+          <div
+            className="pointer-events-none absolute left-3 top-1/2 z-[4] -translate-y-1/2"
+            aria-hidden
+          >
+            <span className="text-[26px] font-medium text-zinc-500/90">‹</span>
           </div>
         ) : null}
         {canScrollRight ? (
-          <div className="pointer-events-none absolute right-3 top-1/2 z-[3] -translate-y-1/2" aria-hidden>
-            <span className="text-[26px] font-medium text-zinc-400/80">›</span>
+          <div
+            className="pointer-events-none absolute right-3 top-1/2 z-[4] -translate-y-1/2"
+            aria-hidden
+          >
+            <span className="text-[26px] font-medium text-zinc-500/90">›</span>
           </div>
         ) : null}
 
         <div
           ref={railRef}
-          className="relative flex h-full w-full items-center gap-2 overflow-x-auto overscroll-x-contain py-0 px-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          className="relative flex h-full w-full items-center gap-2 overflow-x-auto overscroll-x-contain overflow-y-hidden py-0 px-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [touch-action:pan-x]"
         >
           {items.map((item) => {
             const isActive = item.id === activeId
