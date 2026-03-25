@@ -37,6 +37,7 @@ export function StickySectionNav({
   useEffect(() => {
     activeIdRef.current = activeId
   }, [activeId])
+  const scrollSyncLockUntilRef = useRef(0)
 
   const [tx, setTx] = useState(0) // controlled dock translation
   const txRef = useRef(0)
@@ -111,10 +112,12 @@ export function StickySectionNav({
 
     const updateActive = () => {
       raf = 0
+      if (Date.now() < scrollSyncLockUntilRef.current) return
       const line = focusLine()
 
       let bestId: string | null = null
       let bestDist = Number.POSITIVE_INFINITY
+      let currentDist = Number.POSITIVE_INFINITY
 
       for (const t of targets) {
         const rect = t.el.getBoundingClientRect()
@@ -124,9 +127,16 @@ export function StickySectionNav({
           bestDist = d
           bestId = t.id
         }
+        if (t.id === activeIdRef.current) currentDist = d
       }
 
-      if (bestId && bestId !== activeIdRef.current) setActiveId(bestId)
+      if (!bestId || bestId === activeIdRef.current) return
+
+      // Hysteresis to prevent rapid flip-flop between adjacent sections near boundaries.
+      const SWITCH_MARGIN_PX = 36
+      if (bestDist + SWITCH_MARGIN_PX < currentDist) {
+        setActiveId(bestId)
+      }
     }
 
     const onScroll = () => {
@@ -279,6 +289,9 @@ export function StickySectionNav({
       }
 
       setActiveId(id)
+      // Prevent scroll observer from immediately overriding the clicked state
+      // while the viewport is settling during smooth-scroll.
+      scrollSyncLockUntilRef.current = Date.now() + 650
       // Reposition immediately based on new activeId.
       // (Effect runs immediately too, but this removes perceptible lag.)
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
