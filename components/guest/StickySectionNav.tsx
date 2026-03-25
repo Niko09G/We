@@ -324,7 +324,7 @@ export function StickySectionNav({
   return (
     <div
       ref={outerRef}
-      className={`fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-[60] w-[min(26rem,calc(100vw-1.25rem))] -translate-x-1/2 transition-all duration-300 ease-out ${
+      className={`fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-[60] w-[min(26rem,calc(100vw-1.25rem))] -translate-x-1/2 ${
         visible
           ? 'translate-y-0 opacity-100 pointer-events-auto'
           : 'translate-y-8 opacity-0 pointer-events-none'
@@ -380,8 +380,6 @@ export function StickySectionNav({
               height: highlight.height,
               borderRadius: 9999,
               backgroundImage: ACTIVE_GRADIENT,
-              transition:
-                'left 220ms ease, top 220ms ease, width 220ms ease, height 220ms ease',
             }}
             className="absolute z-[2]"
           />
@@ -393,7 +391,6 @@ export function StickySectionNav({
           className="relative flex h-full items-center gap-2 px-0"
           style={{
             transform: `translateX(${tx}px)`,
-            transition: 'transform 220ms ease',
             touchAction: 'pan-y',
           }}
         >
