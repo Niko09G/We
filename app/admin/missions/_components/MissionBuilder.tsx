@@ -59,6 +59,8 @@ type FormState = {
   target_person_name: string
   submission_hint: string
   success_message: string
+  card_cta_label: string
+  card_completed_label: string
   message_required: boolean
 }
 
@@ -108,6 +110,8 @@ function recordToForm(m: MissionRecord): FormState {
     target_person_name: m.target_person_name ?? '',
     submission_hint: m.submission_hint ?? '',
     success_message: m.success_message ?? '',
+    card_cta_label: m.card_cta_label ?? '',
+    card_completed_label: m.card_completed_label ?? '',
     message_required: m.message_required ?? false,
   }
 }
@@ -130,6 +134,8 @@ function emptyForm(): FormState {
     target_person_name: '',
     submission_hint: '',
     success_message: '',
+    card_cta_label: '',
+    card_completed_label: '',
     message_required: false,
   }
 }
@@ -270,6 +276,8 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
         target_person_name: form.target_person_name.trim() || null,
         submission_hint: form.submission_hint.trim() || null,
         success_message: form.success_message.trim() || null,
+        card_cta_label: form.card_cta_label.trim() || null,
+        card_completed_label: form.card_completed_label.trim() || null,
         message_required: form.message_required,
         card_theme_index,
         card_cover_image_url: form.card_cover_image_url.trim() || null,
@@ -422,6 +430,8 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
       target_person_name: form.target_person_name || null,
       submission_hint: form.submission_hint || null,
       success_message: form.success_message || null,
+      card_cta_label: form.card_cta_label || null,
+      card_completed_label: form.card_completed_label || null,
       header_title: form.header_title || null,
       header_image_url: form.header_image_url || null,
       message_required: form.message_required,
@@ -438,6 +448,8 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
       card_theme_choice: form.card_theme_choice,
       card_cover_image_url: form.card_cover_image_url,
       header_image_url: form.header_image_url,
+      card_cta_label: form.card_cta_label,
+      card_completed_label: form.card_completed_label,
       cardCompleted: false,
       cardPending: form.approval_mode === 'manual',
     }),
@@ -763,6 +775,43 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
                       {adminValidationTypeLabel(form.validation_type)}
                     </span>
                   </p>
+
+                  <div className="mt-5 space-y-4 border-t border-zinc-100 pt-5 dark:border-zinc-800">
+                    <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                      Card CTA label
+                      <input
+                        type="text"
+                        value={form.card_cta_label}
+                        onChange={(e) =>
+                          setForm((s) => ({ ...s, card_cta_label: e.target.value }))
+                        }
+                        className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                        placeholder="Start mission"
+                        autoComplete="off"
+                      />
+                      <span className="mt-1 block font-normal text-[11px] text-zinc-500">
+                        Optional. Button label before the mission is completed (default: Start
+                        mission). Examples: Snap photo, Say hi, Join now.
+                      </span>
+                    </label>
+                    <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                      Card completed label
+                      <input
+                        type="text"
+                        value={form.card_completed_label}
+                        onChange={(e) =>
+                          setForm((s) => ({ ...s, card_completed_label: e.target.value }))
+                        }
+                        className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                        placeholder="Completed"
+                        autoComplete="off"
+                      />
+                      <span className="mt-1 block font-normal text-[11px] text-zinc-500">
+                        Optional. Button label after the mission is completed (default: Completed).
+                        Examples: Locked in, Done, Confirmed.
+                      </span>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="border-t border-zinc-100 pt-6 dark:border-zinc-800">

@@ -64,6 +64,8 @@ type MissionRow = {
   card_theme_index?: number | null
   card_cover_image_url?: string | null
   success_message?: string | null
+  card_cta_label?: string | null
+  card_completed_label?: string | null
   created_at?: string
 }
 
@@ -445,7 +447,7 @@ export default function MissionsTablePage({
           const { data: mRes, error: mErr } = await supabase
             .from('missions')
             .select(
-              'id,title,description,points,validation_type,approval_mode,is_active,allow_multiple_submissions,max_submissions_per_table,message_required,target_person_name,submission_hint,header_title,header_image_url,card_theme_index,card_cover_image_url,success_message'
+              'id,title,description,points,validation_type,approval_mode,is_active,allow_multiple_submissions,max_submissions_per_table,message_required,target_person_name,submission_hint,header_title,header_image_url,card_theme_index,card_cover_image_url,success_message,card_cta_label,card_completed_label'
             )
             .in('id', assignedMissionIds)
             .eq('is_active', true)
@@ -471,6 +473,8 @@ export default function MissionsTablePage({
             card_theme_index?: number | null
             card_cover_image_url?: string | null
             success_message?: string | null
+            card_cta_label?: string | null
+            card_completed_label?: string | null
           }>
 
           const activeMs: MissionRow[] = ms.map((m) => ({
@@ -500,6 +504,8 @@ export default function MissionsTablePage({
                 : Math.max(0, Math.min(5, Math.floor(Number(m.card_theme_index)))),
             card_cover_image_url: m.card_cover_image_url ?? null,
             success_message: m.success_message ?? null,
+            card_cta_label: m.card_cta_label ?? null,
+            card_completed_label: m.card_completed_label ?? null,
           }))
           setMissions(activeMs)
         }
@@ -771,6 +777,9 @@ export default function MissionsTablePage({
                   m.card_cover_image_url.trim().length > 0 &&
                   !isTrumpetStoryCard &&
                   !isTableGreetingCard
+                const ctaLabel = (m.card_cta_label ?? '').trim() || 'Start mission'
+                const completedLabel =
+                  (m.card_completed_label ?? '').trim() || 'Completed'
 
                 return (
                   <button
@@ -832,9 +841,31 @@ export default function MissionsTablePage({
                     ) : null}
 
                     <div className="relative z-10 mt-3 w-full">
-                      <span className="flex w-full items-center justify-center rounded-xl bg-white px-4 py-2.5 text-center text-sm font-semibold text-black">
-                        {completed || limitReached ? 'Done' : 'Start mission'}
-                      </span>
+                      {completed ? (
+                        <span className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm">
+                          <svg
+                            className="h-4 w-4 shrink-0 text-white"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                            aria-hidden
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          {completedLabel}
+                        </span>
+                      ) : limitReached ? (
+                        <span className="flex w-full items-center justify-center rounded-xl bg-white px-4 py-2.5 text-center text-sm font-semibold text-black">
+                          Done
+                        </span>
+                      ) : (
+                        <span className="flex w-full items-center justify-center rounded-xl bg-white px-4 py-2.5 text-center text-sm font-semibold text-black">
+                          {ctaLabel}
+                        </span>
+                      )}
                     </div>
                   </button>
                 )

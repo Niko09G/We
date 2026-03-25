@@ -15,6 +15,10 @@ export type MissionPreviewInput = {
   card_theme_choice: number | 'auto'
   card_cover_image_url: string
   header_image_url: string
+  /** Guest card primary CTA; blank → “Start mission”. */
+  card_cta_label: string
+  /** Guest card when complete; blank → “Completed”. */
+  card_completed_label: string
   cardCompleted: boolean
   cardPending: boolean
 }
@@ -38,6 +42,8 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
   const title = form.title.trim() || 'Mission title'
   const pts = Math.max(0, Math.floor(form.points))
   const typeIcon = missionTypeIcon(form.validation_type)
+  const ctaLabel = (form.card_cta_label ?? '').trim() || 'Start mission'
+  const completedLabel = (form.card_completed_label ?? '').trim() || 'Completed'
   const cover =
     typeof form.card_cover_image_url === 'string' && form.card_cover_image_url.trim().length > 0
       ? form.card_cover_image_url.trim()
@@ -80,6 +86,8 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
           beatcoin={form.validation_type === 'beatcoin'}
           pending={form.cardPending && !form.cardCompleted}
           completed={form.cardCompleted}
+          ctaLabel={ctaLabel}
+          completedLabel={completedLabel}
         />
         <PreviewCard
           mode="overlay"
@@ -87,6 +95,8 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
           title={title}
           overlayImg={overlayImg}
           beatcoin={form.validation_type === 'beatcoin'}
+          ctaLabel={ctaLabel}
+          completedLabel={completedLabel}
         />
         <PreviewCard
           mode="done"
@@ -98,6 +108,8 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
           beatcoin={form.validation_type === 'beatcoin'}
           pending={false}
           completed
+          ctaLabel={ctaLabel}
+          completedLabel={completedLabel}
         />
       </div>
 
@@ -113,6 +125,8 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
             beatcoin={form.validation_type === 'beatcoin'}
             pending={form.cardPending && !form.cardCompleted}
             completed={form.cardCompleted}
+            ctaLabel={ctaLabel}
+            completedLabel={completedLabel}
           />
         ) : tab === 'overlay' ? (
           <PreviewCard
@@ -121,6 +135,8 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
             title={title}
             overlayImg={overlayImg}
             beatcoin={form.validation_type === 'beatcoin'}
+            ctaLabel={ctaLabel}
+            completedLabel={completedLabel}
           />
         ) : (
           <PreviewCard
@@ -133,10 +149,29 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
             beatcoin={form.validation_type === 'beatcoin'}
             pending={false}
             completed
+            ctaLabel={ctaLabel}
+            completedLabel={completedLabel}
           />
         )}
       </div>
     </div>
+  )
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      aria-hidden
+    >
+      <path
+        fillRule="evenodd"
+        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+        clipRule="evenodd"
+      />
+    </svg>
   )
 }
 
@@ -151,6 +186,8 @@ function PreviewCard({
   beatcoin,
   pending,
   completed,
+  ctaLabel,
+  completedLabel,
 }: {
   mode: 'card' | 'overlay' | 'done'
   surface: string
@@ -162,6 +199,8 @@ function PreviewCard({
   beatcoin?: boolean
   pending?: boolean
   completed?: boolean
+  ctaLabel: string
+  completedLabel: string
 }) {
   if (mode === 'overlay') {
     return (
@@ -240,9 +279,16 @@ function PreviewCard({
         </p>
       ) : null}
       <div className="relative z-10 mt-3 w-full">
-        <span className="flex w-full items-center justify-center rounded-lg bg-white px-3 py-2 text-center text-xs font-semibold text-black">
-          {doneState ? 'Done' : 'Start mission'}
-        </span>
+        {doneState ? (
+          <span className="flex w-full items-center justify-center gap-1 rounded-lg bg-emerald-500 px-3 py-2 text-center text-xs font-semibold text-white shadow-sm">
+            <CheckIcon className="h-3.5 w-3.5 shrink-0 text-white" />
+            {completedLabel}
+          </span>
+        ) : (
+          <span className="flex w-full items-center justify-center rounded-lg bg-white px-3 py-2 text-center text-xs font-semibold text-black">
+            {ctaLabel}
+          </span>
+        )}
       </div>
     </div>
   )

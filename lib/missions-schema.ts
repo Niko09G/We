@@ -3,7 +3,8 @@
  * DB: id, title, description, points, created_at, validation_type, approval_mode, is_active,
  *     add_to_greetings, allow_multiple_submissions, max_submissions_per_table, points_per_submission,
  *     target_person_name, submission_hint, header_title, header_image_url, message_required,
- *     card_theme_index, card_cover_image_url, success_message
+ *     card_theme_index, card_cover_image_url, success_message,
+ *     card_cta_label, card_completed_label
  */
 export type MissionsTableRow = {
   id: string
@@ -30,4 +31,8 @@ export type MissionsTableRow = {
   card_cover_image_url: string | null
   /** Guest overlay success body after submit; null = default copy. */
   success_message: string | null
+  /** Guest carousel CTA before complete; null = “Start mission”. */
+  card_cta_label: string | null
+  /** Guest carousel CTA when complete; null = “Completed”. */
+  card_completed_label: string | null
 }

@@ -49,6 +49,8 @@ function missionRecordFromSupabaseRow(row: Record<string, unknown>): MissionReco
         : Math.max(0, Math.min(5, Math.floor(Number(row.card_theme_index)))),
     card_cover_image_url: (row.card_cover_image_url as string | null) ?? null,
     success_message: (row.success_message as string | null) ?? null,
+    card_cta_label: (row.card_cta_label as string | null) ?? null,
+    card_completed_label: (row.card_completed_label as string | null) ?? null,
   }
 }
 
@@ -56,7 +58,7 @@ export async function getMissionById(id: string): Promise<MissionRecord | null> 
   const { data, error } = await supabase
     .from('missions')
     .select(
-      'id,title,description,points,created_at,validation_type,is_active,approval_mode,add_to_greetings,allow_multiple_submissions,max_submissions_per_table,points_per_submission,target_person_name,submission_hint,header_title,header_image_url,message_required,card_theme_index,card_cover_image_url,success_message'
+      'id,title,description,points,created_at,validation_type,is_active,approval_mode,add_to_greetings,allow_multiple_submissions,max_submissions_per_table,points_per_submission,target_person_name,submission_hint,header_title,header_image_url,message_required,card_theme_index,card_cover_image_url,success_message,card_cta_label,card_completed_label'
     )
     .eq('id', id)
     .maybeSingle()
@@ -70,7 +72,7 @@ export async function listMissions(): Promise<MissionRecord[]> {
   const { data, error } = await supabase
     .from('missions')
     .select(
-      'id,title,description,points,created_at,validation_type,is_active,approval_mode,add_to_greetings,allow_multiple_submissions,max_submissions_per_table,points_per_submission,target_person_name,submission_hint,header_title,header_image_url,message_required,card_theme_index,card_cover_image_url,success_message'
+      'id,title,description,points,created_at,validation_type,is_active,approval_mode,add_to_greetings,allow_multiple_submissions,max_submissions_per_table,points_per_submission,target_person_name,submission_hint,header_title,header_image_url,message_required,card_theme_index,card_cover_image_url,success_message,card_cta_label,card_completed_label'
     )
     .order('title')
 
@@ -97,6 +99,8 @@ export async function createMission(input: {
   card_theme_index?: number | null
   card_cover_image_url?: string | null
   success_message?: string | null
+  card_cta_label?: string | null
+  card_completed_label?: string | null
 }): Promise<string> {
   const max =
     typeof input.max_submissions_per_table === 'string'
@@ -140,6 +144,12 @@ export async function createMission(input: {
   if (input.success_message !== undefined) {
     row.success_message = input.success_message?.trim() || null
   }
+  if (input.card_cta_label !== undefined) {
+    row.card_cta_label = input.card_cta_label?.trim() || null
+  }
+  if (input.card_completed_label !== undefined) {
+    row.card_completed_label = input.card_completed_label?.trim() || null
+  }
 
   const { data, error } = await supabase.from('missions').insert(row).select('id').single()
   if (error) throw new Error(error.message || 'Failed to create mission.')
@@ -166,6 +176,8 @@ export async function updateMission(
     card_theme_index: number | null
     card_cover_image_url: string | null
     success_message: string | null
+    card_cta_label: string | null
+    card_completed_label: string | null
   }>
 ): Promise<void> {
   const row: Record<string, unknown> = {}
@@ -195,6 +207,12 @@ export async function updateMission(
   }
   if (patch.success_message !== undefined) {
     row.success_message = patch.success_message?.trim() || null
+  }
+  if (patch.card_cta_label !== undefined) {
+    row.card_cta_label = patch.card_cta_label?.trim() || null
+  }
+  if (patch.card_completed_label !== undefined) {
+    row.card_completed_label = patch.card_completed_label?.trim() || null
   }
 
   if (patch.max_submissions_per_table !== undefined) {
