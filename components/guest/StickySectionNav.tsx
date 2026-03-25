@@ -42,6 +42,9 @@ export function StickySectionNav({
   const FADE_OVERLAY_PX = 56
   // Extra padding inside the fade-safe window.
   const KEEP_READABLE_PADDING_PX = 10
+  // Gradient for the active highlight pill.
+  const ACTIVE_GRADIENT =
+    'linear-gradient(to right, #17a3d6, #3869e9, #5f32f3)'
 
   const scrollTo = useCallback((targetId: string) => {
     const el = document.getElementById(targetId)
@@ -56,42 +59,63 @@ export function StickySectionNav({
       if (!rail || !btn) return
 
       const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth)
+      const clientWidth = rail.clientWidth
+      const idx = items.findIndex((x) => x.id === id)
+      if (idx < 0) return
 
-      const railRect = rail.getBoundingClientRect()
-      const btnRect = btn.getBoundingClientRect()
+      // Desired set: active + immediate neighbors (when possible).
+      const desiredIdxs = [idx - 1, idx, idx + 1].filter(
+        (n) => n >= 0 && n < items.length
+      )
 
-      // Fade masks are only visible when there is hidden content on that side.
-      const leftMaskPx = canScrollLeft ? FADE_OVERLAY_PX : 0
-      const rightMaskPx = canScrollRight ? FADE_OVERLAY_PX : 0
+      const leftFadePx = idx > 1 ? FADE_OVERLAY_PX : 0
+      const rightFadePx = idx < items.length - 2 ? FADE_OVERLAY_PX : 0
 
-      // Visible window (in scrollLeft coordinates) that the active button should stay within.
-      const leftBound =
-        rail.scrollLeft + leftMaskPx + KEEP_READABLE_PADDING_PX
-      const rightBound =
-        rail.scrollLeft +
-        rail.clientWidth -
-        rightMaskPx -
-        KEEP_READABLE_PADDING_PX
+      const safeL = leftFadePx + KEEP_READABLE_PADDING_PX
+      const safeR = clientWidth - rightFadePx - KEEP_READABLE_PADDING_PX
 
-      const btnLeft = rail.scrollLeft + (btnRect.left - railRect.left)
-      const btnRight = rail.scrollLeft + (btnRect.right - railRect.left)
-      const btnCenter = (btnLeft + btnRight) / 2
-      const targetCenter = (leftBound + rightBound) / 2
+      const solveForSet = (indices: number[]) => {
+        // Constraints:
+        // itemLeft  >= x + safeL  -> x <= itemLeft - safeL
+        // itemRight <= x + safeR -> x >= itemRight - safeR
+        let lower = -Infinity
+        let upper = Infinity
 
-      // Center the active item inside the fade-safe window.
-      let next = rail.scrollLeft + (btnCenter - targetCenter)
-      next = Math.max(0, Math.min(maxScroll, next))
+        for (const i of indices) {
+          const el = buttonRefs.current[items[i]!.id]
+          if (!el) continue
+          const itemLeft = el.offsetLeft
+          const itemRight = itemLeft + el.offsetWidth
+          lower = Math.max(lower, itemRight - safeR)
+          upper = Math.min(upper, itemLeft - safeL)
+        }
 
-      // Secondary clamp: ensure it doesn't remain under a mask.
-      const afterBtnLeft = next + (btnRect.left - railRect.left)
-      const afterBtnRight = next + (btnRect.right - railRect.left)
-      if (afterBtnLeft < leftBound) next += leftBound - afterBtnLeft
-      if (afterBtnRight > rightBound) next += rightBound - afterBtnRight
-      next = Math.max(0, Math.min(maxScroll, next))
+        // Intersect with [0, maxScroll].
+        lower = Math.max(0, lower)
+        upper = Math.min(maxScroll, upper)
+        if (lower > upper) return null
 
-      rail.scrollTo({ left: next, behavior })
+        const activeBtn = buttonRefs.current[id]
+        if (!activeBtn) return null
+        const activeLeft = activeBtn.offsetLeft
+        const activeRight = activeLeft + activeBtn.offsetWidth
+        const activeCenter = (activeLeft + activeRight) / 2
+        const safeCenter = (safeL + safeR) / 2
+        const ideal = activeCenter - safeCenter
+
+        return Math.max(lower, Math.min(upper, ideal))
+      }
+
+      const next =
+        solveForSet(desiredIdxs) ??
+        solveForSet([idx]) ??
+        rail.scrollLeft
+
+      const clamped = Math.max(0, Math.min(maxScroll, next))
+      if (Math.abs(clamped - rail.scrollLeft) < 0.5) return
+      rail.scrollTo({ left: clamped, behavior })
     },
-    [canScrollLeft, canScrollRight]
+    [items]
   )
 
   // Menu appears when the hero has been scrolled past a bit.
@@ -235,26 +259,26 @@ export function StickySectionNav({
       aria-hidden={!show}
     >
       <nav
-        className="relative mx-auto h-[68px] overflow-hidden rounded-[9999px] border border-zinc-200 bg-white p-1 shadow-[0_10px_28px_rgba(0,0,0,0.10)] backdrop-blur-sm"
+        className="relative mx-auto h-[72px] overflow-hidden rounded-[9999px] border border-zinc-200 bg-white p-1 shadow-[0_16px_34px_rgba(0,0,0,0.14)] backdrop-blur-sm"
         aria-label="Section navigation"
       >
         {/* Internal fades (both sides) */}
         {canScrollLeft ? (
           <div
-            className="pointer-events-none absolute left-0 top-0 bottom-0 z-[2]"
+            className="pointer-events-none absolute left-0 top-0 bottom-0 z-[2] rounded-r-[9999px]"
             style={{ width: FADE_OVERLAY_PX }}
             aria-hidden
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-white to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/92 to-transparent" />
           </div>
         ) : null}
         {canScrollRight ? (
           <div
-            className="pointer-events-none absolute right-0 top-0 bottom-0 z-[2]"
+            className="pointer-events-none absolute right-0 top-0 bottom-0 z-[2] rounded-l-[9999px]"
             style={{ width: FADE_OVERLAY_PX }}
             aria-hidden
           >
-            <div className="absolute inset-0 bg-gradient-to-l from-white to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-l from-white/95 via-white/92 to-transparent" />
           </div>
         ) : null}
 
@@ -264,7 +288,7 @@ export function StickySectionNav({
             className="pointer-events-none absolute left-3 top-1/2 z-[4] -translate-y-1/2"
             aria-hidden
           >
-            <span className="text-[26px] font-medium text-zinc-500/90">‹</span>
+            <span className="text-[28px] font-medium text-zinc-600/95">‹</span>
           </div>
         ) : null}
         {canScrollRight ? (
@@ -272,13 +296,13 @@ export function StickySectionNav({
             className="pointer-events-none absolute right-3 top-1/2 z-[4] -translate-y-1/2"
             aria-hidden
           >
-            <span className="text-[26px] font-medium text-zinc-500/90">›</span>
+            <span className="text-[28px] font-medium text-zinc-600/95">›</span>
           </div>
         ) : null}
 
         <div
           ref={railRef}
-          className="relative flex h-full w-full items-center gap-2 overflow-x-auto overscroll-x-contain overflow-y-hidden py-0 px-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [touch-action:pan-x]"
+          className="relative flex h-full w-full items-center gap-2 overflow-x-auto overscroll-x-contain overflow-y-hidden py-0 px-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [touch-action:pan-y]"
         >
           {items.map((item) => {
             const isActive = item.id === activeId
@@ -295,11 +319,11 @@ export function StickySectionNav({
                   scrollRailToItem(item.id, 'smooth')
                   scrollTo(item.targetId)
                 }}
-                className="group relative flex h-14 min-w-[5.75rem] flex-col items-center justify-center gap-1 rounded-full px-2 text-[11px] font-semibold transition-colors"
+                className="group relative z-[5] flex h-14 min-w-[6.25rem] flex-col items-center justify-center gap-1 rounded-full px-2 text-[11px] font-semibold transition-colors"
                 style={
                   isActive
-                    ? { backgroundColor: highlightColor, color: '#ffffff' }
-                    : { color: highlightColor, backgroundColor: 'transparent' }
+                    ? { backgroundImage: ACTIVE_GRADIENT, color: '#ffffff' }
+                    : { color: '#000000', backgroundColor: 'transparent' }
                 }
                 aria-current={isActive ? 'true' : undefined}
               >
@@ -309,7 +333,7 @@ export function StickySectionNav({
                   className="h-6 w-6 object-contain"
                   draggable={false}
                 />
-                <span className="leading-none">{item.label}</span>
+                <span className="leading-none whitespace-nowrap">{item.label}</span>
               </button>
             )
           })}
