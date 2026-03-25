@@ -3,98 +3,38 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  APPROVAL_MODES,
-  VALIDATION_TYPES,
   adminValidationTypeLabel,
-  createMission,
   listMissions,
-  maxSubmissionsDisplayValue,
-  updateMission,
-  type ApprovalMode,
   type MissionRecord,
   type ValidationType,
 } from '@/lib/admin-missions'
-import {
-  listActiveMissionAssignmentsForAdmin,
-  setMissionAssignmentsForMission,
-} from '@/lib/admin-mission-assignments'
-import { listTablesForAdmin, type AdminTableRow } from '@/lib/admin-tables'
-import {
-  removeMissionImageAssetByPublicUrl,
-  uploadMissionImageAsset,
-} from '@/lib/mission-image-assets'
-import { MAX_IMAGE_UPLOAD_BYTES, prettyMb } from '@/lib/upload-constraints'
+import { listActiveMissionAssignmentsForAdmin } from '@/lib/admin-mission-assignments'
+import { MISSION_CARD_THEME_LABELS } from '@/lib/guest-missions-gradients'
+import { missionTypeIcon, themeLabel } from '@/app/admin/missions/_components/mission-admin-shared'
 
-function typeIcon(type: string): string {
-  if (type === 'photo') return '📷'
-  if (type === 'video') return '🎥'
-  if (type === 'signature') return '✍️'
-  if (type === 'text') return '📝'
-  if (type === 'beatcoin') return '🪙'
-  return '•'
-}
+type StateFilter = 'all' | 'live' | 'draft'
+type TypeFilter = 'all' | string
+type ThemeFilter = 'all' | 'auto' | number
 
-export default function MissionsAdminPage() {
+export default function MissionsLibraryPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-
   const [missions, setMissions] = useState<MissionRecord[]>([])
-  const [tables, setTables] = useState<AdminTableRow[]>([])
   const [assignmentsByMission, setAssignmentsByMission] = useState<Record<string, string[]>>({})
-
-  const [assigningKey, setAssigningKey] = useState<string | null>(null)
-  const [addPickerTableId, setAddPickerTableId] = useState<string | null>(null)
-
-  const [creating, setCreating] = useState(false)
-  const [editingMissionId, setEditingMissionId] = useState<string | null>(null)
-  const [savingMissionId, setSavingMissionId] = useState<string | null>(null)
-  const [uploadingMissionImageSlot, setUploadingMissionImageSlot] = useState<string | null>(null)
-
-  const [createForm, setCreateForm] = useState({
-    title: '',
-    description: '',
-    points: '10',
-    validation_type: 'photo' as ValidationType,
-    approval_mode: 'auto' as ApprovalMode,
-    add_to_greetings: false,
-    max_submissions_per_table: '' as string,
-    points_per_submission: '',
-    header_title: '',
-    header_image_url: '',
-    target_person_name: '',
-    submission_hint: '',
-    message_required: false,
-    is_active: true,
-  })
-  const [editForm, setEditForm] = useState({
-    title: '',
-    description: '',
-    points: '0',
-    validation_type: 'photo' as ValidationType,
-    approval_mode: 'auto' as ApprovalMode,
-    add_to_greetings: false,
-    max_submissions_per_table: '' as string,
-    points_per_submission: '',
-    header_title: '',
-    header_image_url: '',
-    target_person_name: '',
-    submission_hint: '',
-    message_required: false,
-    is_active: true,
-  })
+  const [search, setSearch] = useState('')
+  const [stateFilter, setStateFilter] = useState<StateFilter>('all')
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
+  const [themeFilter, setThemeFilter] = useState<ThemeFilter>('all')
 
   const refresh = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [mList, tList, aMap] = await Promise.all([
+      const [mList, aMap] = await Promise.all([
         listMissions(),
-        listTablesForAdmin(),
         listActiveMissionAssignmentsForAdmin(),
       ])
       setMissions(mList)
-      setTables(tList)
       setAssignmentsByMission(aMap)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load missions.')
@@ -104,825 +44,198 @@ export default function MissionsAdminPage() {
   }, [])
 
   useEffect(() => {
-    refresh()
+    void refresh()
   }, [refresh])
 
-  const activeTables = useMemo(
-    () =>
-      tables.filter(
-        (t) => (t.is_active ?? true) === true && (t.is_archived ?? false) === false
-      ),
-    [tables]
-  )
-  const activeTableIds = useMemo(() => activeTables.map((t) => t.id), [activeTables])
-  const activeMissionTemplates = useMemo(
-    () => missions.filter((m) => (m.is_active ?? true) === true),
-    [missions]
-  )
-
-  function assignedMissionIdsForTable(tableId: string): string[] {
-    return Object.entries(assignmentsByMission)
-      .filter(([, tableIds]) => tableIds.includes(tableId))
-      .map(([missionId]) => missionId)
-  }
-
-  async function setAssignmentForTable(tableId: string, nextMissionIds: string[]) {
-    setError(null)
-    setSuccess(null)
-
-    const currentlyAssigned = assignedMissionIdsForTable(tableId)
-    const toUpdateMissionIds = new Set<string>([...currentlyAssigned, ...nextMissionIds])
-
-    try {
-      for (const missionId of toUpdateMissionIds) {
-        setAssigningKey(`${tableId}:${missionId}`)
-        const prevTableIds = assignmentsByMission[missionId] ?? []
-        const nextTableIds = nextMissionIds.includes(missionId)
-          ? Array.from(new Set([...prevTableIds, tableId]))
-          : prevTableIds.filter((id) => id !== tableId)
-
-        await setMissionAssignmentsForMission({
-          missionId,
-          desiredTableIds: nextTableIds,
-          activeTableIds,
-        })
-
-        setAssignmentsByMission((prev) => ({
-          ...prev,
-          [missionId]: nextTableIds,
-        }))
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return missions.filter((m) => {
+      if (stateFilter === 'live' && !m.is_active) return false
+      if (stateFilter === 'draft' && m.is_active) return false
+      if (typeFilter !== 'all' && m.validation_type !== typeFilter) return false
+      if (themeFilter === 'auto' && m.card_theme_index != null) return false
+      if (typeof themeFilter === 'number' && m.card_theme_index !== themeFilter) return false
+      if (q) {
+        const hay = `${m.title} ${m.description ?? ''}`.toLowerCase()
+        if (!hay.includes(q)) return false
       }
-      setSuccess('Assignments updated.')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update assignments.')
-    } finally {
-      setAssigningKey(null)
-    }
-  }
-
-  async function handleUnassign(tableId: string, missionId: string) {
-    const current = assignedMissionIdsForTable(tableId)
-    const next = current.filter((id) => id !== missionId)
-    await setAssignmentForTable(tableId, next)
-  }
-
-  async function handleAddMission(tableId: string, missionId: string) {
-    const current = assignedMissionIdsForTable(tableId)
-    if (current.includes(missionId)) return
-    await setAssignmentForTable(tableId, [...current, missionId])
-    setAddPickerTableId(null)
-  }
-
-  async function handleCreateMission() {
-    if (!createForm.title.trim()) return
-    setCreating(true)
-    setError(null)
-    setSuccess(null)
-    try {
-      await createMission({
-        title: createForm.title,
-        description: createForm.description,
-        points: Number(createForm.points) || 0,
-        validation_type: createForm.validation_type,
-        approval_mode: createForm.approval_mode,
-        add_to_greetings: createForm.add_to_greetings,
-        max_submissions_per_table: createForm.max_submissions_per_table,
-        points_per_submission:
-          createForm.points_per_submission === ''
-            ? null
-            : Number(createForm.points_per_submission) || null,
-        header_title: createForm.header_title || null,
-        header_image_url: createForm.header_image_url || null,
-        target_person_name: createForm.target_person_name || null,
-        submission_hint: createForm.submission_hint || null,
-        message_required: createForm.message_required,
-        is_active: createForm.is_active,
-      })
-      setCreateForm({
-        title: '',
-        description: '',
-        points: '10',
-        validation_type: 'photo',
-        approval_mode: 'auto',
-        add_to_greetings: false,
-        max_submissions_per_table: '',
-        points_per_submission: '',
-        header_title: '',
-        header_image_url: '',
-        target_person_name: '',
-        submission_hint: '',
-        message_required: false,
-        is_active: true,
-      })
-      setSuccess('Mission created.')
-      await refresh()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Create failed.')
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  function startEdit(m: MissionRecord) {
-    setEditingMissionId(m.id)
-    setEditForm({
-      title: m.title,
-      description: m.description ?? '',
-      points: String(m.points ?? 0),
-      validation_type: VALIDATION_TYPES.includes(m.validation_type as ValidationType)
-        ? (m.validation_type as ValidationType)
-        : 'photo',
-      approval_mode: APPROVAL_MODES.includes(m.approval_mode as ApprovalMode)
-        ? (m.approval_mode as ApprovalMode)
-        : 'auto',
-      add_to_greetings: m.add_to_greetings ?? false,
-      max_submissions_per_table: maxSubmissionsDisplayValue(m),
-      points_per_submission:
-        m.points_per_submission == null ? '' : String(m.points_per_submission),
-      header_title: m.header_title ?? '',
-      header_image_url: m.header_image_url ?? '',
-      target_person_name: m.target_person_name ?? '',
-      submission_hint: m.submission_hint ?? '',
-      message_required: m.message_required ?? false,
-      is_active: m.is_active ?? true,
+      return true
     })
-  }
-
-  async function saveEdit(missionId: string) {
-    setSavingMissionId(missionId)
-    setError(null)
-    setSuccess(null)
-    try {
-      await updateMission(missionId, {
-        title: editForm.title,
-        description: editForm.description,
-        points: Number(editForm.points) || 0,
-        validation_type: editForm.validation_type,
-        approval_mode: editForm.approval_mode,
-        add_to_greetings: editForm.add_to_greetings,
-        max_submissions_per_table: editForm.max_submissions_per_table,
-        points_per_submission:
-          editForm.points_per_submission === ''
-            ? null
-            : Number(editForm.points_per_submission) || null,
-        header_title: editForm.header_title || null,
-        header_image_url: editForm.header_image_url || null,
-        target_person_name: editForm.target_person_name || null,
-        submission_hint: editForm.submission_hint || null,
-        message_required: editForm.message_required,
-        is_active: editForm.is_active,
-      })
-      setEditingMissionId(null)
-      setSuccess('Mission updated.')
-      await refresh()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Update failed.')
-    } finally {
-      setSavingMissionId(null)
-    }
-  }
-
-  async function uploadCreateMissionImage(file: File) {
-    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
-      setError(`Mission image is too large. Max ${prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.`)
-      return
-    }
-    setUploadingMissionImageSlot('create')
-    setError(null)
-    try {
-      const previous = createForm.header_image_url || null
-      const publicUrl = await uploadMissionImageAsset(file)
-      await removeMissionImageAssetByPublicUrl(previous)
-      setCreateForm((s) => ({ ...s, header_image_url: publicUrl }))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Mission image upload failed.')
-    } finally {
-      setUploadingMissionImageSlot(null)
-    }
-  }
-
-  async function uploadEditMissionImage(file: File) {
-    if (!editingMissionId) return
-    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
-      setError(`Mission image is too large. Max ${prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.`)
-      return
-    }
-    setUploadingMissionImageSlot(`edit:${editingMissionId}`)
-    setError(null)
-    try {
-      const previous = editForm.header_image_url || null
-      const publicUrl = await uploadMissionImageAsset(file)
-      await removeMissionImageAssetByPublicUrl(previous)
-      setEditForm((s) => ({ ...s, header_image_url: publicUrl }))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Mission image upload failed.')
-    } finally {
-      setUploadingMissionImageSlot(null)
-    }
-  }
+  }, [missions, search, stateFilter, typeFilter, themeFilter])
 
   if (loading) {
     return (
-      <div className="p-6">
-        <p className="text-sm text-zinc-500">Loading mission board…</p>
+      <div className="min-h-screen bg-zinc-50 px-4 py-8 dark:bg-zinc-950 md:px-6">
+        <p className="text-sm text-zinc-500">Loading missions…</p>
       </div>
     )
   }
 
   return (
-    <div className="p-6 space-y-8">
-      <div>
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-          Missions
-        </h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Table mission board for assignment setup, plus mission library and creation below.
-        </p>
-        <Link
-          href="/admin"
-          className="mt-2 inline-block text-sm font-medium text-zinc-600 underline hover:no-underline dark:text-zinc-400"
-        >
-          Back to admin
-        </Link>
+    <div className="min-h-screen bg-zinc-50 px-4 py-6 dark:bg-zinc-950 md:px-6">
+      <div className="mx-auto w-full max-w-5xl space-y-6">
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Missions</h1>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Catalog of mission templates. Open the builder to edit details, or jump to the board to
+              assign tables.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
+              <Link
+                href="/admin/missions/board"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+              >
+                Assignment board
+              </Link>
+              <Link
+                href="/admin"
+                className="rounded-lg border border-transparent px-3 py-1.5 text-zinc-500 underline-offset-2 hover:underline dark:text-zinc-400"
+              >
+                Admin home
+              </Link>
+            </div>
+          </div>
+          <Link
+            href="/admin/missions/new"
+            className="inline-flex shrink-0 items-center justify-center rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900"
+          >
+            Create mission
+          </Link>
+        </header>
+
+        {error ? (
+          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+            {error}
+          </p>
+        ) : null}
+
+        <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <label className="block min-w-0 flex-1 text-xs">
+              <span className="font-medium text-zinc-500">Search</span>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Title or description…"
+                className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              />
+            </label>
+            <label className="block text-xs lg:w-36">
+              <span className="font-medium text-zinc-500">State</span>
+              <select
+                value={stateFilter}
+                onChange={(e) => setStateFilter(e.target.value as StateFilter)}
+                className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              >
+                <option value="all">All</option>
+                <option value="live">Live</option>
+                <option value="draft">Draft</option>
+              </select>
+            </label>
+            <label className="block text-xs lg:w-44">
+              <span className="font-medium text-zinc-500">Type</span>
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              >
+                <option value="all">All types</option>
+                <option value="photo">Photo</option>
+                <option value="video">Video</option>
+                <option value="signature">Signature</option>
+                <option value="text">Text</option>
+                <option value="beatcoin">BeatCoin</option>
+              </select>
+            </label>
+            <label className="block text-xs lg:w-44">
+              <span className="font-medium text-zinc-500">Theme</span>
+              <select
+                value={
+                  themeFilter === 'all'
+                    ? 'all'
+                    : themeFilter === 'auto'
+                      ? 'auto'
+                      : String(themeFilter)
+                }
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (v === 'all') setThemeFilter('all')
+                  else if (v === 'auto') setThemeFilter('auto')
+                  else setThemeFilter(Number(v))
+                }}
+                className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              >
+                <option value="all">All themes</option>
+                <option value="auto">Auto palette</option>
+                {MISSION_CARD_THEME_LABELS.map((label, i) => (
+                  <option key={label} value={i}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <ul className="mt-5 divide-y divide-zinc-100 dark:divide-zinc-800">
+            {filtered.length === 0 ? (
+              <li className="py-10 text-center text-sm text-zinc-500">No missions match.</li>
+            ) : (
+              filtered.map((m) => (
+                <MissionLibraryRow
+                  key={m.id}
+                  mission={m}
+                  assignedCount={(assignmentsByMission[m.id] ?? []).length}
+                />
+              ))
+            )}
+          </ul>
+        </section>
       </div>
-
-      {error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
-          {error}
-        </div>
-      ) : null}
-      {success ? (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
-          {success}
-        </div>
-      ) : null}
-
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          Table Mission Board
-        </h2>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          One column per active table. Remove mission chips or add missions from the picker.
-        </p>
-
-        {activeTables.length === 0 ? (
-          <p className="mt-4 text-sm text-zinc-500">No active tables available.</p>
-        ) : (
-          <div className="mt-4 overflow-x-auto">
-            <div className="flex gap-4 pb-2 min-w-max">
-              {activeTables.map((table) => {
-                const assignedIds = assignedMissionIdsForTable(table.id)
-                const assignedMissions = assignedIds
-                  .map((id) => missions.find((m) => m.id === id))
-                  .filter(Boolean) as MissionRecord[]
-                const availableToAdd = activeMissionTemplates.filter(
-                  (m) => !assignedIds.includes(m.id)
-                )
-
-                return (
-                  <div
-                    key={table.id}
-                    className="w-72 shrink-0 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-950/40"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                          {table.name}
-                        </div>
-                        <div className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-                          {assignedMissions.length} mission
-                          {assignedMissions.length !== 1 ? 's' : ''}
-                        </div>
-                      </div>
-                      <span
-                        className="h-3 w-3 rounded-full border border-white/30"
-                        style={{ backgroundColor: table.color ?? '#71717a' }}
-                        aria-hidden
-                      />
-                    </div>
-
-                    <div className="mt-3 space-y-2 min-h-[80px]">
-                      {assignedMissions.length === 0 ? (
-                        <div className="rounded border border-dashed border-zinc-300 px-2 py-2 text-xs text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-                          No missions assigned
-                        </div>
-                      ) : (
-                        assignedMissions.map((m) => {
-                          const busy = assigningKey === `${table.id}:${m.id}`
-                          return (
-                            <div
-                              key={m.id}
-                              className="flex items-center justify-between gap-2 rounded border border-zinc-200 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
-                            >
-                              <div className="min-w-0 flex items-center gap-1.5">
-                                <span aria-hidden>{typeIcon(m.validation_type)}</span>
-                                <span className="truncate font-medium text-zinc-800 dark:text-zinc-200">
-                                  {m.title}
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                disabled={busy}
-                                onClick={() => handleUnassign(table.id, m.id)}
-                                className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
-                              >
-                                {busy ? '…' : 'Remove'}
-                              </button>
-                            </div>
-                          )
-                        })
-                      )}
-                    </div>
-
-                    <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
-                      {addPickerTableId === table.id ? (
-                        <div className="space-y-2">
-                          <select
-                            defaultValue=""
-                            onChange={(e) => {
-                              const missionId = e.target.value
-                              if (!missionId) return
-                              handleAddMission(table.id, missionId)
-                            }}
-                            className="w-full rounded border border-zinc-300 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
-                          >
-                            <option value="">Select mission to add…</option>
-                            {availableToAdd.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.title} ({m.validation_type})
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => setAddPickerTableId(null)}
-                            className="text-[11px] text-zinc-500 underline hover:no-underline"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={availableToAdd.length === 0}
-                          onClick={() => setAddPickerTableId(table.id)}
-                          className="w-full rounded border border-zinc-300 px-2 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                        >
-                          + Add mission
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          Mission Library / Creation
-        </h2>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Create mission templates and edit existing ones. Assignment is managed in the board above.
-        </p>
-
-        <div className="mt-4 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            <input
-              placeholder="Title"
-              value={createForm.title}
-              onChange={(e) =>
-                setCreateForm((s) => ({ ...s, title: e.target.value }))
-              }
-              className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            />
-            <input
-              placeholder="Points"
-              type="number"
-              min={0}
-              value={createForm.points}
-              onChange={(e) =>
-                setCreateForm((s) => ({ ...s, points: e.target.value }))
-              }
-              className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            />
-            <select
-              value={createForm.validation_type}
-              onChange={(e) =>
-                setCreateForm((s) => ({
-                  ...s,
-                  validation_type: e.target.value as ValidationType,
-                }))
-              }
-              className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            >
-              {VALIDATION_TYPES.map((v) => (
-                <option key={v} value={v}>
-                  {adminValidationTypeLabel(v)}
-                </option>
-              ))}
-            </select>
-            <select
-              value={createForm.approval_mode}
-              onChange={(e) =>
-                setCreateForm((s) => ({
-                  ...s,
-                  approval_mode: e.target.value as ApprovalMode,
-                }))
-              }
-              className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            >
-              {APPROVAL_MODES.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-            <input
-              placeholder="Header title"
-              value={createForm.header_title}
-              onChange={(e) =>
-                setCreateForm((s) => ({ ...s, header_title: e.target.value }))
-              }
-              className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            />
-            <div className="rounded border border-zinc-300 px-2 py-1.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-              <div className="mb-1 font-medium">Mission image (overlay round image)</div>
-              <div className="flex items-center gap-2">
-                {createForm.header_image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- admin uploaded mission asset preview
-                  <img
-                    src={createForm.header_image_url}
-                    alt=""
-                    className="h-8 w-8 rounded-full border border-zinc-200 object-cover dark:border-zinc-700"
-                  />
-                ) : (
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-zinc-300 text-zinc-400 dark:border-zinc-700">
-                    —
-                  </span>
-                )}
-                <label className="inline-flex cursor-pointer items-center rounded border border-zinc-300 px-2 py-1 text-[11px] font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-800">
-                  {uploadingMissionImageSlot === 'create' ? 'Uploading…' : 'Upload image'}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/jpg,image/png,image/webp"
-                    className="sr-only"
-                    disabled={uploadingMissionImageSlot === 'create'}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      e.currentTarget.value = ''
-                      if (!file) return
-                      void uploadCreateMissionImage(file)
-                    }}
-                  />
-                </label>
-                {createForm.header_image_url ? (
-                  <button
-                    type="button"
-                    className="text-[11px] text-zinc-500 underline hover:no-underline"
-                    onClick={async () => {
-                      const prev = createForm.header_image_url || null
-                      setCreateForm((s) => ({ ...s, header_image_url: '' }))
-                      await removeMissionImageAssetByPublicUrl(prev)
-                    }}
-                  >
-                    Remove
-                  </button>
-                ) : null}
-              </div>
-            </div>
-            <input
-              placeholder="Target person name"
-              value={createForm.target_person_name}
-              onChange={(e) =>
-                setCreateForm((s) => ({ ...s, target_person_name: e.target.value }))
-              }
-              className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            />
-            <input
-              placeholder="Submission hint"
-              value={createForm.submission_hint}
-              onChange={(e) =>
-                setCreateForm((s) => ({ ...s, submission_hint: e.target.value }))
-              }
-              className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            />
-            <input
-              placeholder="Points per submission"
-              type="number"
-              min={0}
-              value={createForm.points_per_submission}
-              onChange={(e) =>
-                setCreateForm((s) => ({
-                  ...s,
-                  points_per_submission: e.target.value,
-                }))
-              }
-              className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            />
-            <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
-              <input
-                type="checkbox"
-                checked={createForm.add_to_greetings}
-                onChange={(e) =>
-                  setCreateForm((s) => ({ ...s, add_to_greetings: e.target.checked }))
-                }
-              />
-              Add to greetings
-            </label>
-            <div className="flex flex-col gap-0.5 text-xs text-zinc-700 dark:text-zinc-300">
-              <label htmlFor="create-max-sub" className="font-medium">
-                Max submissions per table
-              </label>
-              <input
-                id="create-max-sub"
-                type="number"
-                min={1}
-                placeholder="Empty = unlimited"
-                value={createForm.max_submissions_per_table}
-                onChange={(e) =>
-                  setCreateForm((s) => ({ ...s, max_submissions_per_table: e.target.value }))
-                }
-                className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-              />
-              <span className="text-[10px] text-zinc-500">
-                Leave empty for unlimited. 1 = one per table; use a number for a cap (e.g. 10).
-              </span>
-            </div>
-            <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
-              <input
-                type="checkbox"
-                checked={createForm.is_active}
-                onChange={(e) =>
-                  setCreateForm((s) => ({ ...s, is_active: e.target.checked }))
-                }
-              />
-              Active
-            </label>
-            <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
-              <input
-                type="checkbox"
-                checked={createForm.message_required}
-                onChange={(e) =>
-                  setCreateForm((s) => ({ ...s, message_required: e.target.checked }))
-                }
-              />
-              Message required
-            </label>
-          </div>
-
-          <textarea
-            placeholder="Description"
-            value={createForm.description}
-            onChange={(e) =>
-              setCreateForm((s) => ({ ...s, description: e.target.value }))
-            }
-            rows={3}
-            className="mt-2 w-full rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          />
-          <div className="mt-2">
-            <button
-              type="button"
-              disabled={creating || !createForm.title.trim()}
-              onClick={handleCreateMission}
-              className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
-            >
-              {creating ? 'Creating…' : 'Create mission'}
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-5 space-y-2">
-          {missions.map((m) => (
-            <div
-              key={m.id}
-              className="rounded border border-zinc-200 p-3 text-sm dark:border-zinc-700"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="truncate font-medium text-zinc-900 dark:text-zinc-100">
-                    {m.title}
-                  </div>
-                  <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                    {m.validation_type} · {m.points} pts · {m.approval_mode} ·{' '}
-                    {m.is_active ? 'active' : 'inactive'}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => (editingMissionId === m.id ? setEditingMissionId(null) : startEdit(m))}
-                  className="text-xs font-medium text-zinc-600 underline hover:no-underline dark:text-zinc-300"
-                >
-                  {editingMissionId === m.id ? 'Close' : 'Edit'}
-                </button>
-              </div>
-
-              {editingMissionId === m.id ? (
-                <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                    <input
-                      value={editForm.title}
-                      onChange={(e) => setEditForm((s) => ({ ...s, title: e.target.value }))}
-                      className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      value={editForm.points}
-                      onChange={(e) => setEditForm((s) => ({ ...s, points: e.target.value }))}
-                      className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    />
-                    <select
-                      value={editForm.validation_type}
-                      onChange={(e) =>
-                        setEditForm((s) => ({
-                          ...s,
-                          validation_type: e.target.value as ValidationType,
-                        }))
-                      }
-                      className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    >
-                      {VALIDATION_TYPES.map((v) => (
-                        <option key={v} value={v}>
-                          {adminValidationTypeLabel(v)}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={editForm.approval_mode}
-                      onChange={(e) =>
-                        setEditForm((s) => ({
-                          ...s,
-                          approval_mode: e.target.value as ApprovalMode,
-                        }))
-                      }
-                      className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    >
-                      {APPROVAL_MODES.map((mode) => (
-                        <option key={mode} value={mode}>
-                          {mode}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      placeholder="Header title"
-                      value={editForm.header_title}
-                      onChange={(e) =>
-                        setEditForm((s) => ({ ...s, header_title: e.target.value }))
-                      }
-                      className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    />
-                    <div className="rounded border border-zinc-300 px-2 py-1.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-                      <div className="mb-1 font-medium">Mission image (overlay round image)</div>
-                      <div className="flex items-center gap-2">
-                        {editForm.header_image_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element -- admin uploaded mission asset preview
-                          <img
-                            src={editForm.header_image_url}
-                            alt=""
-                            className="h-8 w-8 rounded-full border border-zinc-200 object-cover dark:border-zinc-700"
-                          />
-                        ) : (
-                          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-zinc-300 text-zinc-400 dark:border-zinc-700">
-                            —
-                          </span>
-                        )}
-                        <label className="inline-flex cursor-pointer items-center rounded border border-zinc-300 px-2 py-1 text-[11px] font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-800">
-                          {uploadingMissionImageSlot === `edit:${m.id}` ? 'Uploading…' : 'Upload image'}
-                          <input
-                            type="file"
-                            accept="image/jpeg,image/jpg,image/png,image/webp"
-                            className="sr-only"
-                            disabled={uploadingMissionImageSlot === `edit:${m.id}`}
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              e.currentTarget.value = ''
-                              if (!file) return
-                              void uploadEditMissionImage(file)
-                            }}
-                          />
-                        </label>
-                        {editForm.header_image_url ? (
-                          <button
-                            type="button"
-                            className="text-[11px] text-zinc-500 underline hover:no-underline"
-                            onClick={async () => {
-                              const prev = editForm.header_image_url || null
-                              setEditForm((s) => ({ ...s, header_image_url: '' }))
-                              await removeMissionImageAssetByPublicUrl(prev)
-                            }}
-                          >
-                            Remove
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                    <input
-                      placeholder="Target person name"
-                      value={editForm.target_person_name}
-                      onChange={(e) =>
-                        setEditForm((s) => ({ ...s, target_person_name: e.target.value }))
-                      }
-                      className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    />
-                    <input
-                      placeholder="Submission hint"
-                      value={editForm.submission_hint}
-                      onChange={(e) =>
-                        setEditForm((s) => ({ ...s, submission_hint: e.target.value }))
-                      }
-                      className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    />
-                    <input
-                      placeholder="Points per submission"
-                      type="number"
-                      min={0}
-                      value={editForm.points_per_submission}
-                      onChange={(e) =>
-                        setEditForm((s) => ({
-                          ...s,
-                          points_per_submission: e.target.value,
-                        }))
-                      }
-                      className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    />
-                    <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
-                      <input
-                        type="checkbox"
-                        checked={editForm.add_to_greetings}
-                        onChange={(e) =>
-                          setEditForm((s) => ({
-                            ...s,
-                            add_to_greetings: e.target.checked,
-                          }))
-                        }
-                      />
-                      Add to greetings
-                    </label>
-                    <div className="flex flex-col gap-0.5 text-xs text-zinc-700 dark:text-zinc-300 sm:col-span-2">
-                      <label className="font-medium">Max submissions per table</label>
-                      <input
-                        type="number"
-                        min={1}
-                        placeholder="Empty = unlimited"
-                        value={editForm.max_submissions_per_table}
-                        onChange={(e) =>
-                          setEditForm((s) => ({
-                            ...s,
-                            max_submissions_per_table: e.target.value,
-                          }))
-                        }
-                        className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                      />
-                      <span className="text-[10px] text-zinc-500">
-                        Leave empty for unlimited.
-                      </span>
-                    </div>
-                    <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
-                      <input
-                        type="checkbox"
-                        checked={editForm.is_active}
-                        onChange={(e) =>
-                          setEditForm((s) => ({ ...s, is_active: e.target.checked }))
-                        }
-                      />
-                      Active
-                    </label>
-                    <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
-                      <input
-                        type="checkbox"
-                        checked={editForm.message_required}
-                        onChange={(e) =>
-                          setEditForm((s) => ({ ...s, message_required: e.target.checked }))
-                        }
-                      />
-                      Message required
-                    </label>
-                  </div>
-                  <textarea
-                    value={editForm.description}
-                    onChange={(e) =>
-                      setEditForm((s) => ({ ...s, description: e.target.value }))
-                    }
-                    rows={2}
-                    className="mt-2 w-full rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                  />
-                  <button
-                    type="button"
-                    disabled={savingMissionId === m.id || !editForm.title.trim()}
-                    onClick={() => saveEdit(m.id)}
-                    className="mt-2 rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
-                  >
-                    {savingMissionId === m.id ? 'Saving…' : 'Save changes'}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      </section>
     </div>
+  )
+}
+
+function MissionLibraryRow({
+  mission: m,
+  assignedCount,
+}: {
+  mission: MissionRecord
+  assignedCount: number
+}) {
+  return (
+      <li className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-base" aria-hidden>
+              {missionTypeIcon(m.validation_type)}
+            </span>
+            <span className="truncate font-medium text-zinc-900 dark:text-zinc-100">{m.title}</span>
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                m.is_active
+                  ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-200'
+                  : 'bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+              }`}
+            >
+              {m.is_active ? 'Live' : 'Draft'}
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <span>{adminValidationTypeLabel(m.validation_type as ValidationType)}</span>
+            <span>Reward · {m.points} pts</span>
+            <span>Theme · {themeLabel(m.card_theme_index)}</span>
+            <span>
+              Tables · {assignedCount} assigned
+            </span>
+          </div>
+        </div>
+        <Link
+          href={`/admin/missions/${m.id}/edit`}
+          className="shrink-0 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-2 text-center text-sm font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-100"
+        >
+          Edit
+        </Link>
+      </li>
   )
 }

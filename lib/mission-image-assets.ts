@@ -3,6 +3,9 @@ import { supabase } from '@/lib/supabase/client'
 
 const BUCKET = 'mission-submissions'
 const PREFIX = 'mission-images'
+const PREFIX_CARD_COVER = 'mission-card-covers'
+
+const UPLOAD_PREFIXES = [PREFIX, PREFIX_CARD_COVER] as const
 
 function extForContentType(contentType: string): 'jpg' | 'png' | 'webp' {
   if (contentType === 'image/png') return 'png'
@@ -18,7 +21,10 @@ function storagePathFromPublicUrl(publicUrl: string): string | null {
   return path || null
 }
 
-export async function uploadMissionImageAsset(file: File): Promise<string> {
+async function uploadToPrefix(
+  file: File,
+  prefix: typeof PREFIX | typeof PREFIX_CARD_COVER
+): Promise<string> {
   const contentType = file.type
   if (
     contentType !== 'image/jpeg' &&
@@ -28,7 +34,7 @@ export async function uploadMissionImageAsset(file: File): Promise<string> {
   ) {
     throw new Error('Mission image must be JPG, PNG, or WEBP.')
   }
-  const path = `${PREFIX}/${uuidv4()}.${extForContentType(contentType)}`
+  const path = `${prefix}/${uuidv4()}.${extForContentType(contentType)}`
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
     .upload(path, file, { contentType, upsert: false })
@@ -40,12 +46,23 @@ export async function uploadMissionImageAsset(file: File): Promise<string> {
   return publicUrl
 }
 
+export async function uploadMissionImageAsset(file: File): Promise<string> {
+  return uploadToPrefix(file, PREFIX)
+}
+
+/** Full-bleed mission card artwork (carousel tile). */
+export async function uploadMissionCardCoverAsset(file: File): Promise<string> {
+  return uploadToPrefix(file, PREFIX_CARD_COVER)
+}
+
 export async function removeMissionImageAssetByPublicUrl(
   publicUrl: string | null | undefined
 ): Promise<void> {
   const url = typeof publicUrl === 'string' ? publicUrl.trim() : ''
   if (!url) return
   const path = storagePathFromPublicUrl(url)
-  if (!path || !path.startsWith(`${PREFIX}/`)) return
+  if (!path) return
+  const allowed = UPLOAD_PREFIXES.some((p) => path.startsWith(`${p}/`))
+  if (!allowed) return
   await supabase.storage.from(BUCKET).remove([path])
 }

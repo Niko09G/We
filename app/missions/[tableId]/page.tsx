@@ -40,7 +40,7 @@ import {
   MISSION_CARD_SKELETON_BACKGROUND,
   TABLE_GREETING_ARTWORK_PATH,
   TRUMPET_STORY_CARD_ARTWORK_PATH,
-  missionGradientAt,
+  guestMissionSurfaceGradient,
 } from '@/lib/guest-missions-gradients'
 
 type TableIdParams = { tableId: string }
@@ -61,6 +61,8 @@ type MissionRow = {
   submission_hint?: string | null
   header_title?: string | null
   header_image_url?: string | null
+  card_theme_index?: number | null
+  card_cover_image_url?: string | null
   created_at?: string
 }
 
@@ -442,7 +444,7 @@ export default function MissionsTablePage({
           const { data: mRes, error: mErr } = await supabase
             .from('missions')
             .select(
-              'id,title,description,points,validation_type,approval_mode,is_active,allow_multiple_submissions,max_submissions_per_table,message_required,target_person_name,submission_hint,header_title,header_image_url'
+              'id,title,description,points,validation_type,approval_mode,is_active,allow_multiple_submissions,max_submissions_per_table,message_required,target_person_name,submission_hint,header_title,header_image_url,card_theme_index,card_cover_image_url'
             )
             .in('id', assignedMissionIds)
             .eq('is_active', true)
@@ -465,6 +467,8 @@ export default function MissionsTablePage({
             submission_hint?: string | null
             header_title?: string | null
             header_image_url?: string | null
+            card_theme_index?: number | null
+            card_cover_image_url?: string | null
           }>
 
           const activeMs: MissionRow[] = ms.map((m) => ({
@@ -488,6 +492,11 @@ export default function MissionsTablePage({
             submission_hint: m.submission_hint ?? null,
             header_title: m.header_title ?? null,
             header_image_url: m.header_image_url ?? null,
+            card_theme_index:
+              m.card_theme_index == null
+                ? null
+                : Math.max(0, Math.min(5, Math.floor(Number(m.card_theme_index)))),
+            card_cover_image_url: m.card_cover_image_url ?? null,
           }))
           setMissions(activeMs)
         }
@@ -740,7 +749,7 @@ export default function MissionsTablePage({
                 const completed = st === 'completed'
                 const pending = st === 'pending'
                 const limitReached = st === 'limit_reached'
-                const surface = missionGradientAt(missions, i)
+                const surface = guestMissionSurfaceGradient(m, missions, i)
                 const rewardAmount = Math.max(0, Number(m.points) || 0)
                 const typeIcon = m.validation_type === 'video'
                   ? '🎥'
@@ -754,6 +763,11 @@ export default function MissionsTablePage({
                 const isTableGreetingCard = /post a table greeting/i.test(m.title)
                 const isTrumpetStoryCard =
                   /get alex to explain the trumpet story/i.test(m.title)
+                const customCardCover =
+                  typeof m.card_cover_image_url === 'string' &&
+                  m.card_cover_image_url.trim().length > 0 &&
+                  !isTrumpetStoryCard &&
+                  !isTableGreetingCard
 
                 return (
                   <button
@@ -764,12 +778,20 @@ export default function MissionsTablePage({
                     onClick={() => openMissionModal(m.id)}
                     className={`relative flex h-[min(420px,62vh)] w-[min(300px,78vw)] shrink-0 snap-start flex-col overflow-hidden rounded-3xl p-5 text-left transition active:scale-[0.99] ${limitReached ? 'opacity-95' : ''}`}
                     style={
-                      isTrumpetStoryCard || isTableGreetingCard
+                      isTrumpetStoryCard || isTableGreetingCard || customCardCover
                         ? undefined
                         : { background: surface }
                     }
                   >
-                    {isTrumpetStoryCard ? (
+                    {customCardCover ? (
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat"
+                        style={{
+                          backgroundImage: `url(${m.card_cover_image_url})`,
+                        }}
+                      />
+                    ) : isTrumpetStoryCard ? (
                       <span
                         aria-hidden
                         className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -964,7 +986,8 @@ export default function MissionsTablePage({
               if (!m) return null
               const selectedIdx = missions.findIndex((x) => x.id === selectedMissionId)
               const hasNav = missions.length > 1 && selectedIdx >= 0
-              const missionGradient = missionGradientAt(
+              const missionGradient = guestMissionSurfaceGradient(
+                m,
                 missions,
                 selectedIdx >= 0 ? selectedIdx : 0
               )

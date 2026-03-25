@@ -55,3 +55,29 @@ export function gradientIndexForMission(
 export function missionGradientAt(missions: { title: string }[], missionIndex: number): string {
   return MISSION_CARD_BACKGROUNDS[gradientIndexForMission(missions, missionIndex)]!
 }
+
+/** Admin / guest: short labels for theme swatches (order matches MISSION_CARD_BACKGROUNDS). */
+export const MISSION_CARD_THEME_LABELS = [
+  'Aurora',
+  'Sunset',
+  'Meadow',
+  'Coral',
+  'Indigo',
+  'Royal',
+] as const
+
+/**
+ * Gradient for carousel card + modal chrome when admin picked a fixed theme.
+ * Falls back to rotating list gradient when `card_theme_index` is null.
+ */
+export function guestMissionSurfaceGradient(
+  mission: { title: string; card_theme_index?: number | null },
+  missions: { title: string }[],
+  missionIndex: number
+): string {
+  const idx = mission.card_theme_index
+  if (typeof idx === 'number' && idx >= 0 && idx < MISSION_CARD_BACKGROUNDS.length) {
+    return MISSION_CARD_BACKGROUNDS[idx]!
+  }
+  return missionGradientAt(missions, missionIndex)
+}

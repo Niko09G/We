@@ -13,16 +13,10 @@ export type AdminTableRow = {
 }
 
 export async function listTablesForAdmin(): Promise<AdminTableRow[]> {
-  const { data, error } = await supabase
-    .from('tables')
-    .select(
-      'id, name, color, is_active, is_archived, archived_at, created_at, capacity'
-    )
-    .order('is_archived', { ascending: true })
-    .order('name')
+  const { data, error } = await supabase.from('tables').select('*').order('name')
 
   if (error) throw new Error(error.message || 'Failed to load tables.')
-  return (data ?? []).map((row) => {
+  const rows = (data ?? []).map((row) => {
     const r = row as Record<string, unknown>
     const cap = r.capacity
     const capacity =
@@ -34,14 +28,18 @@ export async function listTablesForAdmin(): Promise<AdminTableRow[]> {
       name: (row.name as string) ?? '',
       color: (row.color as string | null) ?? null,
       is_active: (row.is_active as boolean) ?? true,
-      is_archived: (row as { is_archived?: boolean }).is_archived ?? false,
-      archived_at:
-        ((row as { archived_at?: string | null }).archived_at as string | null) ??
-        null,
+      is_archived: (r.is_archived as boolean | undefined) ?? false,
+      archived_at: (r.archived_at as string | null) ?? null,
       created_at: (row.created_at as string) ?? new Date().toISOString(),
       capacity,
     }
   })
+  rows.sort((a, b) => {
+    const d = Number(a.is_archived) - Number(b.is_archived)
+    if (d !== 0) return d
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+  })
+  return rows
 }
 
 export async function createTable(input: {
