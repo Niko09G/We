@@ -13,6 +13,9 @@ export type GreetingRow = {
   table_id?: string | null
   table_name?: string | null
   table_color?: string | null
+  /** Big-screen rotation stats (optional until migration applied). */
+  display_count?: number
+  last_displayed_at?: string | null
 }
 
 export async function listGreetings(): Promise<GreetingRow[]> {
@@ -25,16 +28,35 @@ export async function listGreetings(): Promise<GreetingRow[]> {
   return (data ?? []) as GreetingRow[]
 }
 
-/** For display carousel: ready only, oldest first. */
-export async function listReadyGreetingsForDisplay(): Promise<GreetingRow[]> {
+const DISPLAY_SELECT =
+  'id,name,message,image_url,status,created_at,source_type,table_id,table_name,table_color,display_count,last_displayed_at'
+
+/**
+ * Big screen only: next ready greeting by fair rotation — fewest `display_count`,
+ * then newest `created_at` (new items surface quickly among ties; older rows still get turns).
+ */
+export async function fetchNextFairGreetingForDisplay(
+  limit = 1
+): Promise<GreetingRow[]> {
+  const lim = Math.min(100, Math.max(1, Math.floor(limit)))
   const { data, error } = await supabase
     .from('greetings')
-    .select('id,name,message,image_url,status,created_at,source_type,table_id,table_name,table_color')
+    .select(DISPLAY_SELECT)
     .eq('status', 'ready')
-    .order('created_at', { ascending: true })
+    .order('display_count', { ascending: true })
+    .order('created_at', { ascending: false })
+    .limit(lim)
 
   if (error) throw new Error(error.message || 'Failed to load greetings.')
   return (data ?? []) as GreetingRow[]
+}
+
+/** After a greeting was shown on the big screen for one slot; increments display_count. */
+export async function recordGreetingDisplayed(greetingId: string): Promise<void> {
+  const { error } = await supabase.rpc('record_greeting_displayed', {
+    p_id: greetingId,
+  })
+  if (error) throw new Error(error.message || 'Failed to record greeting display.')
 }
 
 function storagePathFromPublicUrl(publicUrl: string): string | null {

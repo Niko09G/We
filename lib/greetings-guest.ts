@@ -5,8 +5,8 @@ const SELECT =
   'id,name,message,image_url,status,created_at,source_type,table_id,table_name,table_color'
 
 /**
- * Ready greetings for guests, newest first.
- * Use a limit for strips; omit limit for full gallery (capped server-side by PostgREST default if needed).
+ * Ready greetings for **mobile / guest** surfaces only: newest first, fixed window (no display_count rotation).
+ * Big screen (`/display`) uses fair rotation in `greetings-admin` (`fetchNextFairGreetingForDisplay`).
  */
 export async function listReadyGreetingsNewestFirst(
   limit?: number

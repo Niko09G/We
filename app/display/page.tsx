@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RewardUnitIcon } from '@/components/reward/RewardUnitIcon'
 import { useRewardUnit } from '@/components/reward/RewardUnitProvider'
-import { listReadyGreetingsForDisplay, type GreetingRow } from '@/lib/greetings-admin'
+import {
+  fetchNextFairGreetingForDisplay,
+  recordGreetingDisplayed,
+  type GreetingRow,
+} from '@/lib/greetings-admin'
 import { fetchLeaderboardBundle, type LeaderboardEntry, type RecentActivityItem } from '@/lib/leaderboard'
 import { rewardUnitCompactLabel } from '@/lib/reward-unit'
 
@@ -60,9 +64,8 @@ function ImageWithFallback({
 
 export default function DisplayPage() {
   const { config: rewardUnit } = useRewardUnit()
-  const [greetings, setGreetings] = useState<GreetingRow[]>([])
+  const [currentGreeting, setCurrentGreeting] = useState<GreetingRow | null>(null)
   const [loading, setLoading] = useState(true)
-  const [currentIndex, setCurrentIndex] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[] | null>(null)
   const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([])
@@ -73,42 +76,62 @@ export default function DisplayPage() {
   >({})
   const [recentEnterIds, setRecentEnterIds] = useState<Set<string>>(() => new Set())
   const containerRef = useRef<HTMLDivElement>(null)
+  /** Row currently on the big screen; used to increment display_count on rotation. */
+  const displayedGreetingRef = useRef<GreetingRow | null>(null)
   const prevLeaderboardRef = useRef<LeaderboardEntry[] | null>(null)
   const prevRecentIdsRef = useRef<string[]>([])
   const animClearRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recentClearRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const fetchGreetings = useCallback(async () => {
-    try {
-      const data = await listReadyGreetingsForDisplay()
-      setGreetings(data)
-      setCurrentIndex((i) => (data.length ? Math.min(i, data.length - 1) : 0))
-    } catch {
-      setGreetings((prev) => (prev.length ? prev : []))
-    } finally {
-      setLoading(false)
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const rows = await fetchNextFairGreetingForDisplay(1)
+        if (cancelled) return
+        const next = rows[0] ?? null
+        displayedGreetingRef.current = next
+        setCurrentGreeting(next)
+      } catch {
+        if (!cancelled) {
+          displayedGreetingRef.current = null
+          setCurrentGreeting(null)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
     }
   }, [])
 
   useEffect(() => {
-    let cancelled = false
-    async function load() {
-      await fetchGreetings()
-      if (cancelled) setLoading(true)
-    }
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [fetchGreetings])
-
-  useEffect(() => {
+    const ms = currentGreeting ? ROTATE_INTERVAL_MS : POLL_INTERVAL_MS
     const id = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
-      void fetchGreetings()
-    }, POLL_INTERVAL_MS)
+      const prevId = displayedGreetingRef.current?.id ?? null
+      void (async () => {
+        if (prevId) {
+          try {
+            await recordGreetingDisplayed(prevId)
+          } catch {
+            /* RPC or columns not migrated yet */
+          }
+        }
+        try {
+          const rows = await fetchNextFairGreetingForDisplay(1)
+          const next = rows[0] ?? null
+          displayedGreetingRef.current = next
+          setCurrentGreeting(next)
+        } catch {
+          displayedGreetingRef.current = null
+          setCurrentGreeting(null)
+        }
+      })()
+    }, ms)
     return () => clearInterval(id)
-  }, [fetchGreetings])
+  }, [currentGreeting])
 
   const fetchLeaderboardData = useCallback(async () => {
     try {
@@ -192,14 +215,6 @@ export default function DisplayPage() {
       if (recentClearRef.current) clearTimeout(recentClearRef.current)
     }
   }, [])
-
-  useEffect(() => {
-    if (greetings.length <= 1) return
-    const id = setInterval(() => {
-      setCurrentIndex((i) => (i + 1) % greetings.length)
-    }, ROTATE_INTERVAL_MS)
-    return () => clearInterval(id)
-  }, [greetings.length])
 
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement)
@@ -385,7 +400,7 @@ export default function DisplayPage() {
     </aside>
   )
 
-  if (loading && greetings.length === 0) {
+  if (loading && !currentGreeting) {
     return (
       <div
         ref={containerRef}
@@ -399,7 +414,7 @@ export default function DisplayPage() {
     )
   }
 
-  const hasGreetings = greetings.length > 0
+  const hasGreetings = currentGreeting != null
 
   return (
     <div
@@ -421,11 +436,11 @@ export default function DisplayPage() {
         ) : (
           <>
             <div
-              key={currentIndex}
+              key={currentGreeting.id}
               className="absolute inset-0 animate-[fadeIn_0.8s_ease-out]"
             >
               <ImageWithFallback
-                src={greetings[currentIndex].image_url}
+                src={currentGreeting.image_url}
                 alt=""
                 className="absolute inset-0 h-full w-full object-cover object-center"
               />
@@ -438,26 +453,31 @@ export default function DisplayPage() {
                 }}
               />
               <div
-                key={currentIndex}
+                key={currentGreeting.id}
                 className="absolute inset-0 flex flex-col justify-end pb-[16%] px-[7%] animate-[greetingTextIn_0.55s_ease-out]"
               >
                 <p className="max-w-2xl text-2xl font-medium leading-loose text-white whitespace-pre-wrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] md:text-3xl lg:text-4xl">
-                  {greetings[currentIndex].message}
+                  {currentGreeting.message}
                 </p>
-                {greetings[currentIndex].source_type === 'mission' ? (
+                {currentGreeting.source_type === 'mission' ? (
                   <div className="mt-4 inline-flex items-center gap-2">
                     <span
                       className="h-2.5 w-2.5 rounded-full border border-white/20"
-                      style={{ backgroundColor: greetings[currentIndex].table_color || '#71717a' }}
+                      style={{
+                        backgroundColor: currentGreeting.table_color || '#71717a',
+                      }}
                       aria-hidden
                     />
                     <p className="text-sm text-white/70 tracking-wide">
-                      — {greetings[currentIndex].table_name?.trim() || greetings[currentIndex].name?.trim() || 'Table'}
+                      —{' '}
+                      {currentGreeting.table_name?.trim() ||
+                        currentGreeting.name?.trim() ||
+                        'Table'}
                     </p>
                   </div>
                 ) : (
                   <p className="mt-4 text-sm text-white/60 tracking-wide">
-                    — {greetings[currentIndex].name?.trim() || 'Anonymous'}
+                    — {currentGreeting.name?.trim() || 'Anonymous'}
                   </p>
                 )}
               </div>
