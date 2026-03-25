@@ -48,6 +48,8 @@ import {
   MISSION_SIGNATURE_TEXT,
   MISSION_SIGNATURE_TINT_BG,
 } from '@/lib/mission-ui'
+import { DEFAULT_MISSION_SUBMIT_SUCCESS_MESSAGE } from '@/lib/mission-success-copy'
+import { MissionSubmitConfetti } from '@/components/guest/MissionSubmitConfetti'
 
 type RewardFlightCoin = {
   id: string
@@ -77,6 +79,8 @@ export type MissionForModal = {
   allow_multiple_submissions?: boolean
   max_submissions_per_table?: number | null
   message_required?: boolean
+  /** Shown in overlay after successful submit; null/empty → default copy. */
+  success_message?: string | null
 }
 
 /** Team standing + mission reward coins (guest overlay HUD). */
@@ -170,6 +174,7 @@ export function MissionModal({
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [confettiFire, setConfettiFire] = useState(0)
   const [rewardFlights, setRewardFlights] = useState<RewardFlightCoin[]>([])
   const [rewardFlightActive, setRewardFlightActive] = useState(false)
   const [rewardAbsorbing, setRewardAbsorbing] = useState(false)
@@ -223,6 +228,7 @@ export function MissionModal({
     setSignatureCueVisible(true)
     setSubmitError(null)
     setSuccess(false)
+    setConfettiFire(0)
     setRewardFlights([])
     setRewardFlightActive(false)
     setRewardAbsorbing(false)
@@ -252,6 +258,7 @@ export function MissionModal({
     setSignatureCueVisible(true)
     setSubmitError(null)
     setSuccess(false)
+    setConfettiFire(0)
     setRewardFlights([])
     setRewardFlightActive(false)
     setRewardAbsorbing(false)
@@ -296,6 +303,27 @@ export function MissionModal({
     allow_multiple_submissions: mission.allow_multiple_submissions,
   })
 
+  const showInlineSuccess = success && missionsEnabled && !isBeatcoinMission
+  const successBodyText =
+    mission.success_message != null && mission.success_message.trim() !== ''
+      ? mission.success_message.trim()
+      : DEFAULT_MISSION_SUBMIT_SUCCESS_MESSAGE
+
+  const capAfterSubmit = effectiveMaxSubmissionsPerTable({
+    max_submissions_per_table: mission.max_submissions_per_table,
+    allow_multiple_submissions: mission.allow_multiple_submissions,
+  })
+  const optimisticSlotsUsed = submissionSlotsUsed + (success ? 1 : 0)
+  const atLimitAfterSubmit =
+    capAfterSubmit != null && optimisticSlotsUsed >= capAfterSubmit
+  const canSubmitAnother =
+    success &&
+    missionsEnabled &&
+    !pending &&
+    !completed &&
+    !atLimitAfterSubmit &&
+    !atSubmissionLimit
+
   const isHeroOverlay = overlayVariant === 'hero-greeting'
   const isMissionsSection = overlayVariant === 'missions-section'
 
@@ -315,6 +343,26 @@ export function MissionModal({
     setVideoFile(null)
     setVideoStep(1)
     if (videoInputRef.current) videoInputRef.current.value = ''
+  }
+
+  function prepareForAnotherSubmission() {
+    clearFile()
+    clearVideo()
+    setMessageText('')
+    setHasSignature(false)
+    setSignatureCueVisible(true)
+    setSubmitError(null)
+    setSuccess(false)
+    setConfettiFire(0)
+    setRewardFlights([])
+    setRewardFlightActive(false)
+    setRewardAbsorbing(false)
+    setRewardCounterValue(null)
+    setRewardClaimSummaryVisible(false)
+    signaturePadRef.current?.clear()
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    if (videoInputRef.current) videoInputRef.current.value = ''
+    onSuccess()
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -367,6 +415,7 @@ export function MissionModal({
       })
 
       setSuccess(true)
+      setConfettiFire((n) => n + 1)
       if (isRepeatableAuto && result.autoApproved) {
         setPending(false)
         setCompleted(false)
@@ -376,12 +425,6 @@ export function MissionModal({
         setCompleted(false)
         setRejected(false)
       }
-      clearFile()
-      clearVideo()
-      signaturePadRef.current?.clear()
-      setHasSignature(false)
-      setSignatureCueVisible(true)
-      setMessageText('')
       onSuccess()
     } catch (e) {
       await removeMissionSubmissionUploadByUrl(uploadedMediaUrl)
@@ -428,6 +471,8 @@ export function MissionModal({
     'min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] pl-[10px] pr-3 pb-4 pt-2 sm:pr-4 sm:pt-2.5'
   /** Full-width footer: matches completed-state Done (not nested under scroll padding). */
   const overlayCtaBarClass = `w-full min-w-0 shrink-0 bg-white ${MISSION_OVERLAY_CTA_BAR_PAD}`
+  const overlaySecondaryCtaClass =
+    'w-full rounded-xl border border-zinc-200 bg-white py-3 text-center text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 active:scale-[0.99] dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800'
 
   const inActiveMissionForm =
     missionsEnabled && !completed && !pending && !atSubmissionLimit
@@ -558,7 +603,7 @@ export function MissionModal({
   }
 
   function renderPrimaryCta(defaultLabel: string) {
-    if (success && rewardHud) {
+    if (success && rewardHud && !showInlineSuccess) {
       if (rewardClaimSummaryVisible) {
         return (
           <div className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-200/80 bg-emerald-50 px-4 py-3 text-center text-[0.92rem] font-medium text-emerald-800">
@@ -824,6 +869,123 @@ export function MissionModal({
               ) : null}
 
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                {showInlineSuccess ? (
+                  <>
+                    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden motion-safe:animate-[missionStepIn_0.28s_ease-out_both]">
+                      <MissionSubmitConfetti fireKey={confettiFire} />
+                      <div
+                        className={`${cardScrollAreaClass} flex min-h-[11rem] flex-1 flex-col items-center justify-center px-5 pb-2 pt-5 text-center`}
+                      >
+                        <div
+                          className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-300"
+                          aria-hidden
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="h-7 w-7"
+                          >
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg>
+                        </div>
+                        <h2 className="text-[1.15rem] font-semibold leading-snug text-zinc-900 dark:text-zinc-100">
+                          Nice one!
+                        </h2>
+                        <p className="mt-3 max-w-[22rem] text-pretty text-[0.92rem] font-normal leading-relaxed text-zinc-600 dark:text-zinc-400">
+                          {successBodyText}
+                        </p>
+                        {pending ? (
+                          <p className="mt-4 max-w-[22rem] text-pretty text-[0.82rem] font-medium leading-relaxed text-zinc-500 dark:text-zinc-500">
+                            We&apos;ll take it from here while this is reviewed.
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className={`${overlayCtaBarClass} flex flex-col gap-2`}>
+                      {rewardHud && !pending && !rewardClaimSummaryVisible ? (
+                        <>
+                          <button
+                            ref={claimRewardBtnRef}
+                            type="button"
+                            onClick={() => void runRewardClaimAnimation()}
+                            disabled={rewardFlightActive}
+                            className={MISSION_PRIMARY_CTA_CLASS}
+                          >
+                            {rewardFlightActive
+                              ? 'Claiming…'
+                              : `Claim +${rewardHud.missionRewardPoints}`}
+                            <RewardUnitIcon size={COIN_SIZE} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={onClose}
+                            className={overlaySecondaryCtaClass}
+                          >
+                            Close
+                          </button>
+                        </>
+                      ) : rewardHud &&
+                        !pending &&
+                        rewardClaimSummaryVisible &&
+                        canSubmitAnother ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={prepareForAnotherSubmission}
+                            className={MISSION_PRIMARY_CTA_CLASS}
+                          >
+                            Submit another
+                          </button>
+                          <button
+                            type="button"
+                            onClick={onClose}
+                            className={overlaySecondaryCtaClass}
+                          >
+                            Close
+                          </button>
+                        </>
+                      ) : rewardHud &&
+                        !pending &&
+                        rewardClaimSummaryVisible &&
+                        !canSubmitAnother ? (
+                        <button
+                          type="button"
+                          onClick={onClose}
+                          className={MISSION_PRIMARY_CTA_CLASS}
+                        >
+                          Done
+                        </button>
+                      ) : canSubmitAnother ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={prepareForAnotherSubmission}
+                            className={MISSION_PRIMARY_CTA_CLASS}
+                          >
+                            Submit another
+                          </button>
+                          <button
+                            type="button"
+                            onClick={onClose}
+                            className={overlaySecondaryCtaClass}
+                          >
+                            Close
+                          </button>
+                        </>
+                      ) : (
+                        <button type="button" onClick={onClose} className={MISSION_PRIMARY_CTA_CLASS}>
+                          Done
+                        </button>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
                 {!showOverlayTerminalFooter && isPhotoTwoStep ? (
                   <input
                     id="mission-photo-file"
@@ -1298,6 +1460,8 @@ export function MissionModal({
                     )}
                   </div>
                 ) : null}
+                  </>
+                )}
               </div>
             </div>
           </div>

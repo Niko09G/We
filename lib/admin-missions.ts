@@ -48,6 +48,7 @@ function missionRecordFromSupabaseRow(row: Record<string, unknown>): MissionReco
         ? null
         : Math.max(0, Math.min(5, Math.floor(Number(row.card_theme_index)))),
     card_cover_image_url: (row.card_cover_image_url as string | null) ?? null,
+    success_message: (row.success_message as string | null) ?? null,
   }
 }
 
@@ -55,7 +56,7 @@ export async function getMissionById(id: string): Promise<MissionRecord | null> 
   const { data, error } = await supabase
     .from('missions')
     .select(
-      'id,title,description,points,created_at,validation_type,is_active,approval_mode,add_to_greetings,allow_multiple_submissions,max_submissions_per_table,points_per_submission,target_person_name,submission_hint,header_title,header_image_url,message_required,card_theme_index,card_cover_image_url'
+      'id,title,description,points,created_at,validation_type,is_active,approval_mode,add_to_greetings,allow_multiple_submissions,max_submissions_per_table,points_per_submission,target_person_name,submission_hint,header_title,header_image_url,message_required,card_theme_index,card_cover_image_url,success_message'
     )
     .eq('id', id)
     .maybeSingle()
@@ -69,7 +70,7 @@ export async function listMissions(): Promise<MissionRecord[]> {
   const { data, error } = await supabase
     .from('missions')
     .select(
-      'id,title,description,points,created_at,validation_type,is_active,approval_mode,add_to_greetings,allow_multiple_submissions,max_submissions_per_table,points_per_submission,target_person_name,submission_hint,header_title,header_image_url,message_required,card_theme_index,card_cover_image_url'
+      'id,title,description,points,created_at,validation_type,is_active,approval_mode,add_to_greetings,allow_multiple_submissions,max_submissions_per_table,points_per_submission,target_person_name,submission_hint,header_title,header_image_url,message_required,card_theme_index,card_cover_image_url,success_message'
     )
     .order('title')
 
@@ -95,6 +96,7 @@ export async function createMission(input: {
   message_required?: boolean
   card_theme_index?: number | null
   card_cover_image_url?: string | null
+  success_message?: string | null
 }): Promise<string> {
   const max =
     typeof input.max_submissions_per_table === 'string'
@@ -135,6 +137,9 @@ export async function createMission(input: {
   if (input.card_cover_image_url !== undefined) {
     row.card_cover_image_url = input.card_cover_image_url?.trim() || null
   }
+  if (input.success_message !== undefined) {
+    row.success_message = input.success_message?.trim() || null
+  }
 
   const { data, error } = await supabase.from('missions').insert(row).select('id').single()
   if (error) throw new Error(error.message || 'Failed to create mission.')
@@ -160,6 +165,7 @@ export async function updateMission(
     message_required: boolean
     card_theme_index: number | null
     card_cover_image_url: string | null
+    success_message: string | null
   }>
 ): Promise<void> {
   const row: Record<string, unknown> = {}
@@ -186,6 +192,9 @@ export async function updateMission(
   }
   if (patch.card_cover_image_url !== undefined) {
     row.card_cover_image_url = patch.card_cover_image_url?.trim() || null
+  }
+  if (patch.success_message !== undefined) {
+    row.success_message = patch.success_message?.trim() || null
   }
 
   if (patch.max_submissions_per_table !== undefined) {

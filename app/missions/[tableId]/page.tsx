@@ -63,6 +63,7 @@ type MissionRow = {
   header_image_url?: string | null
   card_theme_index?: number | null
   card_cover_image_url?: string | null
+  success_message?: string | null
   created_at?: string
 }
 
@@ -444,7 +445,7 @@ export default function MissionsTablePage({
           const { data: mRes, error: mErr } = await supabase
             .from('missions')
             .select(
-              'id,title,description,points,validation_type,approval_mode,is_active,allow_multiple_submissions,max_submissions_per_table,message_required,target_person_name,submission_hint,header_title,header_image_url,card_theme_index,card_cover_image_url'
+              'id,title,description,points,validation_type,approval_mode,is_active,allow_multiple_submissions,max_submissions_per_table,message_required,target_person_name,submission_hint,header_title,header_image_url,card_theme_index,card_cover_image_url,success_message'
             )
             .in('id', assignedMissionIds)
             .eq('is_active', true)
@@ -469,6 +470,7 @@ export default function MissionsTablePage({
             header_image_url?: string | null
             card_theme_index?: number | null
             card_cover_image_url?: string | null
+            success_message?: string | null
           }>
 
           const activeMs: MissionRow[] = ms.map((m) => ({
@@ -497,6 +499,7 @@ export default function MissionsTablePage({
                 ? null
                 : Math.max(0, Math.min(5, Math.floor(Number(m.card_theme_index)))),
             card_cover_image_url: m.card_cover_image_url ?? null,
+            success_message: m.success_message ?? null,
           }))
           setMissions(activeMs)
         }
@@ -1034,6 +1037,7 @@ export default function MissionsTablePage({
                 allow_multiple_submissions: m.allow_multiple_submissions ?? false,
                 max_submissions_per_table: m.max_submissions_per_table ?? null,
                 message_required: m.message_required ?? false,
+                success_message: m.success_message ?? null,
               }
               return (
                 <MissionModal

@@ -58,6 +58,7 @@ type FormState = {
   card_theme_choice: number | 'auto'
   target_person_name: string
   submission_hint: string
+  success_message: string
   message_required: boolean
 }
 
@@ -106,6 +107,7 @@ function recordToForm(m: MissionRecord): FormState {
         : 'auto',
     target_person_name: m.target_person_name ?? '',
     submission_hint: m.submission_hint ?? '',
+    success_message: m.success_message ?? '',
     message_required: m.message_required ?? false,
   }
 }
@@ -127,6 +129,7 @@ function emptyForm(): FormState {
     card_theme_choice: 'auto',
     target_person_name: '',
     submission_hint: '',
+    success_message: '',
     message_required: false,
   }
 }
@@ -266,6 +269,7 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
         header_image_url: form.header_image_url.trim() || null,
         target_person_name: form.target_person_name.trim() || null,
         submission_hint: form.submission_hint.trim() || null,
+        success_message: form.success_message.trim() || null,
         message_required: form.message_required,
         card_theme_index,
         card_cover_image_url: form.card_cover_image_url.trim() || null,
@@ -417,6 +421,7 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
         form.points_per_submission === '' ? null : Number(form.points_per_submission),
       target_person_name: form.target_person_name || null,
       submission_hint: form.submission_hint || null,
+      success_message: form.success_message || null,
       header_title: form.header_title || null,
       header_image_url: form.header_image_url || null,
       message_required: form.message_required,
@@ -947,6 +952,24 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
                     Token missions use your BeatCoin settings — no photo/text rules here.
                   </p>
                 )}
+
+                <label className="mt-5 block text-xs">
+                  <span className="font-medium text-zinc-600 dark:text-zinc-400">
+                    Success message
+                  </span>
+                  <textarea
+                    value={form.success_message}
+                    onChange={(e) =>
+                      setForm((s) => ({ ...s, success_message: e.target.value }))
+                    }
+                    rows={2}
+                    placeholder="e.g. Nice one — that'll show on the feed shortly."
+                    className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                  />
+                  <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+                    Optional. Shown after a successful submission in the guest mission overlay.
+                  </p>
+                </label>
               </div>
             </section>
           ) : null}

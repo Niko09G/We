@@ -120,3 +120,18 @@ select {
     transform: translateX(0);
   }
 }
+
+/* Mission overlay: subtle confetti burst (CSS vars set inline per piece) */
+@keyframes missionConfettiPiece {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.65) rotate(0deg);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--tx), var(--ty), 0) scale(1) rotate(var(--rot));
+  }
+}

@@ -3,7 +3,7 @@
  * DB: id, title, description, points, created_at, validation_type, approval_mode, is_active,
  *     add_to_greetings, allow_multiple_submissions, max_submissions_per_table, points_per_submission,
  *     target_person_name, submission_hint, header_title, header_image_url, message_required,
- *     card_theme_index, card_cover_image_url
+ *     card_theme_index, card_cover_image_url, success_message
  */
 export type MissionsTableRow = {
   id: string
@@ -28,4 +28,6 @@ export type MissionsTableRow = {
   card_theme_index: number | null
   /** Optional full-bleed card image. */
   card_cover_image_url: string | null
+  /** Guest overlay success body after submit; null = default copy. */
+  success_message: string | null
 }
