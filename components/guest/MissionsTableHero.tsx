@@ -22,7 +22,8 @@ export type MissionsTableHeroProps = {
 }
 
 /**
- * Exactly 100vh hero, vertical gradient ending in white, content centered; nav overlaid at top.
+ * Full-viewport hero, vertical gradient ending in white, content centered; nav overlaid at top.
+ * Uses `viewport-fit=cover` + safe-area padding so the gradient fills the status bar inset on iOS.
  */
 export function MissionsTableHero({
   loading,
@@ -40,10 +41,10 @@ export function MissionsTableHero({
 }: MissionsTableHeroProps) {
   return (
     <section
-      className="relative isolate h-[100dvh] min-h-[100dvh] max-h-[100dvh] w-full max-w-full min-w-0 overflow-x-hidden overflow-y-hidden text-white"
+      className="relative isolate box-border flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] w-full max-w-full min-w-0 flex-col overflow-x-hidden overflow-y-hidden pt-[env(safe-area-inset-top,0px)] text-white"
       style={{ background: MISSIONS_HERO_BACKGROUND }}
     >
-      <nav className="absolute left-0 right-0 top-0 z-20 flex flex-wrap items-center justify-between gap-2 px-5 pt-5">
+      <nav className="absolute left-0 right-0 top-0 z-20 flex flex-wrap items-center justify-between gap-2 px-5 pt-[calc(env(safe-area-inset-top,0px)+1.25rem)]">
         <Link
           href="/play"
           className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white/95 backdrop-blur-sm transition active:scale-[0.98] hover:bg-white/25"
@@ -58,7 +59,7 @@ export function MissionsTableHero({
         </Link>
       </nav>
 
-      <div className="relative z-10 flex h-[100dvh] min-h-0 w-full items-center justify-center px-5 pb-6 pt-16">
+      <div className="relative z-10 flex min-h-0 w-full flex-1 items-center justify-center px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-16">
         <div className="relative mx-auto w-full max-w-sm text-center">
           {loading && !tableName.trim() ? (
             <div className="space-y-5 animate-pulse">

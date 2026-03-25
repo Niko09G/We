@@ -1,5 +1,8 @@
 /** Guest missions UI — vertical linear-gradients via inline `background` only. */
 
+/** Top stop of `MISSIONS_HERO_BACKGROUND` — use for `theme-color` / status bar tint. */
+export const MISSIONS_HERO_THEME_COLOR = '#7b3ff2'
+
 export const MISSIONS_HERO_BACKGROUND =
   'linear-gradient(to bottom, #7b3ff2 0%, #5a5ee6 40%, #4fa3c8 75%, #ffffff 100%)'
 
