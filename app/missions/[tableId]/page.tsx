@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { use, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { MissionSocialFeedSection } from '@/components/guest/MissionSocialFeedSection'
 import { SeatingMapPanel } from '@/components/guest/SeatingMapPanel'
 import { StickySectionNav } from '@/components/guest/StickySectionNav'
@@ -211,6 +211,20 @@ export default function MissionsTablePage({
     }
     return { kind: 'fallback' as const }
   }, [guestEmblems, leaderboardRows, tablePoints, tableRank])
+  const deltaAccentBase = (teamPage.theme.primaryColor || tableColor || '#6335fb').trim()
+  const deltaAccentLight = (tableColor || teamPage.theme.tableGradient.colorBottom || '').trim()
+  const hasDeltaGradient = Boolean(
+    deltaAccentBase &&
+      deltaAccentLight &&
+      deltaAccentLight.toLowerCase() !== deltaAccentBase.toLowerCase()
+  )
+  const deltaAccentStyle: CSSProperties = hasDeltaGradient
+    ? {
+        backgroundImage: `linear-gradient(to right, ${deltaAccentLight}, ${deltaAccentBase})`,
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+      }
+    : { color: deltaAccentBase }
 
   const pushMomentum = useCallback((entries: MomentumEntry[]) => {
     if (entries.length === 0) return
@@ -1166,8 +1180,14 @@ export default function MissionsTablePage({
             {leaderboardMotivation.kind === 'close_chase' ? (
               <span className="inline-flex flex-wrap items-center gap-1">
                 <span>⚠️ Only</span>
-                <span className="inline-flex items-center gap-0.5 font-semibold tabular-nums">
-                  {leaderboardMotivation.delta}
+                <span
+                  key={`lb-delta-close-${leaderboardMotivation.delta}`}
+                  className={`inline-flex items-center gap-0.5 font-semibold tracking-tight tabular-nums motion-safe:animate-[lbPointsPop_0.45s_ease-out] ${
+                    hasDeltaGradient ? 'bg-clip-text text-transparent' : ''
+                  }`}
+                  style={deltaAccentStyle}
+                >
+                  <span>{leaderboardMotivation.delta}</span>
                   <RewardUnitIcon size={14} />
                 </span>
                 <span>coins to reach</span>
@@ -1186,8 +1206,14 @@ export default function MissionsTablePage({
             ) : leaderboardMotivation.kind === 'chase' ? (
               <span className="inline-flex flex-wrap items-center gap-1">
                 <span>You need</span>
-                <span className="inline-flex items-center gap-0.5 font-semibold tabular-nums">
-                  {leaderboardMotivation.delta}
+                <span
+                  key={`lb-delta-chase-${leaderboardMotivation.delta}`}
+                  className={`inline-flex items-center gap-0.5 font-semibold tracking-tight tabular-nums motion-safe:animate-[lbPointsPop_0.45s_ease-out] ${
+                    hasDeltaGradient ? 'bg-clip-text text-transparent' : ''
+                  }`}
+                  style={deltaAccentStyle}
+                >
+                  <span>{leaderboardMotivation.delta}</span>
                   <RewardUnitIcon size={14} />
                 </span>
                 <span>coins to overtake</span>
@@ -1206,8 +1232,14 @@ export default function MissionsTablePage({
             ) : leaderboardMotivation.kind === 'leading' ? (
               <span className="inline-flex flex-wrap items-center gap-1">
                 <span>You&apos;re leading by</span>
-                <span className="inline-flex items-center gap-0.5 font-semibold tabular-nums">
-                  {leaderboardMotivation.delta}
+                <span
+                  key={`lb-delta-lead-${leaderboardMotivation.delta}`}
+                  className={`inline-flex items-center gap-0.5 font-semibold tracking-tight tabular-nums motion-safe:animate-[lbPointsPop_0.45s_ease-out] ${
+                    hasDeltaGradient ? 'bg-clip-text text-transparent' : ''
+                  }`}
+                  style={deltaAccentStyle}
+                >
+                  <span>{leaderboardMotivation.delta}</span>
                   <RewardUnitIcon size={14} />
                 </span>
                 <span>coins — increase the gap!</span>
