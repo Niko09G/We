@@ -760,37 +760,62 @@ export default function TablesAdminPage() {
                         )
                       })}
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      <ColorCircleField
-                        label="Hero top"
-                        value={formTheme.heroTop}
-                        onChange={(v) => setFormTheme((p) => ({ ...p, heroTop: v }))}
-                      />
-                      <ColorCircleField
-                        label="Hero middle"
-                        value={formTheme.heroMiddle}
-                        onChange={(v) => setFormTheme((p) => ({ ...p, heroMiddle: v }))}
-                      />
-                      <ColorCircleField
-                        label="Hero bottom"
-                        value={formTheme.heroBottom}
-                        onChange={(v) => setFormTheme((p) => ({ ...p, heroBottom: v }))}
-                      />
-                      <ColorCircleField
-                        label="Leaderboard top"
-                        value={formTheme.lbGradTop}
-                        onChange={(v) => setFormTheme((p) => ({ ...p, lbGradTop: v }))}
-                      />
-                      <ColorCircleField
-                        label="Leaderboard bottom"
-                        value={formTheme.lbGradBottom}
-                        onChange={(v) => setFormTheme((p) => ({ ...p, lbGradBottom: v }))}
-                      />
-                      <ColorCircleField
-                        label="Primary CTA"
-                        value={formTheme.primaryColor}
-                        onChange={(v) => setFormTheme((p) => ({ ...p, primaryColor: v }))}
-                      />
+                    <div className="grid grid-cols-4 gap-3 text-[11px] text-zinc-500">
+                      {THEME_PRESETS.map((preset) => (
+                        <span key={`${preset.id}-label`} className="text-center truncate">
+                          {preset.name}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <div className="mb-2 text-xs font-semibold text-zinc-700">Hero</div>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          <ColorCircleField
+                            label="Hero top"
+                            value={formTheme.heroTop}
+                            onChange={(v) => setFormTheme((p) => ({ ...p, heroTop: v }))}
+                          />
+                          <ColorCircleField
+                            label="Hero middle"
+                            value={formTheme.heroMiddle}
+                            onChange={(v) => setFormTheme((p) => ({ ...p, heroMiddle: v }))}
+                          />
+                          <ColorCircleField
+                            label="Hero bottom"
+                            value={formTheme.heroBottom}
+                            onChange={(v) => setFormTheme((p) => ({ ...p, heroBottom: v }))}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="mb-2 text-xs font-semibold text-zinc-700">Leaderboard</div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <ColorCircleField
+                            label="Leaderboard top"
+                            value={formTheme.lbGradTop}
+                            onChange={(v) => setFormTheme((p) => ({ ...p, lbGradTop: v }))}
+                          />
+                          <ColorCircleField
+                            label="Leaderboard bottom"
+                            value={formTheme.lbGradBottom}
+                            onChange={(v) => setFormTheme((p) => ({ ...p, lbGradBottom: v }))}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="mb-2 text-xs font-semibold text-zinc-700">CTA</div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <ColorCircleField
+                            label="Primary CTA"
+                            value={formTheme.primaryColor}
+                            onChange={(v) => setFormTheme((p) => ({ ...p, primaryColor: v }))}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </section>
 
