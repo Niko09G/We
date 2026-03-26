@@ -81,6 +81,17 @@ type MissionRow = {
 type CompletionRow = { mission_id: string }
 type PendingRow = { mission_id: string }
 type ApprovedRow = { mission_id: string }
+type MomentumEventType = 'mission' | 'catching_up' | 'lead' | 'momentum'
+type MomentumEntry = {
+  id: string
+  tableId: string
+  tableName: string
+  tableColor: string | null
+  eventType: MomentumEventType
+  coinChange: number
+  message: string
+  createdAt: number
+}
 
 function isUuid(value: unknown): value is string {
   if (typeof value !== 'string') return false
@@ -141,6 +152,9 @@ export default function MissionsTablePage({
   const [missionFeedItems, setMissionFeedItems] = useState<GuestMissionFeedItem[]>([])
   const [missionFeedLoading, setMissionFeedLoading] = useState(false)
   const [guestEmblems, setGuestEmblems] = useState<GuestEmblemsSettingsValue>({})
+  const [momentumFeed, setMomentumFeed] = useState<MomentumEntry[]>([])
+  const [momentumEnterIds, setMomentumEnterIds] = useState<Set<string>>(new Set())
+  const prevLeaderboardRef = useRef<LeaderboardEntry[] | null>(null)
 
   const { tablePoints, tableRank, totalTeams } = useMemo(() => {
     const idx = leaderboardRows.findIndex((e) => e.tableId === tableId)
@@ -167,6 +181,126 @@ export default function MissionsTablePage({
   const heroTeamEmblemUrl = useMemo(
     () => guestEmblems.team_emblem_by_table_id?.[tableId] ?? null,
     [guestEmblems, tableId]
+  )
+  const leaderboardMotivation = useMemo(() => {
+    if (tableRank == null || leaderboardRows.length === 0) {
+      return { kind: 'fallback' as const }
+    }
+    if (tableRank > 1) {
+      const above = leaderboardRows[tableRank - 2]
+      if (!above) return { kind: 'fallback' as const }
+      const abovePoints = safeRewardPoints(above.totalPoints)
+      const delta = Math.max(0, abovePoints - tablePoints)
+      return {
+        kind: delta <= 5 ? ('close_chase' as const) : ('chase' as const),
+        delta,
+        targetRank: tableRank - 1,
+        targetRankEmblemUrl: resolveRankEmblemUrl(guestEmblems, tableRank - 1),
+      }
+    }
+    if (tableRank === 1) {
+      const below = leaderboardRows[1]
+      if (!below) return { kind: 'fallback' as const }
+      const belowPoints = safeRewardPoints(below.totalPoints)
+      return {
+        kind: 'leading' as const,
+        delta: Math.max(0, tablePoints - belowPoints),
+        targetRank: 1,
+        targetRankEmblemUrl: resolveRankEmblemUrl(guestEmblems, 1),
+      }
+    }
+    return { kind: 'fallback' as const }
+  }, [guestEmblems, leaderboardRows, tablePoints, tableRank])
+
+  const pushMomentum = useCallback((entries: MomentumEntry[]) => {
+    if (entries.length === 0) return
+    const newIds = entries.map((e) => e.id)
+    setMomentumEnterIds((prev) => {
+      const next = new Set(prev)
+      newIds.forEach((id) => next.add(id))
+      return next
+    })
+    setTimeout(() => {
+      setMomentumEnterIds((prev) => {
+        const next = new Set(prev)
+        newIds.forEach((id) => next.delete(id))
+        return next
+      })
+    }, 700)
+    setMomentumFeed((prev) => {
+      const seen = new Set(prev.map((e) => e.id))
+      const fresh = entries.filter((e) => !seen.has(e.id))
+      return [...fresh, ...prev].slice(0, 8)
+    })
+  }, [])
+
+  const buildMomentumEntries = useCallback(
+    (nextLb: LeaderboardEntry[]): MomentumEntry[] => {
+      const prevLb = prevLeaderboardRef.current
+      prevLeaderboardRef.current = nextLb
+      if (!prevLb || prevLb.length === 0 || nextLb.length === 0) return []
+
+      const prevById = new Map(prevLb.map((r) => [r.tableId, r]))
+      const now = Date.now()
+      const out: MomentumEntry[] = []
+
+      const previousLeader = prevLb[0]?.tableId ?? null
+      const nextLeader = nextLb[0]?.tableId ?? null
+      if (nextLeader && previousLeader && nextLeader !== previousLeader) {
+        const row = nextLb[0]!
+        out.push({
+          id: `lead-${row.tableId}-${safeRewardPoints(row.totalPoints)}-${now}`,
+          tableId: row.tableId,
+          tableName: row.tableName,
+          tableColor: row.tableColor,
+          eventType: 'lead',
+          coinChange: 0,
+          message: `${row.tableName} just took the lead 👑`,
+          createdAt: now,
+        })
+      }
+
+      for (let i = 0; i < nextLb.length; i++) {
+        const row = nextLb[i]!
+        const prev = prevById.get(row.tableId)
+        if (!prev) continue
+        const prevPoints = safeRewardPoints(prev.totalPoints)
+        const nextPoints = safeRewardPoints(row.totalPoints)
+        const delta = nextPoints - prevPoints
+        if (delta <= 0) continue
+
+        const prevRank = prevLb.findIndex((x) => x.tableId === row.tableId) + 1
+        const nextRank = i + 1
+        const improved = prevRank > 0 && nextRank < prevRank
+        const eventType: MomentumEventType = improved
+          ? 'catching_up'
+          : delta >= 12
+            ? 'mission'
+            : 'momentum'
+        const message =
+          eventType === 'mission'
+            ? `${row.tableName} completed a mission (+${delta})`
+            : eventType === 'catching_up'
+              ? `${row.tableName} is catching up (+${delta})`
+              : `${row.tableName} gained momentum (+${delta})`
+
+        out.push({
+          id: `${row.tableId}-${nextPoints}-${nextRank}-${now}`,
+          tableId: row.tableId,
+          tableName: row.tableName,
+          tableColor: row.tableColor,
+          eventType,
+          coinChange: delta,
+          message,
+          createdAt: now,
+        })
+      }
+
+      return out
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, 5)
+    },
+    []
   )
 
   const scrollToQuests = () => {
@@ -233,6 +367,7 @@ export default function MissionsTablePage({
       try {
         const lb = await fetchLeaderboard()
         setLeaderboardRows(lb)
+        pushMomentum(buildMomentumEntries(lb))
       } catch {
         /* keep previous leaderboard */
       }
@@ -301,7 +436,15 @@ export default function MissionsTablePage({
       setRejectedSubmissionByMissionId(rejectedMap)
       void loadMissionFeed()
     })()
-  }, [tableId, loadMissionFeed])
+  }, [tableId, loadMissionFeed, pushMomentum, buildMomentumEntries])
+
+  useEffect(() => {
+    if (loading) return
+    const timer = window.setInterval(() => {
+      refreshTableData()
+    }, 20000)
+    return () => window.clearInterval(timer)
+  }, [loading, refreshTableData])
 
   useEffect(() => {
     if (missionsEnabled !== true) {
@@ -1020,7 +1163,66 @@ export default function MissionsTablePage({
             className="mt-1 text-base text-zinc-500"
             style={{ color: teamPage.typography.textColorSecondary }}
           >
-            See how your table stacks up
+            {leaderboardMotivation.kind === 'close_chase' ? (
+              <span className="inline-flex flex-wrap items-center gap-1">
+                <span>⚠️ Only</span>
+                <span className="inline-flex items-center gap-0.5 font-semibold tabular-nums">
+                  {leaderboardMotivation.delta}
+                  <RewardUnitIcon size={14} />
+                </span>
+                <span>coins to reach</span>
+                <span className="inline-flex items-center gap-1 font-semibold">
+                  {leaderboardMotivation.targetRankEmblemUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={leaderboardMotivation.targetRankEmblemUrl}
+                      alt=""
+                      className="h-5 w-5 rounded object-contain"
+                    />
+                  ) : null}
+                  #{leaderboardMotivation.targetRank}
+                </span>
+              </span>
+            ) : leaderboardMotivation.kind === 'chase' ? (
+              <span className="inline-flex flex-wrap items-center gap-1">
+                <span>You need</span>
+                <span className="inline-flex items-center gap-0.5 font-semibold tabular-nums">
+                  {leaderboardMotivation.delta}
+                  <RewardUnitIcon size={14} />
+                </span>
+                <span>coins to overtake</span>
+                <span className="inline-flex items-center gap-1 font-semibold">
+                  {leaderboardMotivation.targetRankEmblemUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={leaderboardMotivation.targetRankEmblemUrl}
+                      alt=""
+                      className="h-5 w-5 rounded object-contain"
+                    />
+                  ) : null}
+                  #{leaderboardMotivation.targetRank}
+                </span>
+              </span>
+            ) : leaderboardMotivation.kind === 'leading' ? (
+              <span className="inline-flex flex-wrap items-center gap-1">
+                <span>You&apos;re leading by</span>
+                <span className="inline-flex items-center gap-0.5 font-semibold tabular-nums">
+                  {leaderboardMotivation.delta}
+                  <RewardUnitIcon size={14} />
+                </span>
+                <span>coins — increase the gap!</span>
+                {leaderboardMotivation.targetRankEmblemUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={leaderboardMotivation.targetRankEmblemUrl}
+                    alt=""
+                    className="h-5 w-5 rounded object-contain"
+                  />
+                ) : null}
+              </span>
+            ) : (
+              'Keep earning coins to climb the leaderboard'
+            )}
           </p>
 
           {leaderboardPreview.length > 0 ? (
@@ -1082,6 +1284,52 @@ export default function MissionsTablePage({
                   />
                   Earn more coins
                 </button>
+              </div>
+              <div className="mt-4">
+                <h3
+                  className="text-xs font-semibold uppercase tracking-wide text-zinc-500"
+                  style={{ color: teamPage.typography.textColorSecondary }}
+                >
+                  Momentum feed
+                </h3>
+                {momentumFeed.length === 0 ? (
+                  <p
+                    className="mt-2 text-xs text-zinc-500"
+                    style={{ color: teamPage.typography.textColorSecondary }}
+                  >
+                    No recent scoring activity yet.
+                  </p>
+                ) : (
+                  <ul className="mt-2 space-y-2">
+                    {momentumFeed.map((item, idx) => (
+                      <li
+                        key={item.id}
+                        className={`rounded-lg border border-zinc-200/80 bg-white/80 px-3 py-2 text-xs ${
+                          momentumEnterIds.has(item.id)
+                            ? 'motion-safe:animate-[fadeIn_0.45s_ease-out]'
+                            : ''
+                        } ${idx >= 5 ? 'opacity-70' : idx >= 3 ? 'opacity-85' : 'opacity-100'}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="inline-flex min-w-0 items-center gap-2">
+                            <span
+                              className="h-2.5 w-2.5 shrink-0 rounded-full"
+                              style={{ backgroundColor: item.tableColor ?? '#a1a1aa' }}
+                              aria-hidden
+                            />
+                            <span className="truncate text-zinc-700">{item.message}</span>
+                          </span>
+                          {item.coinChange > 0 ? (
+                            <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold tabular-nums text-zinc-700">
+                              +{item.coinChange}
+                              <RewardUnitIcon size={12} />
+                            </span>
+                          ) : null}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </>
           ) : (
