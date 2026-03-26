@@ -47,7 +47,6 @@ import {
 } from '@/lib/guest-missions-gradients'
 import {
   heroBackgroundStyle,
-  leaderboardRowFill,
   resolveTeamPageConfig,
 } from '@/lib/team-page-config'
 
@@ -81,7 +80,14 @@ type MissionRow = {
 type CompletionRow = { mission_id: string }
 type PendingRow = { mission_id: string }
 type ApprovedRow = { mission_id: string }
-type MomentumEventType = 'mission' | 'catching_up' | 'lead' | 'momentum'
+type MomentumEventType =
+  | 'entered'
+  | 'lead'
+  | 'reclaimed_second'
+  | 'on_fire'
+  | 'closing_gap'
+  | 'move'
+  | 'neutral'
 type MomentumEntry = {
   id: string
   tableId: string
@@ -152,12 +158,10 @@ export default function MissionsTablePage({
   const [missionFeedItems, setMissionFeedItems] = useState<GuestMissionFeedItem[]>([])
   const [missionFeedLoading, setMissionFeedLoading] = useState(false)
   const [guestEmblems, setGuestEmblems] = useState<GuestEmblemsSettingsValue>({})
-  const [leaderboardThemeByTableId, setLeaderboardThemeByTableId] = useState<
-    Map<string, { top: string; bottom: string }>
-  >(new Map())
   const [momentumFeed, setMomentumFeed] = useState<MomentumEntry[]>([])
   const [momentumEnterIds, setMomentumEnterIds] = useState<Set<string>>(new Set())
   const prevLeaderboardRef = useRef<LeaderboardEntry[] | null>(null)
+  const momentumCarouselRef = useRef<HTMLDivElement>(null)
 
   const { tablePoints, tableRank, totalTeams } = useMemo(() => {
     const idx = leaderboardRows.findIndex((e) => e.tableId === tableId)
@@ -228,6 +232,8 @@ export default function MissionsTablePage({
         WebkitTextFillColor: 'transparent',
       }
     : { color: deltaAccentBase }
+  const sharedLeaderboardGradient =
+    'linear-gradient(to right, rgb(23, 163, 214), rgb(56, 105, 233), rgb(95, 50, 243))'
 
   const pushMomentum = useCallback((entries: MomentumEntry[]) => {
     if (entries.length === 0) return
@@ -272,7 +278,7 @@ export default function MissionsTablePage({
           tableColor: row.tableColor,
           eventType: 'lead',
           coinChange: 0,
-          message: `${row.tableName} just took the lead 👑`,
+          message: `${row.tableName} took the lead 👑`,
           createdAt: now,
         })
       }
@@ -280,26 +286,49 @@ export default function MissionsTablePage({
       for (let i = 0; i < nextLb.length; i++) {
         const row = nextLb[i]!
         const prev = prevById.get(row.tableId)
-        if (!prev) continue
-        const prevPoints = safeRewardPoints(prev.totalPoints)
         const nextPoints = safeRewardPoints(row.totalPoints)
+        const nextRank = i + 1
+        if (!prev) {
+          if (nextRank <= 4 && nextPoints > 0) {
+            out.push({
+              id: `${row.tableId}-entered-${nextPoints}-${now}`,
+              tableId: row.tableId,
+              tableName: row.tableName,
+              tableColor: row.tableColor,
+              eventType: 'entered',
+              coinChange: nextPoints,
+              message: `${row.tableName} finally entered the leaderboard 🎉`,
+              createdAt: now,
+            })
+          }
+          continue
+        }
+
+        const prevPoints = safeRewardPoints(prev.totalPoints)
         const delta = nextPoints - prevPoints
         if (delta <= 0) continue
 
         const prevRank = prevLb.findIndex((x) => x.tableId === row.tableId) + 1
-        const nextRank = i + 1
         const improved = prevRank > 0 && nextRank < prevRank
-        const eventType: MomentumEventType = improved
-          ? 'catching_up'
-          : delta >= 12
-            ? 'mission'
-            : 'momentum'
-        const message =
-          eventType === 'mission'
-            ? `${row.tableName} completed a mission (+${delta})`
-            : eventType === 'catching_up'
-              ? `${row.tableName} is catching up (+${delta})`
-              : `${row.tableName} gained momentum (+${delta})`
+        const jump = prevRank > 0 ? prevRank - nextRank : 0
+        let eventType: MomentumEventType = 'neutral'
+        let message = `${row.tableName} gained momentum`
+        if (improved && nextRank === 1) {
+          eventType = 'lead'
+          message = `${row.tableName} took the lead 👑`
+        } else if (improved && nextRank === 2 && prevRank > 2) {
+          eventType = 'reclaimed_second'
+          message = `${row.tableName} reclaimed 2nd place 🥈`
+        } else if (delta >= 18 || jump >= 2) {
+          eventType = 'on_fire'
+          message = `${row.tableName} is on fire 🔥`
+        } else if (improved) {
+          eventType = 'closing_gap'
+          message = `${row.tableName} is closing the gap ⚡`
+        } else if (delta >= 8) {
+          eventType = 'move'
+          message = `${row.tableName} made a move 📈`
+        }
 
         out.push({
           id: `${row.tableId}-${nextPoints}-${nextRank}-${now}`,
@@ -358,6 +387,26 @@ export default function MissionsTablePage({
     }
   }
 
+  const scrollMomentumCarousel = (dir: -1 | 1) => {
+    const el = momentumCarouselRef.current
+    if (!el || momentumFeed.length === 0) return
+    const card = el.querySelector('[data-momentum-card]') as HTMLElement | null
+    const gap = 12
+    const cardW = card?.offsetWidth ?? Math.min(el.clientWidth * 0.8, 300)
+    const step = cardW + gap
+    const { scrollLeft, scrollWidth, clientWidth } = el
+    const maxScroll = Math.max(0, scrollWidth - clientWidth)
+    const atEnd = scrollLeft >= maxScroll - 2
+    const atStart = scrollLeft <= 2
+    if (dir > 0) {
+      if (atEnd) el.scrollTo({ left: 0, behavior: 'smooth' })
+      else el.scrollBy({ left: step, behavior: 'smooth' })
+    } else {
+      if (atStart) el.scrollTo({ left: maxScroll, behavior: 'smooth' })
+      else el.scrollBy({ left: -step, behavior: 'smooth' })
+    }
+  }
+
   const loadMissionFeed = useCallback(async () => {
     if (missionsEnabled !== true) {
       setMissionFeedItems([])
@@ -379,43 +428,11 @@ export default function MissionsTablePage({
     }
   }, [missionsEnabled, feedMissionIds])
 
-  const refreshLeaderboardThemes = useCallback(async (rows: LeaderboardEntry[]) => {
-    const ids = Array.from(new Set(rows.map((r) => r.tableId))).filter(Boolean)
-    if (ids.length === 0) {
-      setLeaderboardThemeByTableId(new Map())
-      return
-    }
-    const { data, error } = await supabase
-      .from('tables')
-      .select('id,name,color,page_config')
-      .in('id', ids)
-    if (error) return
-
-    const next = new Map<string, { top: string; bottom: string }>()
-    for (const row of (data ?? []) as Array<{
-      id: string
-      name?: string | null
-      color?: string | null
-      page_config?: unknown
-    }>) {
-      const resolved = resolveTeamPageConfig(row.page_config ?? null, {
-        tableColor: row.color ?? null,
-        tableName: row.name ?? '',
-      })
-      next.set(row.id, {
-        top: resolved.theme.leaderboardGradient.colorTop,
-        bottom: resolved.theme.leaderboardGradient.colorBottom,
-      })
-    }
-    setLeaderboardThemeByTableId(next)
-  }, [])
-
   const refreshTableData = useCallback(() => {
     void (async () => {
       try {
         const lb = await fetchLeaderboard()
         setLeaderboardRows(lb)
-        void refreshLeaderboardThemes(lb)
         pushMomentum(buildMomentumEntries(lb))
       } catch {
         /* keep previous leaderboard */
@@ -490,7 +507,6 @@ export default function MissionsTablePage({
     loadMissionFeed,
     pushMomentum,
     buildMomentumEntries,
-    refreshLeaderboardThemes,
   ])
 
   useEffect(() => {
@@ -601,7 +617,6 @@ export default function MissionsTablePage({
           const lb = await fetchLeaderboard()
           if (!cancelled) {
             setLeaderboardRows(lb)
-            void refreshLeaderboardThemes(lb)
           }
         } catch {
           if (!cancelled) setLeaderboardRows([])
@@ -1245,7 +1260,12 @@ export default function MissionsTablePage({
                       className="h-5 w-5 rounded object-contain"
                     />
                   ) : null}
-                  #{leaderboardMotivation.targetRank}
+                  <span
+                    className={hasDeltaGradient ? 'bg-clip-text text-transparent' : ''}
+                    style={deltaAccentStyle}
+                  >
+                    #{leaderboardMotivation.targetRank}
+                  </span>
                 </span>
               </span>
             ) : leaderboardMotivation.kind === 'chase' ? (
@@ -1271,7 +1291,12 @@ export default function MissionsTablePage({
                       className="h-5 w-5 rounded object-contain"
                     />
                   ) : null}
-                  #{leaderboardMotivation.targetRank}
+                  <span
+                    className={hasDeltaGradient ? 'bg-clip-text text-transparent' : ''}
+                    style={deltaAccentStyle}
+                  >
+                    #{leaderboardMotivation.targetRank}
+                  </span>
                 </span>
               </span>
             ) : leaderboardMotivation.kind === 'leading' ? (
@@ -1313,19 +1338,10 @@ export default function MissionsTablePage({
                       key={row.tableId}
                       className="flex items-center justify-between gap-3 rounded-md px-3 py-3 text-sm"
                       style={{
-                        background: leaderboardRowFill(row.tableColor, {
-                          ...teamPage,
-                          theme: {
-                            ...teamPage.theme,
-                            leaderboardGradient: leaderboardThemeByTableId.get(row.tableId)
-                              ? {
-                                  colorTop: leaderboardThemeByTableId.get(row.tableId)!.top,
-                                  colorBottom:
-                                    leaderboardThemeByTableId.get(row.tableId)!.bottom,
-                                }
-                              : teamPage.theme.leaderboardGradient,
-                          },
-                        }),
+                        background:
+                          isYou
+                            ? `linear-gradient(to bottom, ${teamPage.theme.leaderboardGradient.colorTop} 0%, ${teamPage.theme.leaderboardGradient.colorBottom} 100%)`
+                            : sharedLeaderboardGradient,
                         ...(isYou
                           ? {
                               boxShadow:
@@ -1359,6 +1375,80 @@ export default function MissionsTablePage({
                   )
                 })}
               </ul>
+              <div className="mt-4">
+                <h3
+                  className="text-base font-medium text-zinc-500"
+                  style={{ color: teamPage.typography.textColorSecondary }}
+                >
+                  Momentum feed
+                </h3>
+                {momentumFeed.length === 0 ? (
+                  <p
+                    className="mt-2 text-xs text-zinc-500"
+                    style={{ color: teamPage.typography.textColorSecondary }}
+                  >
+                    No recent scoring activity yet.
+                  </p>
+                ) : (
+                  <>
+                    <div
+                      ref={momentumCarouselRef}
+                      className="mt-2 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+                    >
+                      {momentumFeed.map((item, idx) => (
+                        <div
+                          key={item.id}
+                          data-momentum-card
+                          className={`w-[min(300px,82vw)] shrink-0 snap-start rounded-lg border border-zinc-200/80 bg-white/85 px-3 py-2 ${
+                            momentumEnterIds.has(item.id)
+                              ? 'motion-safe:animate-[fadeIn_0.45s_ease-out]'
+                              : ''
+                          } ${
+                            idx >= 5 ? 'opacity-70' : idx >= 3 ? 'opacity-85' : 'opacity-100'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="inline-flex min-w-0 items-center gap-2">
+                              <div
+                                className="h-8 w-8 shrink-0 rounded-full border border-white/35 bg-white/20"
+                                style={{ background: sharedLeaderboardGradient }}
+                                aria-hidden
+                              />
+                              <span className="truncate text-base text-zinc-700">{item.message}</span>
+                            </span>
+                            {item.coinChange > 0 ? (
+                              <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold tabular-nums text-zinc-700">
+                                +{item.coinChange}
+                                <RewardUnitIcon size={COIN_SIZE} className="align-middle" />
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {momentumFeed.length > 1 ? (
+                      <div className="mt-2 flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          aria-label="Previous momentum item"
+                          onClick={() => scrollMomentumCarousel(-1)}
+                          className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300 bg-white text-lg font-medium text-zinc-900 transition hover:bg-zinc-50 active:scale-95"
+                        >
+                          ‹
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Next momentum item"
+                          onClick={() => scrollMomentumCarousel(1)}
+                          className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300 bg-white text-lg font-medium text-zinc-900 transition hover:bg-zinc-50 active:scale-95"
+                        >
+                          ›
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
               <div className="mt-4 flex w-full justify-center">
                 <button
                   type="button"
@@ -1373,52 +1463,6 @@ export default function MissionsTablePage({
                   />
                   Earn more coins
                 </button>
-              </div>
-              <div className="mt-4">
-                <h3
-                  className="text-xs font-semibold uppercase tracking-wide text-zinc-500"
-                  style={{ color: teamPage.typography.textColorSecondary }}
-                >
-                  Momentum feed
-                </h3>
-                {momentumFeed.length === 0 ? (
-                  <p
-                    className="mt-2 text-xs text-zinc-500"
-                    style={{ color: teamPage.typography.textColorSecondary }}
-                  >
-                    No recent scoring activity yet.
-                  </p>
-                ) : (
-                  <ul className="mt-2 space-y-2">
-                    {momentumFeed.map((item, idx) => (
-                      <li
-                        key={item.id}
-                        className={`rounded-lg border border-zinc-200/80 bg-white/80 px-3 py-2 text-xs ${
-                          momentumEnterIds.has(item.id)
-                            ? 'motion-safe:animate-[fadeIn_0.45s_ease-out]'
-                            : ''
-                        } ${idx >= 5 ? 'opacity-70' : idx >= 3 ? 'opacity-85' : 'opacity-100'}`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="inline-flex min-w-0 items-center gap-2">
-                            <span
-                              className="h-2.5 w-2.5 shrink-0 rounded-full"
-                              style={{ backgroundColor: item.tableColor ?? '#a1a1aa' }}
-                              aria-hidden
-                            />
-                            <span className="truncate text-zinc-700">{item.message}</span>
-                          </span>
-                          {item.coinChange > 0 ? (
-                            <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold tabular-nums text-zinc-700">
-                              +{item.coinChange}
-                              <RewardUnitIcon size={12} />
-                            </span>
-                          ) : null}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
               </div>
             </>
           ) : (
