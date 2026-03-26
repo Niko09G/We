@@ -646,7 +646,7 @@ export default function TablesAdminPage() {
             </div>
 
             <div className="overflow-y-auto px-5 py-4 [&_input]:!text-[14px] [&_textarea]:!text-[14px] [&_select]:!text-[14px]">
-              <div className="grid gap-5 lg:grid-cols-[1fr_1fr_280px]">
+              <div className="grid gap-5 lg:grid-cols-[280px_280px_280px]">
                 <div className="space-y-4 lg:col-span-2">
                   <div className="grid gap-4 lg:grid-cols-2">
                     <div className="space-y-4">
