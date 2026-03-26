@@ -860,7 +860,13 @@ export default function MissionsTablePage({
                     </h3>
                     <p className="relative z-10 mt-2 text-left text-sm font-semibold tabular-nums text-white/95">
                       <span className="inline-flex items-center gap-1">
-                        <RewardAmount showPlus amount={rewardAmount} iconSize={COIN_SIZE} className="text-white/95" />
+                        <RewardAmount
+                          showPlus
+                          amount={rewardAmount}
+                          iconSize={COIN_SIZE}
+                          className="text-white/95"
+                          displayVariant="onDark"
+                        />
                       </span>
                     </p>
 

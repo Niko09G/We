@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useRewardUnit } from '@/components/reward/RewardUnitProvider'
 import {
   REWARD_UNIT_FALLBACK_EMOJI,
@@ -34,14 +35,20 @@ export function RewardUnitIconFromConfig({
   tintColor,
 }: Props & { config: RewardUnitConfig }) {
   const url = rewardUnitMainIconUrl(config)
+  const [imgFailed, setImgFailed] = useState(false)
+  useEffect(() => {
+    setImgFailed(false)
+  }, [url])
+
   const onDark = displayVariant === 'onDark'
   const imgTone = onDark ? 'brightness-0 invert' : ''
+  const showRaster = Boolean(url && !imgFailed)
 
-  if (url) {
+  if (showRaster) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- dynamic admin-provided URL
       <img
-        src={url}
+        src={url!}
         alt=""
         width={size}
         height={size}
@@ -49,6 +56,7 @@ export function RewardUnitIconFromConfig({
         title={title}
         loading="lazy"
         decoding="async"
+        onError={() => setImgFailed(true)}
       />
     )
   }

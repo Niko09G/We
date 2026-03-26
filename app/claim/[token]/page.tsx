@@ -200,7 +200,12 @@ export default function ClaimBeatcoinPage({
           <div className="mt-8">
             {lookup ? (
               <p className="flex items-center justify-center gap-2 text-center text-3xl font-extrabold tabular-nums text-violet-300">
-                <RewardAmount showPlus amount={lookup.points} iconSize={28} />
+                <RewardAmount
+                  showPlus
+                  amount={lookup.points}
+                  iconSize={28}
+                  displayVariant="onDark"
+                />
               </p>
             ) : null}
 
@@ -284,7 +289,12 @@ export default function ClaimBeatcoinPage({
           <div className="mt-12 text-center">
             <p className="text-lg font-semibold text-emerald-400">Claimed!</p>
             <p className="mt-2 flex flex-wrap items-center justify-center gap-2 text-2xl font-bold text-white">
-              <RewardAmount showPlus amount={pointsAwarded ?? 0} iconSize={28} />
+              <RewardAmount
+                showPlus
+                amount={pointsAwarded ?? 0}
+                iconSize={28}
+                displayVariant="onDark"
+              />
               <span className="text-lg font-semibold">added</span>
             </p>
             <p className="mt-2 text-sm text-zinc-400">

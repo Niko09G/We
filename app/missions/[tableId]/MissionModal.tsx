@@ -795,7 +795,7 @@ export function MissionModal({
         return (
           <div className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-200/80 bg-emerald-50 px-4 py-3 text-center text-[0.92rem] font-medium text-emerald-800">
             <span>✓ Mission completed (+{missionRewardDisplay})</span>
-            <RewardUnitIcon size={COIN_SIZE} />
+            <RewardUnitIcon size={COIN_SIZE} displayVariant="default" />
           </div>
         )
       }
@@ -808,7 +808,7 @@ export function MissionModal({
           className={MISSION_PRIMARY_CTA_CLASS}
         >
           {rewardFlightActive ? 'Claiming…' : `Claim +${missionRewardDisplay}`}
-          <RewardUnitIcon size={COIN_SIZE} />
+          <RewardUnitIcon size={COIN_SIZE} displayVariant="onDark" />
         </button>
       )
     }
@@ -956,7 +956,7 @@ export function MissionModal({
                           className={`inline-flex items-center gap-1 leading-none ${hudGradientStatsClass}`}
                           data-mission-overlay-coin-count
                         >
-                          <RewardUnitIcon size={COIN_SIZE} />
+                          <RewardUnitIcon size={COIN_SIZE} displayVariant="onDark" />
                           <span ref={missionOverlayCoinCountValueRef}>{displayedTeamPoints}</span>
                         </span>
                         {!completed ? (
@@ -966,7 +966,7 @@ export function MissionModal({
                             className={`inline-flex items-center gap-0.5 tabular-nums leading-none text-emerald-400/85 ${hudGradientStatsClass}`}
                           >
                             <span data-mission-overlay-reward-amount>(+{missionRewardDisplay})</span>
-                            <RewardUnitIcon size={COIN_SIZE} />
+                            <RewardUnitIcon size={COIN_SIZE} displayVariant="onDark" />
                           </span>
                         ) : null}
                       </div>
@@ -1000,7 +1000,7 @@ export function MissionModal({
                       data-mission-overlay-announcement
                     >
                       <span>✓ Mission completed (+{missionRewardDisplay})</span>
-                      <RewardUnitIcon size={COIN_SIZE} />
+                      <RewardUnitIcon size={COIN_SIZE} displayVariant="default" />
                     </div>
                   ) : isPendingState ? (
                     <div
@@ -1011,7 +1011,11 @@ export function MissionModal({
                         <span className="truncate">
                           Pending review (+{missionRewardDisplay})
                         </span>
-                        <RewardUnitIcon size={COIN_SIZE} className="shrink-0" />
+                        <RewardUnitIcon
+                          size={COIN_SIZE}
+                          className="shrink-0"
+                          displayVariant="default"
+                        />
                       </span>
                       <span
                         className={`text-right text-[0.78rem] font-medium tracking-tight sm:text-[0.82rem] opacity-90 ${MISSION_PENDING_TEXT_CLASS}`}
@@ -1030,7 +1034,11 @@ export function MissionModal({
                       >
                         <span className="inline-flex min-w-0 items-center gap-1 font-semibold">
                           <span className="truncate">Grants +{missionRewardDisplay}</span>
-                          <RewardUnitIcon size={COIN_SIZE} className="shrink-0" />
+                          <RewardUnitIcon
+                            size={COIN_SIZE}
+                            className="shrink-0"
+                            displayVariant="default"
+                          />
                         </span>
                         <span
                           className="text-right text-[0.78rem] font-semibold tracking-tight opacity-95 sm:text-[0.82rem]"
@@ -1106,7 +1114,7 @@ export function MissionModal({
                             {rewardFlightActive
                               ? 'Claiming…'
                               : `Claim +${missionRewardDisplay}`}
-                            <RewardUnitIcon size={COIN_SIZE} />
+                            <RewardUnitIcon size={COIN_SIZE} displayVariant="onDark" />
                           </button>
                           <button
                             type="button"

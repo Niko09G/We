@@ -71,7 +71,7 @@ export function TableTeamHero({
               {rewardUnitCompactLabel(rewardUnit)}
             </p>
             <p className="mt-1 flex items-center gap-2 text-2xl font-bold tabular-nums text-white">
-              <RewardUnitIcon size={26} />
+              <RewardUnitIcon size={26} displayVariant="onDark" />
               {Number.isFinite(points) ? points : 0}
             </p>
           </div>

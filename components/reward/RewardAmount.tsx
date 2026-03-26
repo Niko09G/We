@@ -9,6 +9,8 @@ type Props = {
   showPlus?: boolean
   className?: string
   iconSize?: number
+  /** Light icon on dark backgrounds; default on light backgrounds. */
+  displayVariant?: 'default' | 'onDark'
 }
 
 /** Numeric amount + reward icon (game economy display). */
@@ -17,6 +19,7 @@ export function RewardAmount({
   showPlus = false,
   className = '',
   iconSize = 18,
+  displayVariant = 'default',
 }: Props) {
   const n = safeRewardPoints(amount)
   const text =
@@ -24,7 +27,7 @@ export function RewardAmount({
   return (
     <span className={`inline-flex items-center gap-1 tabular-nums ${className}`}>
       <span>{text}</span>
-      <RewardUnitIcon size={iconSize} />
+      <RewardUnitIcon size={iconSize} displayVariant={displayVariant} />
     </span>
   )
 }

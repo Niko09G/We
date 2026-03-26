@@ -422,6 +422,7 @@ export default function MissionDetailPage({
                       amount={guestMissionDisplayReward(mission)}
                       iconSize={16}
                       className="text-white"
+                      displayVariant="onDark"
                     />
                   </div>
                   <div className="mt-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-white/80">

@@ -288,7 +288,7 @@ export default function DisplayPage() {
                 <th className="pb-3 pr-2">Table</th>
                 <th className="pb-3 pr-2">
                   <span className="inline-flex items-center gap-1">
-                    <RewardUnitIcon size={12} />
+                    <RewardUnitIcon size={12} displayVariant="onDark" />
                     <span>{rewardUnitCompactLabel(rewardUnit)}</span>
                   </span>
                 </th>
@@ -338,7 +338,7 @@ export default function DisplayPage() {
                     </td>
                     <td className={`py-3 pr-2 ${pointsCellClass(rank)}`}>
                       <span className="inline-flex items-center gap-1">
-                        <RewardUnitIcon size={14} />
+                        <RewardUnitIcon size={14} displayVariant="onDark" />
                         <span className="tabular-nums">{entry.totalPoints}</span>
                         {anim?.delta != null && anim.delta > 0 && (
                           <span
@@ -388,7 +388,7 @@ export default function DisplayPage() {
                   </span>
                   <span className="inline-flex shrink-0 items-center gap-0.5 tabular-nums font-semibold text-amber-200/90">
                     +{item.points}
-                    <RewardUnitIcon size={11} />
+                    <RewardUnitIcon size={11} displayVariant="onDark" />
                   </span>
                 </div>
                 <p className="mt-0.5 truncate text-zinc-500">{item.missionTitle}</p>
