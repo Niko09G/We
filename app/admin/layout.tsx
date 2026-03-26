@@ -9,9 +9,9 @@ const inter = Inter({
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
-    <div className={`${inter.className} min-h-screen bg-zinc-50 dark:bg-zinc-950`}>
+    <div className={`${inter.className} min-h-screen bg-[#fafafa]`}>
       <AdminSidebar />
-      <div className="md:pl-64">
+      <div className="md:pl-[14.5rem]">
         <main>{children}</main>
       </div>
     </div>

@@ -191,14 +191,11 @@ export default function AdminSidebar() {
   return (
     <>
       {/* Desktop: fixed sidebar */}
-      <aside className="hidden md:block fixed left-0 top-0 h-screen w-64 border-r border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/90 backdrop-blur">
+      <aside className="hidden md:block fixed left-0 top-0 h-screen w-[14.5rem] border-r border-zinc-200 bg-[#fafafa]">
         <div className="flex h-full flex-col">
-          <div className="px-4 py-4">
-            <div className="admin-helper-text text-zinc-900 dark:text-zinc-100">
-              Admin
-            </div>
-            <div className="mt-1 admin-helper-text">
-              Manage the event
+          <div className="border-b border-zinc-200/80 px-4 py-4">
+            <div className="text-[18px] font-semibold tracking-[-0.01em] text-[#000]">
+              Nikobea App
             </div>
           </div>
 
@@ -217,8 +214,8 @@ export default function AdminSidebar() {
                           href={item.href}
                           className={`group flex items-center justify-between rounded-xl px-3 py-2.5 admin-btn-text-small transition-colors ${
                             isActive
-                              ? 'bg-zinc-900 text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-900'
-                              : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200'
+                              ? 'bg-[#ebebeb] text-zinc-900'
+                              : 'text-zinc-500 hover:bg-[#f3f3f3] hover:text-zinc-800'
                           }`}
                         >
                           <span className="inline-flex items-center gap-2.5">
@@ -243,19 +240,16 @@ export default function AdminSidebar() {
 
       {/* Mobile: top bar + slide-down nav */}
       <div className="md:hidden">
-        <header className="flex items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/90 px-4 py-3">
+        <header className="flex items-center justify-between gap-3 border-b border-zinc-200 bg-[#fafafa] px-4 py-3">
           <div className="min-w-0">
-            <div className="truncate admin-helper-text text-zinc-900 dark:text-zinc-100">
-              Admin
-            </div>
-            <div className="truncate admin-helper-text">
-              {NAV_ITEMS.find((n) => n.key === activeKey)?.label}
+            <div className="truncate text-[18px] font-semibold tracking-[-0.01em] text-[#000]">
+              Nikobea App
             </div>
           </div>
           <button
             type="button"
             onClick={() => setMobileOpen((v) => !v)}
-            className="rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 admin-btn-text-small text-zinc-700 dark:text-zinc-200"
+            className="rounded-lg border border-zinc-200 px-3 py-1.5 admin-btn-text-small text-zinc-700"
             aria-expanded={mobileOpen}
           >
             {mobileOpen ? 'Close' : 'Menu'}
@@ -263,7 +257,7 @@ export default function AdminSidebar() {
         </header>
 
         {mobileOpen && (
-          <nav className="border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+          <nav className="border-b border-zinc-200 bg-[#fafafa]">
             <div className="space-y-3 p-2">
               {(['event', 'scoring', 'system'] as const).map((sectionKey) => (
                 <div key={sectionKey}>
@@ -280,8 +274,8 @@ export default function AdminSidebar() {
                             onClick={() => setMobileOpen(false)}
                             className={`group flex items-center justify-between rounded-xl px-3 py-2.5 admin-btn-text-small ${
                               isActive
-                                ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-                                : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'
+                                ? 'bg-[#ebebeb] text-zinc-900'
+                                : 'text-zinc-600 hover:bg-[#f3f3f3]'
                             }`}
                           >
                             <span className="inline-flex items-center gap-2.5">
