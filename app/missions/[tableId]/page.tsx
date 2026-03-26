@@ -152,6 +152,9 @@ export default function MissionsTablePage({
   const [missionFeedItems, setMissionFeedItems] = useState<GuestMissionFeedItem[]>([])
   const [missionFeedLoading, setMissionFeedLoading] = useState(false)
   const [guestEmblems, setGuestEmblems] = useState<GuestEmblemsSettingsValue>({})
+  const [leaderboardThemeByTableId, setLeaderboardThemeByTableId] = useState<
+    Map<string, { top: string; bottom: string }>
+  >(new Map())
   const [momentumFeed, setMomentumFeed] = useState<MomentumEntry[]>([])
   const [momentumEnterIds, setMomentumEnterIds] = useState<Set<string>>(new Set())
   const prevLeaderboardRef = useRef<LeaderboardEntry[] | null>(null)
@@ -376,11 +379,43 @@ export default function MissionsTablePage({
     }
   }, [missionsEnabled, feedMissionIds])
 
+  const refreshLeaderboardThemes = useCallback(async (rows: LeaderboardEntry[]) => {
+    const ids = Array.from(new Set(rows.map((r) => r.tableId))).filter(Boolean)
+    if (ids.length === 0) {
+      setLeaderboardThemeByTableId(new Map())
+      return
+    }
+    const { data, error } = await supabase
+      .from('tables')
+      .select('id,name,color,page_config')
+      .in('id', ids)
+    if (error) return
+
+    const next = new Map<string, { top: string; bottom: string }>()
+    for (const row of (data ?? []) as Array<{
+      id: string
+      name?: string | null
+      color?: string | null
+      page_config?: unknown
+    }>) {
+      const resolved = resolveTeamPageConfig(row.page_config ?? null, {
+        tableColor: row.color ?? null,
+        tableName: row.name ?? '',
+      })
+      next.set(row.id, {
+        top: resolved.theme.leaderboardGradient.colorTop,
+        bottom: resolved.theme.leaderboardGradient.colorBottom,
+      })
+    }
+    setLeaderboardThemeByTableId(next)
+  }, [])
+
   const refreshTableData = useCallback(() => {
     void (async () => {
       try {
         const lb = await fetchLeaderboard()
         setLeaderboardRows(lb)
+        void refreshLeaderboardThemes(lb)
         pushMomentum(buildMomentumEntries(lb))
       } catch {
         /* keep previous leaderboard */
@@ -450,7 +485,13 @@ export default function MissionsTablePage({
       setRejectedSubmissionByMissionId(rejectedMap)
       void loadMissionFeed()
     })()
-  }, [tableId, loadMissionFeed, pushMomentum, buildMomentumEntries])
+  }, [
+    tableId,
+    loadMissionFeed,
+    pushMomentum,
+    buildMomentumEntries,
+    refreshLeaderboardThemes,
+  ])
 
   useEffect(() => {
     if (loading) return
@@ -558,7 +599,10 @@ export default function MissionsTablePage({
 
         try {
           const lb = await fetchLeaderboard()
-          if (!cancelled) setLeaderboardRows(lb)
+          if (!cancelled) {
+            setLeaderboardRows(lb)
+            void refreshLeaderboardThemes(lb)
+          }
         } catch {
           if (!cancelled) setLeaderboardRows([])
         }
@@ -1109,6 +1153,7 @@ export default function MissionsTablePage({
               items={missionFeedItems}
               loading={missionFeedLoading}
               sectionTitleColor={teamPage.typography.textColorPrimary}
+              ctaColor={teamPage.theme.primaryColor}
             />
           ) : null}
         </section>
@@ -1188,7 +1233,7 @@ export default function MissionsTablePage({
                   style={deltaAccentStyle}
                 >
                   <span>{leaderboardMotivation.delta}</span>
-                  <RewardUnitIcon size={14} />
+                  <RewardUnitIcon size={COIN_SIZE} className="align-middle" />
                 </span>
                 <span>coins to reach</span>
                 <span className="inline-flex items-center gap-1 font-semibold">
@@ -1214,7 +1259,7 @@ export default function MissionsTablePage({
                   style={deltaAccentStyle}
                 >
                   <span>{leaderboardMotivation.delta}</span>
-                  <RewardUnitIcon size={14} />
+                  <RewardUnitIcon size={COIN_SIZE} className="align-middle" />
                 </span>
                 <span>coins to overtake</span>
                 <span className="inline-flex items-center gap-1 font-semibold">
@@ -1240,7 +1285,7 @@ export default function MissionsTablePage({
                   style={deltaAccentStyle}
                 >
                   <span>{leaderboardMotivation.delta}</span>
-                  <RewardUnitIcon size={14} />
+                  <RewardUnitIcon size={COIN_SIZE} className="align-middle" />
                 </span>
                 <span>coins — increase the gap!</span>
                 {leaderboardMotivation.targetRankEmblemUrl ? (
@@ -1268,7 +1313,19 @@ export default function MissionsTablePage({
                       key={row.tableId}
                       className="flex items-center justify-between gap-3 rounded-md px-3 py-3 text-sm"
                       style={{
-                        background: leaderboardRowFill(row.tableColor, teamPage),
+                        background: leaderboardRowFill(row.tableColor, {
+                          ...teamPage,
+                          theme: {
+                            ...teamPage.theme,
+                            leaderboardGradient: leaderboardThemeByTableId.get(row.tableId)
+                              ? {
+                                  colorTop: leaderboardThemeByTableId.get(row.tableId)!.top,
+                                  colorBottom:
+                                    leaderboardThemeByTableId.get(row.tableId)!.bottom,
+                                }
+                              : teamPage.theme.leaderboardGradient,
+                          },
+                        }),
                         ...(isYou
                           ? {
                               boxShadow:

@@ -462,11 +462,14 @@ export function MissionSocialFeedSection({
   items,
   loading = false,
   sectionTitleColor,
+  ctaColor,
 }: {
   items: GuestMissionFeedItem[]
   loading?: boolean
   /** Team page typography — section title only (missions area unchanged). */
   sectionTitleColor?: string
+  /** Team primary CTA color from table page theme config. */
+  ctaColor?: string
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -598,7 +601,8 @@ export function MissionSocialFeedSection({
       <div className="mt-4 flex w-full justify-center">
         <Link
           href="/greetings"
-          className="inline-flex w-[min(300px,78vw)] items-center justify-center rounded-xl bg-[#6335fb] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-105 active:scale-[0.98]"
+          className="inline-flex w-[min(300px,78vw)] items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-105 active:scale-[0.98]"
+          style={{ backgroundColor: ctaColor?.trim() || '#6335fb' }}
         >
           View all
         </Link>
