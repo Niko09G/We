@@ -233,7 +233,7 @@ export default function TablesAdminPage() {
   const [rows, setRows] = useState<AdminTableRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const [successToast, setSuccessToast] = useState<string | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [mode, setMode] = useState<EditorMode>('create')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -250,6 +250,12 @@ export default function TablesAdminPage() {
   const [heroUploading, setHeroUploading] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement | null>(null)
   const heroInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (!successToast) return
+    const t = window.setTimeout(() => setSuccessToast(null), 2200)
+    return () => window.clearTimeout(t)
+  }, [successToast])
 
   const activeRows = useMemo(() => rows.filter((r) => !r.is_archived), [rows])
   const archivedRows = useMemo(() => rows.filter((r) => r.is_archived), [rows])
@@ -370,7 +376,7 @@ export default function TablesAdminPage() {
     }
     setSaving(true)
     setError(null)
-    setSuccess(null)
+    setSuccessToast(null)
     try {
       const pageConfig = pageConfigJsonFromAdminForm({
         ...formTheme,
@@ -389,7 +395,7 @@ export default function TablesAdminPage() {
           await updateTable(created.id, { page_config: pageConfig })
         }
         setRows(await listTablesForAdmin())
-        setSuccess('Table created.')
+        setSuccessToast('Table created.')
       } else if (editingId) {
         await updateTable(editingId, {
           name,
@@ -399,7 +405,7 @@ export default function TablesAdminPage() {
           page_config: pageConfig,
         })
         await load()
-        setSuccess('Table updated.')
+        setSuccessToast('Table updated.')
       }
       setEditorOpen(false)
     } catch (e) {
@@ -444,7 +450,7 @@ export default function TablesAdminPage() {
 
   return (
     <div className="admin-page-shell">
-      <header className="flex items-start justify-between gap-3">
+      <header className="flex items-center justify-between gap-3">
         <div>
           <h1 className="admin-page-title text-zinc-900">Tables</h1>
           <p className="admin-gap-page-title-intro admin-intro">
@@ -465,12 +471,6 @@ export default function TablesAdminPage() {
           {error}
         </p>
       ) : null}
-      {success ? (
-        <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          {success}
-        </p>
-      ) : null}
-
       <section className="admin-gap-intro-first-section">
         {loading ? (
           <p className="text-sm text-zinc-500">Loading tables...</p>
@@ -641,7 +641,7 @@ export default function TablesAdminPage() {
             </div>
 
             <div className="overflow-y-auto px-5 py-4">
-              <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
+              <div className="grid gap-5 lg:grid-cols-[1fr_280px_280px]">
                 <div className="space-y-4">
                   <label className="block">
                     <span className="text-xs font-medium text-zinc-600">Table name</span>
@@ -672,26 +672,6 @@ export default function TablesAdminPage() {
                         className="mt-1.5 h-9 w-28 rounded-xl border border-zinc-300 px-3 text-sm"
                       />
                     </label>
-                    <label className="mb-1 inline-flex items-center gap-2 rounded-full border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700">
-                      <span
-                        className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
-                          formActive ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]' : 'bg-zinc-300'
-                        }`}
-                      >
-                        <span
-                          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                            formActive ? 'translate-x-4.5' : 'translate-x-0.5'
-                          }`}
-                        />
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={formActive}
-                        onChange={(e) => setFormActive(e.target.checked)}
-                        className="sr-only"
-                      />
-                      Make active
-                    </label>
                   </div>
 
                   <div>
@@ -720,7 +700,9 @@ export default function TablesAdminPage() {
                               background: `linear-gradient(to right, ${preset.tableGradTop}, ${preset.tableGradBottom})`,
                             }}
                           >
-                            <div className="text-[11px] font-semibold">{preset.name}</div>
+                            <div className="aspect-square">
+                              <div className="text-[11px] font-semibold">{preset.name}</div>
+                            </div>
                             <span className="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/90">
                               {selected ? (
                                 <span className="inline-flex h-3 w-3 items-center justify-center rounded-full bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white">
@@ -845,10 +827,11 @@ export default function TablesAdminPage() {
                       </span>
                     </div>
                   </div>
-                  <div>
-                    <div className="mb-1 text-xs font-medium text-zinc-700">Preview</div>
-                    <PreviewPhone form={formTheme} name={formName || 'New table'} />
-                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-1 text-xs font-medium text-zinc-700">Preview</div>
+                  <PreviewPhone form={formTheme} name={formName || 'New table'} />
                 </div>
               </div>
             </div>
@@ -866,6 +849,26 @@ export default function TablesAdminPage() {
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
+                <label className="inline-flex items-center gap-2 rounded-full border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700">
+                  <span
+                    className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
+                      formActive ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]' : 'bg-zinc-300'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                        formActive ? 'translate-x-4.5' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={formActive}
+                    onChange={(e) => setFormActive(e.target.checked)}
+                    className="sr-only"
+                  />
+                  Mark active
+                </label>
                 <button
                   type="button"
                   onClick={() => setEditorOpen(false)}
@@ -883,6 +886,26 @@ export default function TablesAdminPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {successToast ? (
+        <div className="pointer-events-none fixed right-6 top-6 z-[70]">
+          <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-700 shadow-sm animate-[fadeIn_180ms_ease-out]">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden
+            >
+              <path d="m5 12 5 5L20 7" />
+            </svg>
+            <span>{successToast}</span>
           </div>
         </div>
       ) : null}
