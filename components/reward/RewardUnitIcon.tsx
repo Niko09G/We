@@ -6,6 +6,14 @@ import { rewardUnitMainIconUrl, type RewardUnitConfig } from '@/lib/reward-unit'
 
 type DisplayVariant = 'default' | 'onDark'
 
+function stripImageFilterUtilities(className: string): string {
+  if (!className.trim()) return ''
+  return className
+    .split(/\s+/)
+    .filter((token) => token !== 'brightness-0' && token !== 'invert')
+    .join(' ')
+}
+
 /** Vector fallback — explicit fills so parent `color` / transparency cannot hide the coin. */
 function RewardUnitVectorFallback({
   size,
@@ -69,6 +77,7 @@ export function RewardUnitIconFromConfig({
 
   const onDark = displayVariant === 'onDark'
   const imgTone = onDark ? 'brightness-0 invert' : ''
+  const safeClassName = stripImageFilterUtilities(className)
   const showRaster = Boolean(url && !imgFailed)
 
   if (showRaster) {
@@ -79,7 +88,7 @@ export function RewardUnitIconFromConfig({
         alt=""
         width={size}
         height={size}
-        className={`inline-block shrink-0 object-contain align-middle ${imgTone} ${className}`.trim()}
+        className={`inline-block shrink-0 object-contain align-middle ${imgTone} ${safeClassName}`.trim()}
         title={title}
         loading="lazy"
         decoding="async"
@@ -94,7 +103,7 @@ export function RewardUnitIconFromConfig({
 
   return (
     <span
-      className={`inline-flex shrink-0 items-center justify-center align-middle leading-none ${className}`.trim()}
+      className={`inline-flex shrink-0 items-center justify-center align-middle leading-none ${safeClassName}`.trim()}
       style={{
         lineHeight: 1,
         minWidth: size,
