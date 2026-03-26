@@ -624,6 +624,19 @@ export default function MissionsTablePage({
     }
   }, [completedMissionIds, pendingMissionIds, submissionSlotsUsedByMission])
 
+  const orderedMissions = useMemo(() => {
+    const withMeta = missions.map((mission, index) => {
+      const status = statusFor(mission.id, mission)
+      const priority = status === 'completed' ? 2 : status === 'pending' ? 1 : 0
+      return { mission, index, priority }
+    })
+    withMeta.sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority
+      return a.index - b.index
+    })
+    return withMeta.map((entry) => entry.mission)
+  }, [missions, statusFor])
+
   const missionSectionProgress = useMemo(() => {
     if (missions.length === 0) return null
     const done = missions.filter((m) => {
@@ -783,12 +796,12 @@ export default function MissionsTablePage({
               ref={carouselRef}
               className="mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain pb-3 pl-5 pr-6 [scroll-padding-left:1.25rem] [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
             >
-              {missions.map((m, i) => {
+              {orderedMissions.map((m, i) => {
                 const st = statusFor(m.id, m)
                 const completed = st === 'completed'
                 const pending = st === 'pending'
                 const limitReached = st === 'limit_reached'
-                const surface = guestMissionSurfaceGradient(m, missions, i)
+                const surface = guestMissionSurfaceGradient(m, orderedMissions, i)
                 const rewardAmount = guestMissionDisplayReward(m)
                 const typeIcon = m.validation_type === 'video'
                   ? '🎥'
@@ -1085,13 +1098,13 @@ export default function MissionsTablePage({
 
         {selectedMissionId
           ? (() => {
-              const m = missions.find((x) => x.id === selectedMissionId)
+              const m = orderedMissions.find((x) => x.id === selectedMissionId)
               if (!m) return null
-              const selectedIdx = missions.findIndex((x) => x.id === selectedMissionId)
-              const hasNav = missions.length > 1 && selectedIdx >= 0
+              const selectedIdx = orderedMissions.findIndex((x) => x.id === selectedMissionId)
+              const hasNav = orderedMissions.length > 1 && selectedIdx >= 0
               const missionGradient = guestMissionSurfaceGradient(
                 m,
-                missions,
+                orderedMissions,
                 selectedIdx >= 0 ? selectedIdx : 0
               )
               const nextRankTarget =
@@ -1175,8 +1188,9 @@ export default function MissionsTablePage({
                     missionOverlayVariant === 'hero-greeting' && hasNav
                       ? () =>
                           setSelectedMissionId(
-                            missions[
-                              (selectedIdx - 1 + missions.length) % missions.length
+                            orderedMissions[
+                              (selectedIdx - 1 + orderedMissions.length) %
+                                orderedMissions.length
                             ]!.id
                           )
                       : undefined
@@ -1185,7 +1199,7 @@ export default function MissionsTablePage({
                     missionOverlayVariant === 'hero-greeting' && hasNav
                       ? () =>
                           setSelectedMissionId(
-                            missions[(selectedIdx + 1) % missions.length]!.id
+                            orderedMissions[(selectedIdx + 1) % orderedMissions.length]!.id
                           )
                       : undefined
                   }
