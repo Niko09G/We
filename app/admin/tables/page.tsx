@@ -650,24 +650,15 @@ export default function TablesAdminPage() {
                 <div className="space-y-4 lg:col-span-2">
                   <div className="grid gap-4 lg:grid-cols-2">
                     <div className="space-y-4">
-                  <label className="block">
-                    <span className="text-xs font-medium text-zinc-600">Table name</span>
-                    <input
-                      value={formName}
-                      onChange={(e) => setFormName(e.target.value)}
-                      className="mt-1.5 h-9 w-full rounded-xl border border-zinc-300 px-3 !text-[14px]"
-                      placeholder="e.g. Kaypoh Aunties"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-xs font-medium text-zinc-600">Description</span>
-                    <textarea
-                      rows={3}
-                      value={formTheme.teamText}
-                      onChange={(e) => setFormTheme((p) => ({ ...p, teamText: e.target.value }))}
-                        className="mt-1.5 h-[142px] w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 !text-[14px]"
-                    />
-                  </label>
+                      <label className="block">
+                        <span className="text-xs font-medium text-zinc-600">Table name</span>
+                        <input
+                          value={formName}
+                          onChange={(e) => setFormName(e.target.value)}
+                          className="mt-1.5 h-9 w-full rounded-xl border border-zinc-300 px-3 !text-[14px]"
+                          placeholder="e.g. Kaypoh Aunties"
+                        />
+                      </label>
                       <label className="block">
                         <span className="mb-2.5 block text-xs font-medium text-zinc-600">Seat capacity</span>
                         <input
@@ -681,6 +672,15 @@ export default function TablesAdminPage() {
                     </div>
 
                     <div className="space-y-3">
+                      <label className="block">
+                        <span className="text-xs font-medium text-zinc-600">Description</span>
+                        <textarea
+                          rows={3}
+                          value={formTheme.teamText}
+                          onChange={(e) => setFormTheme((p) => ({ ...p, teamText: e.target.value }))}
+                          className="mt-1.5 h-[100px] w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 !text-[14px]"
+                        />
+                      </label>
                       <div className="text-xs font-medium text-zinc-600">Team identity</div>
                       <input
                         ref={avatarInputRef}
@@ -704,42 +704,44 @@ export default function TablesAdminPage() {
                           if (file) void uploadHero(file)
                         }}
                       />
-                      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
-                        <div className="text-xs font-medium text-zinc-700">Avatar upload</div>
-                        <div className="mt-2 flex min-h-[52px] items-center justify-between gap-2">
-                          <button
-                            type="button"
-                            onClick={() => avatarInputRef.current?.click()}
-                            disabled={avatarUploading}
-                            className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700"
-                          >
-                            {avatarUploading ? 'Uploading...' : 'Upload avatar'}
-                          </button>
-                          <span className="h-12 w-12 overflow-hidden rounded-full border border-zinc-300 bg-white">
-                            {formTheme.avatarImageUrl.trim() ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={formTheme.avatarImageUrl.trim()} alt="" className="h-full w-full object-cover" />
-                            ) : null}
-                          </span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+                          <div className="text-xs font-medium text-zinc-700">Avatar upload</div>
+                          <div className="mt-2 flex min-h-[52px] items-center justify-between gap-2">
+                            <button
+                              type="button"
+                              onClick={() => avatarInputRef.current?.click()}
+                              disabled={avatarUploading}
+                              className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700"
+                            >
+                              {avatarUploading ? 'Uploading...' : 'Upload avatar'}
+                            </button>
+                            <span className="h-12 w-12 overflow-hidden rounded-full border border-zinc-300 bg-white">
+                              {formTheme.avatarImageUrl.trim() ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={formTheme.avatarImageUrl.trim()} alt="" className="h-full w-full object-cover" />
+                              ) : null}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
-                        <div className="text-xs font-medium text-zinc-700">Hero image upload</div>
-                        <div className="mt-2 flex min-h-[52px] items-center justify-between gap-2">
-                          <button
-                            type="button"
-                            disabled={heroUploading}
-                            onClick={() => heroInputRef.current?.click()}
-                            className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700"
-                          >
-                            {heroUploading ? 'Uploading...' : 'Upload hero'}
-                          </button>
-                          <span className="h-10 w-16 overflow-hidden rounded-md border border-zinc-300 bg-white">
-                            {formTheme.heroImageUrl.trim() ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={formTheme.heroImageUrl.trim()} alt="" className="h-full w-full object-cover" />
-                            ) : null}
-                          </span>
+                        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+                          <div className="text-xs font-medium text-zinc-700">Hero image upload</div>
+                          <div className="mt-2 flex min-h-[52px] items-center justify-between gap-2">
+                            <button
+                              type="button"
+                              disabled={heroUploading}
+                              onClick={() => heroInputRef.current?.click()}
+                              className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700"
+                            >
+                              {heroUploading ? 'Uploading...' : 'Upload hero'}
+                            </button>
+                            <span className="h-10 w-16 overflow-hidden rounded-md border border-zinc-300 bg-white">
+                              {formTheme.heroImageUrl.trim() ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={formTheme.heroImageUrl.trim()} alt="" className="h-full w-full object-cover" />
+                              ) : null}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
