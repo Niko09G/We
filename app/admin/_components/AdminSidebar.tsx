@@ -89,10 +89,10 @@ export default function AdminSidebar() {
       <aside className="hidden md:block fixed left-0 top-0 h-screen w-64 border-r border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/90 backdrop-blur">
         <div className="flex h-full flex-col">
           <div className="px-4 py-4">
-            <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            <div className="admin-helper-text text-zinc-900 dark:text-zinc-100">
               Admin
             </div>
-            <div className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+            <div className="mt-1 admin-helper-text">
               Manage the event
             </div>
           </div>
@@ -105,7 +105,7 @@ export default function AdminSidebar() {
                   <li key={item.href}>
                     <Link
                       href={item.href}
-                      className={`group flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium ${
+                      className={`group flex items-center justify-between rounded-lg px-3 py-2 admin-btn-text-small ${
                         isActive
                           ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
                           : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'
@@ -113,7 +113,7 @@ export default function AdminSidebar() {
                     >
                       <span>{item.label}</span>
                       {item.key === 'submissions' && pendingCount !== null && pendingCount > 0 && (
-                        <span className="ml-2 inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200 border border-amber-500/25">
+                        <span className="ml-2 inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 admin-helper-text text-amber-700 dark:text-amber-200 border border-amber-500/25">
                           {pendingCount}
                         </span>
                       )}
@@ -130,17 +130,17 @@ export default function AdminSidebar() {
       <div className="md:hidden">
         <header className="flex items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/90 px-4 py-3">
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            <div className="truncate admin-helper-text text-zinc-900 dark:text-zinc-100">
               Admin
             </div>
-            <div className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+            <div className="truncate admin-helper-text">
               {NAV_ITEMS.find((n) => n.key === activeKey)?.label}
             </div>
           </div>
           <button
             type="button"
             onClick={() => setMobileOpen((v) => !v)}
-            className="rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-200"
+            className="rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 admin-btn-text-small text-zinc-700 dark:text-zinc-200"
             aria-expanded={mobileOpen}
           >
             {mobileOpen ? 'Close' : 'Menu'}
@@ -157,7 +157,7 @@ export default function AdminSidebar() {
                     <Link
                       href={item.href}
                       onClick={() => setMobileOpen(false)}
-                      className={`group flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium ${
+                      className={`group flex items-center justify-between rounded-lg px-3 py-2 admin-btn-text-small ${
                         isActive
                           ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
                           : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'
@@ -165,7 +165,7 @@ export default function AdminSidebar() {
                     >
                       <span>{item.label}</span>
                       {item.key === 'submissions' && pendingCount !== null && pendingCount > 0 && (
-                        <span className="ml-2 inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200 border border-amber-500/25">
+                        <span className="ml-2 inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 admin-helper-text text-amber-700 dark:text-amber-200 border border-amber-500/25">
                           {pendingCount}
                         </span>
                       )}

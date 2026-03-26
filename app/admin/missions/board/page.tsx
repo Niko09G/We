@@ -117,10 +117,10 @@ export default function MissionBoardPage() {
           >
             ← Mission library
           </Link>
-          <h1 className="mt-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+          <h1 className="mt-2 admin-page-title text-zinc-900 dark:text-zinc-100">
             Table mission board
           </h1>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="admin-gap-page-title-intro admin-intro">
             One column per table — add or remove missions quickly. Edit a mission’s details from the
             library.
           </p>

@@ -107,7 +107,7 @@ export function TeamPageConfigEditor({
       </div>
 
       <fieldset className="mt-4 space-y-3">
-        <legend className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Hero</legend>
+        <legend className="admin-card-title text-zinc-800 dark:text-zinc-200">Hero</legend>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <ColorField label="Gradient top" value={value.heroTop} onChange={(heroTop) => patch({ heroTop })} />
           <ColorField
@@ -122,7 +122,9 @@ export function TeamPageConfigEditor({
           />
         </div>
         <div>
-          <span className="mb-1 block text-[10px] font-medium text-zinc-500">Hero image</span>
+          <span className="mb-2 block admin-field-label text-zinc-500 dark:text-zinc-400">
+            Hero image
+          </span>
           <div className="rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 p-2">
             {value.heroImageUrl.trim() ? (
               <div className="mb-2">
@@ -196,14 +198,16 @@ export function TeamPageConfigEditor({
             {heroError ? (
               <p className="mt-2 text-xs font-medium text-rose-600">{heroError}</p>
             ) : (
-              <p className="mt-2 text-[11px] text-zinc-500">
-                Uploaded image URL is saved in <code>page_config.hero.heroImage.url</code>.
-              </p>
+                <p className="mt-2 admin-meta-text">
+                  Uploaded image URL is saved in <code>page_config.hero.heroImage.url</code>.
+                </p>
             )}
           </div>
         </div>
         <div>
-          <span className="mb-1 block text-[10px] font-medium text-zinc-500">Team text</span>
+          <span className="mb-2 block admin-field-label text-zinc-500 dark:text-zinc-400">
+            Team text
+          </span>
           <textarea
             value={value.teamText}
             onChange={(e) => patch({ teamText: e.target.value })}
@@ -214,7 +218,7 @@ export function TeamPageConfigEditor({
       </fieldset>
 
       <fieldset className="mt-5 space-y-3">
-        <legend className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Theme</legend>
+        <legend className="admin-card-title text-zinc-800 dark:text-zinc-200">Theme</legend>
         <div className="grid gap-3 sm:grid-cols-2">
           <ColorField
             label="Primary color"
@@ -223,7 +227,7 @@ export function TeamPageConfigEditor({
           />
           <ColorField label="Icon color" value={value.iconColor} onChange={(iconColor) => patch({ iconColor })} />
         </div>
-        <p className="text-[10px] font-medium text-zinc-500">Table gradient</p>
+        <p className="admin-helper-text text-zinc-500 dark:text-zinc-400">Table gradient</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <ColorField
             label="Table gradient top"
@@ -236,7 +240,7 @@ export function TeamPageConfigEditor({
             onChange={(tableGradBottom) => patch({ tableGradBottom })}
           />
         </div>
-        <p className="text-[10px] font-medium text-zinc-500">Leaderboard gradient</p>
+        <p className="admin-helper-text text-zinc-500 dark:text-zinc-400">Leaderboard gradient</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <ColorField
             label="Leaderboard gradient top"
@@ -252,7 +256,7 @@ export function TeamPageConfigEditor({
       </fieldset>
 
       <fieldset className="mt-5 space-y-3">
-        <legend className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Typography</legend>
+        <legend className="admin-card-title text-zinc-800 dark:text-zinc-200">Typography</legend>
         <div className="grid gap-3 sm:grid-cols-2">
           <ColorField
             label="Primary text color"

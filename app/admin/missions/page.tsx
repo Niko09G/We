@@ -76,8 +76,8 @@ export default function MissionsLibraryPage() {
       <div className="mx-auto w-full max-w-5xl space-y-6">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Missions</h1>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              <h1 className="admin-page-title text-zinc-900 dark:text-zinc-100">Missions</h1>
+              <p className="admin-gap-page-title-intro admin-intro">
               Catalog of mission templates. Open the builder to edit details, or jump to the board to
               assign tables.
             </p>

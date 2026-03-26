@@ -148,8 +148,8 @@ export default function AdminRecoveryPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Recovery</h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        <h1 className="admin-page-title text-zinc-900 dark:text-zinc-100">Recovery</h1>
+        <p className="admin-gap-page-title-intro admin-intro">
           Resets archive affected rows into reset batches. Restores replay archived rows.
         </p>
       </div>
@@ -166,8 +166,8 @@ export default function AdminRecoveryPage() {
       )}
 
       <section className="rounded border border-zinc-200 bg-white p-4 space-y-3 dark:border-zinc-800 dark:bg-zinc-900/40">
-        <h2 className="text-sm font-semibold">Reset controls</h2>
-        <p className="text-xs text-zinc-600 dark:text-zinc-400">
+        <h2 className="admin-section-title">Reset controls</h2>
+        <p className="admin-meta-text">
           Each reset archives affected submissions/completions/greetings/token claims into a batch.
           You can restore from history below.
         </p>

@@ -549,10 +549,10 @@ export default function AdminPage() {
       <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 px-4 py-6 md:px-6">
         <div className="mx-auto w-full max-w-5xl">
           <div className="mb-6">
-            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+            <h1 className="admin-page-title text-zinc-900 dark:text-zinc-100">
               Admin overview
             </h1>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="admin-gap-page-title-intro admin-intro">
               Manage the event from the sidebar.
             </p>
           </div>
@@ -564,10 +564,10 @@ export default function AdminPage() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  <div className="admin-card-title text-zinc-900 dark:text-zinc-100">
                     Missions
                   </div>
-                  <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  <div className="admin-meta-text">
                     {mmMissions.length} total
                   </div>
                 </div>
@@ -583,10 +583,10 @@ export default function AdminPage() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  <div className="admin-card-title text-zinc-900 dark:text-zinc-100">
                     Tables
                   </div>
-                  <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  <div className="admin-meta-text">
                     {ttTables.filter((t) => !t.is_archived).length} active
                     {ttTables.some((t) => t.is_archived)
                       ? ` · ${ttTables.filter((t) => t.is_archived).length} archived`

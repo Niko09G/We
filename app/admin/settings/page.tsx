@@ -208,8 +208,8 @@ export default function AdminSettingsPage() {
   return (
     <div className="p-6 space-y-6 max-w-lg">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Settings</h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        <h1 className="admin-page-title text-zinc-900 dark:text-zinc-100">Settings</h1>
+        <p className="admin-gap-page-title-intro admin-intro">
           Event-wide reward unit (currency) shown on guest missions, leaderboard, and displays.
         </p>
       </div>
@@ -226,8 +226,8 @@ export default function AdminSettingsPage() {
       )}
 
       <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Event currency</h2>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+        <h2 className="admin-section-title text-zinc-900 dark:text-zinc-100">Event currency</h2>
+        <p className="admin-meta-text">
           Static game UI uses the main icon. Support icons are reserved for reward animations.
           Upload PNG/WEBP files (same coin, different angles).
         </p>
@@ -236,16 +236,16 @@ export default function AdminSettingsPage() {
           <p className="mt-4 text-sm text-zinc-500">Loading…</p>
         ) : (
           <div className="mt-4 space-y-3">
-            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            <label className="block admin-field-label text-zinc-600 dark:text-zinc-400">
               Currency name
               <input
                 value={form.name}
                 onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
-                className="mt-1 w-full rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                className="mt-2 w-full rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
                 placeholder="e.g. BeatCoin"
               />
             </label>
-            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            <label className="block admin-field-label text-zinc-600 dark:text-zinc-400">
               Short label (optional)
               <input
                 value={form.short_label ?? ''}
@@ -255,13 +255,13 @@ export default function AdminSettingsPage() {
                     short_label: e.target.value.trim() || null,
                   }))
                 }
-                className="mt-1 w-full rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                className="mt-2 w-full rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
                 placeholder="e.g. BC — for tight tables"
               />
             </label>
             <div className="space-y-3">
               <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-                <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                <p className="admin-field-label text-zinc-700 dark:text-zinc-300">
                   Main icon (static UI)
                 </p>
                 <div className="mt-2 flex items-center gap-3">
@@ -275,7 +275,7 @@ export default function AdminSettingsPage() {
                   ) : (
                     <RewardUnitIconFromConfig config={form} size={30} />
                   )}
-                  <label className="inline-flex cursor-pointer items-center rounded border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                  <label className="inline-flex cursor-pointer items-center rounded border border-zinc-300 px-3 py-1.5 admin-btn-text-small text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800">
                     {uploadingSlot === 'main' ? 'Uploading…' : 'Upload main icon'}
                     <input
                       type="file"
