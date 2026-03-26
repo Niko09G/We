@@ -233,6 +233,7 @@ export default function TablesAdminPage() {
   const [error, setError] = useState<string | null>(null)
   const [successToast, setSuccessToast] = useState<string | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
+  const [editorClosing, setEditorClosing] = useState(false)
   const [mode, setMode] = useState<EditorMode>('create')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -247,6 +248,25 @@ export default function TablesAdminPage() {
   const [heroUploading, setHeroUploading] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement | null>(null)
   const heroInputRef = useRef<HTMLInputElement | null>(null)
+  const overlayCloseTimerRef = useRef<number | null>(null)
+  const overlayTriggerRef = useRef<HTMLButtonElement | null>(null)
+
+  const closeOverlay = useCallback(() => {
+    if (!editorOpen || editorClosing) return
+    setEditorClosing(true)
+    if (overlayCloseTimerRef.current !== null) {
+      window.clearTimeout(overlayCloseTimerRef.current)
+    }
+    overlayCloseTimerRef.current = window.setTimeout(() => {
+      setEditorOpen(false)
+      setEditorClosing(false)
+      if (overlayTriggerRef.current) {
+        overlayTriggerRef.current.blur()
+        overlayTriggerRef.current = null
+      }
+      overlayCloseTimerRef.current = null
+    }, 200)
+  }, [editorOpen, editorClosing])
 
   useEffect(() => {
     if (!successToast) return
@@ -258,14 +278,22 @@ export default function TablesAdminPage() {
     if (!editorOpen) return
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setEditorOpen(false)
+        closeOverlay()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [editorOpen])
+  }, [editorOpen, closeOverlay])
+
+  useEffect(() => {
+    return () => {
+      if (overlayCloseTimerRef.current !== null) {
+        window.clearTimeout(overlayCloseTimerRef.current)
+      }
+    }
+  }, [])
 
   const activeRows = useMemo(() => rows.filter((r) => !r.is_archived), [rows])
   const archivedRows = useMemo(() => rows.filter((r) => r.is_archived), [rows])
@@ -316,11 +344,16 @@ export default function TablesAdminPage() {
       tableName: 'New Table',
     })
     setFormTheme({ ...d, avatarImageUrl: '' })
+    overlayTriggerRef.current = null
+    setEditorClosing(false)
     setEditorOpen(true)
     setError(null)
   }
 
-  function openEditEditor(row: AdminTableRow) {
+  function openEditEditor(
+    row: AdminTableRow,
+    triggerEl?: HTMLButtonElement | null
+  ) {
     setMode('edit')
     setEditingId(row.id)
     setFormName(row.name)
@@ -331,6 +364,8 @@ export default function TablesAdminPage() {
       tableName: row.name,
     })
     setFormTheme({ ...d, avatarImageUrl: d.avatarImageUrl ?? '' })
+    overlayTriggerRef.current = triggerEl ?? null
+    setEditorClosing(false)
     setEditorOpen(true)
     setError(null)
   }
@@ -498,8 +533,8 @@ export default function TablesAdminPage() {
                 <button
                   key={row.id}
                   type="button"
-                  onClick={() => openEditEditor(row)}
-                  className="group relative h-[290px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm"
+                  onClick={(e) => openEditEditor(row, e.currentTarget)}
+                  className="group relative h-[290px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 text-left outline-none transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/70 focus-visible:ring-offset-2"
                   style={{
                     background: `linear-gradient(to bottom, ${resolved.heroTop}, ${resolved.heroMiddle || resolved.heroBottom}, ${resolved.heroBottom})`,
                   }}
@@ -616,14 +651,22 @@ export default function TablesAdminPage() {
         </div>
       </section>
 
-      {editorOpen ? (
+      {editorOpen || editorClosing ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 p-4"
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-200 ease-out ${
+            editorClosing ? 'bg-zinc-900/0 opacity-0' : 'bg-zinc-900/30 opacity-100'
+          }`}
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setEditorOpen(false)
+            if (e.target === e.currentTarget) closeOverlay()
           }}
         >
-          <div className="flex max-h-[88vh] w-full max-w-[1004px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm animate-[fadeIn_180ms_ease-out]">
+          <div
+            className={`flex max-h-[88vh] w-full max-w-[1004px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm transition-all duration-200 ease-out ${
+              editorClosing
+                ? 'opacity-0 scale-[0.98] translate-y-2'
+                : 'opacity-100 scale-100 translate-y-0'
+            }`}
+          >
             <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3">
               <div>
                 <h3 className="text-lg font-semibold text-zinc-900">
@@ -632,7 +675,7 @@ export default function TablesAdminPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setEditorOpen(false)}
+                onClick={closeOverlay}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black text-white"
                 aria-label="Close editor"
               >
@@ -880,7 +923,7 @@ export default function TablesAdminPage() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setEditorOpen(false)}
+                  onClick={closeOverlay}
                   className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700"
                 >
                   Back
