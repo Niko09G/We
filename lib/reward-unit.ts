@@ -26,11 +26,19 @@ export const DEFAULT_REWARD_UNIT: RewardUnitConfig = {
   icon_alt_urls: [],
 }
 
-/** Shown when no icon URL is configured. */
+/** Legacy emoji fallback; UI uses an SVG coin so Montserrat-only stacks still show a mark. */
 export const REWARD_UNIT_FALLBACK_EMOJI = '🪙' as const
 
 function cleanUrl(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null
+  if (typeof value === 'string') {
+    const t = value.trim()
+    return t || null
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const t = String(value).trim()
+    return t || null
+  }
+  return null
 }
 
 /** Backward-compatible parser for legacy `icon_url` and new asset shape. */
@@ -48,6 +56,15 @@ function parseRewardIconAssets(value: Record<string, unknown>): {
 }
 
 export function parseRewardUnit(value: unknown): RewardUnitConfig {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return DEFAULT_REWARD_UNIT
+    try {
+      return parseRewardUnit(JSON.parse(trimmed) as unknown)
+    } catch {
+      return DEFAULT_REWARD_UNIT
+    }
+  }
   if (value == null || typeof value !== 'object') return DEFAULT_REWARD_UNIT
   const o = value as Record<string, unknown>
   const nameRaw = o.name

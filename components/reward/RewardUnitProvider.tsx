@@ -12,6 +12,7 @@ import {
 import {
   DEFAULT_REWARD_UNIT,
   fetchRewardUnitConfig,
+  rewardUnitMainIconUrl,
   type RewardUnitConfig,
 } from '@/lib/reward-unit'
 
@@ -37,6 +38,14 @@ export function RewardUnitProvider({ children }: { children: ReactNode }) {
     try {
       const c = await fetchRewardUnitConfig()
       setConfig(c)
+      if (process.env.NODE_ENV === 'development') {
+        const resolved = rewardUnitMainIconUrl(c)
+        console.debug('[RewardUnit] loaded app_settings.reward_unit', {
+          icon_main_url: c.icon_main_url,
+          resolvedRasterUrl: resolved,
+          usingVectorFallback: !resolved,
+        })
+      }
     } catch {
       setConfig(DEFAULT_REWARD_UNIT)
     } finally {
