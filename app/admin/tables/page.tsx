@@ -159,8 +159,8 @@ function PreviewPhone({ form, name }: { form: TeamPageAdminFormValues; name: str
                 className="mx-auto mb-2 h-16 w-[82%] rounded-md object-contain"
               />
             ) : null}
-            <div className="text-center text-[11px] font-semibold">{name || 'Table name'}</div>
-            <div className="mx-auto mt-1 line-clamp-2 w-[90%] text-center text-[10px] opacity-95">
+            <div className="text-center text-[13px] font-semibold">{name || 'Table name'}</div>
+            <div className="mx-auto mt-1 line-clamp-2 w-[90%] text-center text-[10px] font-medium opacity-95">
               {form.teamText.trim() || 'Team description preview'}
             </div>
             <div className="mt-2 flex justify-center">
@@ -224,7 +224,8 @@ function PreviewPhone({ form, name }: { form: TeamPageAdminFormValues; name: str
           </div>
         </div>
       </div>
-      <div className="pointer-events-none absolute bottom-0 right-0 h-[55%] w-[70%] bg-gradient-to-br from-transparent via-white/10 to-white/70" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-b from-transparent via-white/70 to-white" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-7 bg-white/85" />
     </div>
   ) 
 }
@@ -641,14 +642,16 @@ export default function TablesAdminPage() {
             </div>
 
             <div className="overflow-y-auto px-5 py-4">
-              <div className="grid gap-5 lg:grid-cols-[1fr_280px_280px]">
-                <div className="space-y-4">
+              <div className="grid gap-5 lg:grid-cols-[1fr_1fr_280px]">
+                <div className="space-y-4 lg:col-span-2">
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="space-y-4">
                   <label className="block">
                     <span className="text-xs font-medium text-zinc-600">Table name</span>
                     <input
                       value={formName}
                       onChange={(e) => setFormName(e.target.value)}
-                      className="mt-1.5 h-9 w-full rounded-xl border border-zinc-300 px-3 text-sm"
+                      className="mt-1.5 h-9 w-full rounded-xl border border-zinc-300 px-3 text-[14px]"
                       placeholder="e.g. Kaypoh Aunties"
                     />
                   </label>
@@ -658,20 +661,84 @@ export default function TablesAdminPage() {
                       rows={3}
                       value={formTheme.teamText}
                       onChange={(e) => setFormTheme((p) => ({ ...p, teamText: e.target.value }))}
-                      className="mt-1.5 w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-sm"
+                      className="mt-1.5 w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-[14px]"
                     />
                   </label>
-                  <div className="flex items-end gap-3">
-                    <label className="block">
-                      <span className="text-xs font-medium text-zinc-600">Seat capacity</span>
+                      <label className="block">
+                        <span className="text-xs font-medium text-zinc-600">Seat capacity</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={formCapacity}
+                          onChange={(e) => setFormCapacity(Math.max(1, Number(e.target.value) || 1))}
+                          className="mt-1.5 h-9 w-28 rounded-xl border border-zinc-300 px-3 text-[14px]"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="text-xs font-medium text-zinc-600">Team identity</div>
                       <input
-                        type="number"
-                        min={1}
-                        value={formCapacity}
-                        onChange={(e) => setFormCapacity(Math.max(1, Number(e.target.value) || 1))}
-                        className="mt-1.5 h-9 w-28 rounded-xl border border-zinc-300 px-3 text-sm"
+                        ref={avatarInputRef}
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null
+                          e.currentTarget.value = ''
+                          if (file) void uploadAvatar(file)
+                        }}
                       />
-                    </label>
+                      <input
+                        ref={heroInputRef}
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null
+                          e.currentTarget.value = ''
+                          if (file) void uploadHero(file)
+                        }}
+                      />
+                      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+                        <div className="text-xs font-medium text-zinc-700">Avatar upload</div>
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => avatarInputRef.current?.click()}
+                            disabled={avatarUploading}
+                            className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700"
+                          >
+                            {avatarUploading ? 'Uploading...' : 'Upload avatar'}
+                          </button>
+                          <span className="h-12 w-12 overflow-hidden rounded-full border border-zinc-300 bg-white">
+                            {formTheme.avatarImageUrl.trim() ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={formTheme.avatarImageUrl.trim()} alt="" className="h-full w-full object-cover" />
+                            ) : null}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+                        <div className="text-xs font-medium text-zinc-700">Hero image upload</div>
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            disabled={heroUploading}
+                            onClick={() => heroInputRef.current?.click()}
+                            className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700"
+                          >
+                            {heroUploading ? 'Uploading...' : 'Upload hero'}
+                          </button>
+                          <span className="h-10 w-16 overflow-hidden rounded-md border border-zinc-300 bg-white">
+                            {formTheme.heroImageUrl.trim() ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={formTheme.heroImageUrl.trim()} alt="" className="h-full w-full object-cover" />
+                            ) : null}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   <div>
@@ -766,71 +833,8 @@ export default function TablesAdminPage() {
                   ) : null}
                 </div>
 
-                <div className="space-y-3">
-                  <input
-                    ref={avatarInputRef}
-                    type="file"
-                    accept="image/jpeg,image/jpg,image/png,image/webp"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null
-                      e.currentTarget.value = ''
-                      if (file) void uploadAvatar(file)
-                    }}
-                  />
-                  <input
-                    ref={heroInputRef}
-                    type="file"
-                    accept="image/jpeg,image/jpg,image/png,image/webp"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null
-                      e.currentTarget.value = ''
-                      if (file) void uploadHero(file)
-                    }}
-                  />
-                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
-                    <div className="text-xs font-medium text-zinc-700">Avatar upload</div>
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        onClick={() => avatarInputRef.current?.click()}
-                        disabled={avatarUploading}
-                        className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700"
-                      >
-                        {avatarUploading ? 'Uploading...' : 'Upload avatar'}
-                      </button>
-                      <span className="h-12 w-12 overflow-hidden rounded-full border border-zinc-300 bg-white">
-                        {formTheme.avatarImageUrl.trim() ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={formTheme.avatarImageUrl.trim()} alt="" className="h-full w-full object-cover" />
-                        ) : null}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
-                    <div className="text-xs font-medium text-zinc-700">Hero image upload</div>
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        disabled={heroUploading}
-                        onClick={() => heroInputRef.current?.click()}
-                        className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700"
-                      >
-                        {heroUploading ? 'Uploading...' : 'Upload hero'}
-                      </button>
-                      <span className="h-10 w-16 overflow-hidden rounded-md border border-zinc-300 bg-white">
-                        {formTheme.heroImageUrl.trim() ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={formTheme.heroImageUrl.trim()} alt="" className="h-full w-full object-cover" />
-                        ) : null}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
                 <div>
-                  <div className="mb-1 text-xs font-medium text-zinc-700">Preview</div>
+                  <div className="mb-1 text-xs font-medium text-zinc-600">Preview</div>
                   <PreviewPhone form={formTheme} name={formName || 'New table'} />
                 </div>
               </div>
@@ -849,7 +853,7 @@ export default function TablesAdminPage() {
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
-                <label className="inline-flex items-center gap-2 rounded-full border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700">
+                <label className="inline-flex items-center gap-2 px-1 py-1.5 text-sm font-medium text-zinc-700">
                   <span
                     className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
                       formActive ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]' : 'bg-zinc-300'
