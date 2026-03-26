@@ -115,56 +115,50 @@ function ColorCircleField({
 }) {
   const safe = /^#[0-9A-Fa-f]{6}$/.test(value.trim()) ? value.trim() : '#64748b'
   return (
-    <label className="block">
-      <span className="admin-field-label text-zinc-600">{label}</span>
-      <div className="admin-gap-label-input flex items-center gap-2">
-        <input
-          type="color"
-          value={safe}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-8 w-8 cursor-pointer rounded-full border border-zinc-300 bg-transparent p-0"
-        />
+    <label className="block text-xs">
+      <span className="font-medium text-zinc-600">{label}</span>
+      <div className="mt-1.5 flex items-center gap-2">
+        <span
+          className="relative h-7 w-7 shrink-0 rounded-full border border-zinc-300"
+          style={{ backgroundColor: safe }}
+        >
+          <input
+            type="color"
+            value={safe}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 cursor-pointer opacity-0"
+            aria-label={label}
+          />
+        </span>
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="h-9 flex-1 rounded-full border border-zinc-300 bg-white px-3 text-sm"
+          className="h-8 flex-1 rounded-full border border-zinc-300 bg-white px-3 text-xs"
         />
       </div>
     </label>
   )
 }
 
-function PreviewPhone({
-  form,
-  name,
-  step,
-}: {
-  form: TeamPageAdminFormValues
-  name: string
-  step: 1 | 2
-}) {
+function PreviewPhone({ form, name }: { form: TeamPageAdminFormValues; name: string }) {
   const heroBg = form.heroMiddle.trim()
     ? `linear-gradient(to bottom, ${form.heroTop}, ${form.heroMiddle}, ${form.heroBottom})`
     : `linear-gradient(to bottom, ${form.heroTop}, ${form.heroBottom})`
   const avatarUrl = form.avatarImageUrl.trim()
   const initials = initialsFromName(name)
   return (
-    <div className="rounded-3xl border border-zinc-200 bg-zinc-100 p-2">
-      <div className="mx-auto h-[430px] w-[220px] overflow-hidden rounded-[26px] border border-zinc-300 bg-white shadow-sm">
-        <div className="px-3 pt-3 pb-2 text-[11px] font-semibold text-zinc-700">Preview</div>
+    <div className="h-[520px] w-[255px] overflow-hidden rounded-[28px] border border-zinc-300 bg-white shadow-sm">
+      <div className="h-full overflow-y-auto">
+        <div className="p-3 text-[11px] font-semibold text-zinc-700">Preview</div>
         <div className="mx-3 rounded-xl p-3 text-white" style={{ background: heroBg }}>
-          <div className="text-xs font-semibold">{name || 'Table name'}</div>
-          <div className="mt-1 text-[10px] opacity-90 line-clamp-2">
+          {form.heroImageUrl.trim() ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={form.heroImageUrl.trim()} alt="" className="mb-2 h-11 w-full rounded-md object-cover" />
+          ) : null}
+          <div className="text-[11px] font-semibold">{name || 'Table name'}</div>
+          <div className="mt-1 text-[10px] opacity-95 line-clamp-2">
             {form.teamText.trim() || 'Team description preview'}
           </div>
-          {step === 2 && form.heroImageUrl.trim() ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={form.heroImageUrl.trim()}
-              alt=""
-              className="mt-2 h-16 w-full rounded-lg object-cover"
-            />
-          ) : null}
           <button
             type="button"
             className="mt-2 rounded-full px-3 py-1 text-[10px] font-semibold text-white"
@@ -224,7 +218,7 @@ function PreviewPhone({
         </div>
       </div>
     </div>
-  )
+  ) 
 }
 
 export default function TablesAdminPage() {
@@ -235,7 +229,6 @@ export default function TablesAdminPage() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [mode, setMode] = useState<EditorMode>('create')
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [step, setStep] = useState<1 | 2>(1)
   const [saving, setSaving] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [formName, setFormName] = useState('')
@@ -290,7 +283,6 @@ export default function TablesAdminPage() {
   function openCreateEditor() {
     setMode('create')
     setEditingId(null)
-    setStep(1)
     setShowAdvanced(false)
     setFormName('')
     setFormCapacity(10)
@@ -308,7 +300,6 @@ export default function TablesAdminPage() {
   function openEditEditor(row: AdminTableRow) {
     setMode('edit')
     setEditingId(row.id)
-    setStep(1)
     setShowAdvanced(false)
     setFormName(row.name)
     setFormCapacity(row.capacity || 10)
@@ -464,45 +455,95 @@ export default function TablesAdminPage() {
       ) : null}
 
       <section className="admin-gap-intro-first-section">
+        <div className="mb-4 flex justify-end">
+          <button
+            type="button"
+            onClick={openCreateEditor}
+            className={`rounded-xl px-4 py-2 text-sm font-semibold shadow-sm ${GRADIENT_CTA}`}
+          >
+            Create new table
+          </button>
+        </div>
         {loading ? (
           <p className="text-sm text-zinc-500">Loading tables...</p>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <button
-              type="button"
-              onClick={openCreateEditor}
-              className={`rounded-2xl border p-5 text-left transition-transform duration-200 hover:-translate-y-0.5 ${GRADIENT_CTA}`}
-            >
-              <div className="text-base font-semibold">Create new table</div>
-              <div className="mt-1 text-sm text-white/90">Start with a preset and finalize in 2 steps.</div>
-            </button>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {activeRows.map((row) => {
               const resolved = teamPageAdminFormDefaults(row.page_config, {
                 tableColor: row.color,
                 tableName: row.name,
               })
+              const avatarUrl = resolved.avatarImageUrl.trim()
+              const isActiveStatus = row.is_active && !row.is_archived
               return (
                 <button
                   key={row.id}
                   type="button"
                   onClick={() => openEditEditor(row)}
-                  className="rounded-2xl border border-zinc-200 bg-white p-5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm"
+                  className="group relative h-[290px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm"
+                  style={{
+                    background: `linear-gradient(to bottom, ${resolved.heroTop}, ${resolved.heroMiddle || resolved.heroBottom}, ${resolved.heroBottom})`,
+                  }}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-base font-semibold text-zinc-900">{row.name}</p>
-                      <p className="mt-1 text-sm text-zinc-500">
-                        Capacity {row.capacity} · {row.is_active ? 'Active' : 'Inactive'}
-                      </p>
+                  <div className="flex h-full flex-col justify-between p-3 text-white">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="h-9 w-9 overflow-hidden rounded-full ring-1 ring-white/55">
+                        {avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <span
+                            className="flex h-full w-full items-center justify-center text-[11px] font-semibold"
+                            style={{ backgroundColor: avatarFallbackColor(row.name) }}
+                          >
+                            {initialsFromName(row.name)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="rounded-full bg-black/20 p-1.5 text-white/90 transition-colors group-hover:bg-black/30">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={1.8}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-4 w-4"
+                          aria-hidden
+                        >
+                          <path d="M12 20h9" />
+                          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                        </svg>
+                      </span>
                     </div>
-                    <span
-                      className="h-9 w-9 rounded-full border border-white/70"
-                      style={{ backgroundColor: resolved.primaryColor }}
-                    />
-                  </div>
-                  <div className="mt-4 rounded-xl p-3 text-xs text-white" style={{ background: `linear-gradient(to bottom, ${resolved.heroTop}, ${resolved.heroBottom})` }}>
-                    <div className="font-medium">{row.name}</div>
-                    <div className="mt-1 opacity-90 line-clamp-2">{resolved.teamText}</div>
+                    <div>
+                      <p className="text-base font-semibold drop-shadow-sm">{row.name}</p>
+                    </div>
+                    <div
+                      className="rounded-xl px-3 py-2 text-[11px] font-medium"
+                      style={{ backgroundColor: resolved.primaryColor || '#6335fb' }}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span>Seats {row.capacity}</span>
+                        <span className="inline-flex items-center gap-1">
+                          {isActiveStatus ? (
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="h-3.5 w-3.5"
+                              aria-hidden
+                            >
+                              <path d="m5 12 5 5L20 7" />
+                            </svg>
+                          ) : null}
+                          {isActiveStatus ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </button>
               )
@@ -549,170 +590,203 @@ export default function TablesAdminPage() {
       </section>
 
       {editorOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 p-4">
-          <div className="w-full max-w-5xl rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm animate-[fadeIn_180ms_ease-out]">
-            <div className="flex items-center justify-between gap-3 border-b border-zinc-200 pb-3">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setEditorOpen(false)
+          }}
+        >
+          <div className="flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm animate-[fadeIn_180ms_ease-out]">
+            <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3">
               <div>
                 <h3 className="text-lg font-semibold text-zinc-900">
                   {mode === 'create' ? 'Create new table' : 'Edit table'}
                 </h3>
-                <p className="text-sm text-zinc-500">Step {step} of 2</p>
               </div>
               <button
                 type="button"
                 onClick={() => setEditorOpen(false)}
-                className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black text-white"
+                aria-label="Close editor"
               >
-                Close
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-4 w-4"
+                  aria-hidden
+                >
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
-            <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_250px]">
-              <div>
-                {step === 1 ? (
-                  <div className="space-y-5">
-                    <div className="grid gap-4 sm:grid-cols-[88px_1fr] sm:items-start">
-                      <div>
-                        <input
-                          ref={avatarInputRef}
-                          type="file"
-                          accept="image/jpeg,image/jpg,image/png,image/webp"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0] ?? null
-                            e.currentTarget.value = ''
-                            if (file) void uploadAvatar(file)
-                          }}
+            <div className="overflow-y-auto px-5 py-4">
+              <div className="grid gap-5 lg:grid-cols-[1fr_255px]">
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block sm:col-span-1">
+                      <span className="text-xs font-medium text-zinc-600">Table name</span>
+                      <input
+                        value={formName}
+                        onChange={(e) => setFormName(e.target.value)}
+                        className="mt-1.5 h-9 w-full rounded-xl border border-zinc-300 px-3 text-sm"
+                        placeholder="e.g. Kaypoh Aunties"
+                      />
+                    </label>
+                    <div className="row-span-2 flex items-end justify-start sm:justify-end">
+                      <input
+                        ref={avatarInputRef}
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null
+                          e.currentTarget.value = ''
+                          if (file) void uploadAvatar(file)
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => avatarInputRef.current?.click()}
+                        disabled={avatarUploading}
+                        className="h-16 w-16 overflow-hidden rounded-full border border-zinc-300 bg-zinc-50"
+                        title="Upload avatar"
+                      >
+                        {formTheme.avatarImageUrl.trim() ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={formTheme.avatarImageUrl.trim()}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="flex h-full w-full items-center justify-center text-[10px] text-zinc-500">
+                            Avatar
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                    <label className="block">
+                      <span className="text-xs font-medium text-zinc-600">Seat capacity</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={formCapacity}
+                        onChange={(e) => setFormCapacity(Math.max(1, Number(e.target.value) || 1))}
+                        className="mt-1.5 h-9 w-full rounded-xl border border-zinc-300 px-3 text-sm"
+                      />
+                    </label>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="text-xs font-medium text-zinc-600">Status</span>
+                      <select
+                        value={formActive ? 'active' : 'inactive'}
+                        onChange={(e) => setFormActive(e.target.value === 'active')}
+                        className="mt-1.5 h-9 w-full rounded-xl border border-zinc-300 px-3 text-sm"
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </label>
+                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+                      Avatar upload and hero image are separate controls.
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-zinc-700">Theme preset</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvanced((v) => !v)}
+                        className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700"
+                      >
+                        {showAdvanced ? 'Hide customize' : 'Customize'}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                      {THEME_PRESETS.map((preset) => {
+                        const selected = formPresetId === preset.id
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => applyPreset(preset.id)}
+                            className={`rounded-xl border p-2 text-left transition-colors ${
+                              selected ? 'border-zinc-900 bg-white' : 'border-zinc-200 bg-white'
+                            }`}
+                          >
+                            <div className="text-[11px] font-semibold text-zinc-800">{preset.name}</div>
+                            <div
+                              className="mt-1.5 h-4 rounded-md"
+                              style={{ background: `linear-gradient(to right, ${preset.tableGradTop}, ${preset.tableGradBottom})` }}
+                            />
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {showAdvanced ? (
+                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+                      <p className="text-xs font-medium text-zinc-800">Advanced customization (table instance only)</p>
+                      <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
+                        <ColorCircleField
+                          label="Primary CTA"
+                          value={formTheme.primaryColor}
+                          onChange={(v) => setFormTheme((p) => ({ ...p, primaryColor: v }))}
                         />
+                        <ColorCircleField
+                          label="Hero top"
+                          value={formTheme.heroTop}
+                          onChange={(v) => setFormTheme((p) => ({ ...p, heroTop: v }))}
+                        />
+                        <ColorCircleField
+                          label="Hero middle"
+                          value={formTheme.heroMiddle}
+                          onChange={(v) => setFormTheme((p) => ({ ...p, heroMiddle: v }))}
+                        />
+                        <ColorCircleField
+                          label="Hero bottom"
+                          value={formTheme.heroBottom}
+                          onChange={(v) => setFormTheme((p) => ({ ...p, heroBottom: v }))}
+                        />
+                        <ColorCircleField
+                          label="Leaderboard top"
+                          value={formTheme.lbGradTop}
+                          onChange={(v) => setFormTheme((p) => ({ ...p, lbGradTop: v }))}
+                        />
+                        <ColorCircleField
+                          label="Leaderboard bottom"
+                          value={formTheme.lbGradBottom}
+                          onChange={(v) => setFormTheme((p) => ({ ...p, lbGradBottom: v }))}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+                      <div className="text-xs font-medium text-zinc-700">Avatar upload</div>
+                      <p className="mt-1 text-[11px] text-zinc-500">Used for table identity in previews.</p>
+                      <div className="mt-2">
                         <button
                           type="button"
                           onClick={() => avatarInputRef.current?.click()}
                           disabled={avatarUploading}
-                          className="h-20 w-20 overflow-hidden rounded-full border border-zinc-300 bg-zinc-50"
+                          className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700"
                         >
-                          {formTheme.avatarImageUrl.trim() ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={formTheme.avatarImageUrl.trim()}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <span className="flex h-full w-full items-center justify-center text-xs text-zinc-500">
-                              Upload
-                            </span>
-                          )}
+                          {avatarUploading ? 'Uploading...' : 'Upload avatar'}
                         </button>
                       </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="block sm:col-span-2">
-                          <span className="admin-field-label text-zinc-600">Table name</span>
-                          <input
-                            value={formName}
-                            onChange={(e) => setFormName(e.target.value)}
-                            className="admin-gap-label-input h-10 w-full rounded-xl border border-zinc-300 px-3 text-sm"
-                            placeholder="e.g. Kaypoh Aunties"
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="admin-field-label text-zinc-600">Seat capacity</span>
-                          <input
-                            type="number"
-                            min={1}
-                            value={formCapacity}
-                            onChange={(e) => setFormCapacity(Math.max(1, Number(e.target.value) || 1))}
-                            className="admin-gap-label-input h-10 w-full rounded-xl border border-zinc-300 px-3 text-sm"
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="admin-field-label text-zinc-600">Status</span>
-                          <select
-                            value={formActive ? 'active' : 'inactive'}
-                            onChange={(e) => setFormActive(e.target.value === 'active')}
-                            className="admin-gap-label-input h-10 w-full rounded-xl border border-zinc-300 px-3 text-sm"
-                          >
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                          </select>
-                        </label>
-                      </div>
                     </div>
-
-                    <div>
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <span className="admin-field-label text-zinc-600">Theme preset</span>
-                        <button
-                          type="button"
-                          onClick={() => setShowAdvanced((v) => !v)}
-                          className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-700"
-                        >
-                          {showAdvanced ? 'Hide customize' : 'Customize'}
-                        </button>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {THEME_PRESETS.map((preset) => {
-                          const selected = formPresetId === preset.id
-                          return (
-                            <button
-                              key={preset.id}
-                              type="button"
-                              onClick={() => applyPreset(preset.id)}
-                              className={`rounded-2xl border p-3 text-left transition-colors ${
-                                selected
-                                  ? 'border-zinc-900 bg-zinc-50'
-                                  : 'border-zinc-200 bg-white hover:border-zinc-300'
-                              }`}
-                            >
-                              <div className="text-sm font-semibold text-zinc-900">{preset.name}</div>
-                              <div className="mt-2 h-6 rounded-lg" style={{ background: `linear-gradient(to right, ${preset.tableGradTop}, ${preset.tableGradBottom})` }} />
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    {showAdvanced ? (
-                      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                        <p className="text-sm font-medium text-zinc-800">Advanced customization (table instance only)</p>
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                          <ColorCircleField
-                            label="Primary CTA color"
-                            value={formTheme.primaryColor}
-                            onChange={(v) => setFormTheme((p) => ({ ...p, primaryColor: v }))}
-                          />
-                          <ColorCircleField
-                            label="Hero gradient top"
-                            value={formTheme.heroTop}
-                            onChange={(v) => setFormTheme((p) => ({ ...p, heroTop: v }))}
-                          />
-                          <ColorCircleField
-                            label="Hero gradient middle"
-                            value={formTheme.heroMiddle}
-                            onChange={(v) => setFormTheme((p) => ({ ...p, heroMiddle: v }))}
-                          />
-                          <ColorCircleField
-                            label="Hero gradient bottom"
-                            value={formTheme.heroBottom}
-                            onChange={(v) => setFormTheme((p) => ({ ...p, heroBottom: v }))}
-                          />
-                          <ColorCircleField
-                            label="Leaderboard gradient top"
-                            value={formTheme.lbGradTop}
-                            onChange={(v) => setFormTheme((p) => ({ ...p, lbGradTop: v }))}
-                          />
-                          <ColorCircleField
-                            label="Leaderboard gradient bottom"
-                            value={formTheme.lbGradBottom}
-                            onChange={(v) => setFormTheme((p) => ({ ...p, lbGradBottom: v }))}
-                          />
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div>
-                      <span className="admin-field-label text-zinc-600">Hero image</span>
+                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+                      <div className="text-xs font-medium text-zinc-700">Hero image upload</div>
+                      <p className="mt-1 text-[11px] text-zinc-500">Separate hero visual for the page top section.</p>
                       <input
                         ref={heroInputRef}
                         type="file"
@@ -724,105 +798,86 @@ export default function TablesAdminPage() {
                           if (file) void uploadHero(file)
                         }}
                       />
-                      <div className="admin-gap-label-input rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={heroUploading}
+                          onClick={() => heroInputRef.current?.click()}
+                          className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700"
+                        >
+                          {heroUploading ? 'Uploading...' : 'Upload hero'}
+                        </button>
                         {formTheme.heroImageUrl.trim() ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={formTheme.heroImageUrl.trim()}
-                            alt=""
-                            className="h-32 w-full rounded-xl object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-32 items-center justify-center rounded-xl border border-dashed border-zinc-300 text-sm text-zinc-500">
-                            No hero image selected
-                          </div>
-                        )}
-                        <div className="mt-3 flex items-center gap-2">
                           <button
                             type="button"
-                            disabled={heroUploading}
-                            onClick={() => heroInputRef.current?.click()}
-                            className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700"
+                            onClick={async () => {
+                              const prev = formTheme.heroImageUrl.trim() || null
+                              setFormTheme((p) => ({ ...p, heroImageUrl: '' }))
+                              try {
+                                await removeTeamHeroImageByPublicUrl(prev)
+                              } catch {
+                                // best effort cleanup
+                              }
+                            }}
+                            className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700"
                           >
-                            {heroUploading ? 'Uploading...' : 'Upload / replace'}
+                            Remove
                           </button>
-                          {formTheme.heroImageUrl.trim() ? (
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const prev = formTheme.heroImageUrl.trim() || null
-                                setFormTheme((p) => ({ ...p, heroImageUrl: '' }))
-                                try {
-                                  await removeTeamHeroImageByPublicUrl(prev)
-                                } catch {
-                                  // best effort cleanup
-                                }
-                              }}
-                              className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700"
-                            >
-                              Remove
-                            </button>
-                          ) : null}
-                        </div>
+                        ) : null}
                       </div>
                     </div>
-
-                    <label className="block">
-                      <span className="admin-field-label text-zinc-600">Description</span>
-                      <textarea
-                        rows={4}
-                        value={formTheme.teamText}
-                        onChange={(e) => setFormTheme((p) => ({ ...p, teamText: e.target.value }))}
-                        className="admin-gap-label-input w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-sm"
-                      />
-                    </label>
                   </div>
-                )}
-              </div>
+                  {formTheme.heroImageUrl.trim() ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={formTheme.heroImageUrl.trim()}
+                      alt=""
+                      className="h-20 w-full rounded-xl border border-zinc-200 object-cover"
+                    />
+                  ) : null}
+                  <label className="block">
+                    <span className="text-xs font-medium text-zinc-600">Description</span>
+                    <textarea
+                      rows={3}
+                      value={formTheme.teamText}
+                      onChange={(e) => setFormTheme((p) => ({ ...p, teamText: e.target.value }))}
+                      className="mt-1.5 w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-sm"
+                    />
+                  </label>
+                </div>
 
-              <PreviewPhone form={formTheme} name={formName || 'New table'} step={step} />
+                <PreviewPhone form={formTheme} name={formName || 'New table'} />
+              </div>
             </div>
 
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-200 pt-4">
+            <div className="flex items-center justify-between gap-2 border-t border-zinc-200 px-5 py-3">
               <div className="flex items-center gap-2">
                 {mode === 'edit' && editingId ? (
                   <button
                     type="button"
                     onClick={() => void onArchive(editingId)}
-                    className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700"
+                    className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700"
                   >
                     Archive table
                   </button>
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
-                {step === 2 ? (
-                  <button
-                    type="button"
-                    onClick={() => setStep(1)}
-                    className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700"
-                  >
-                    Back
-                  </button>
-                ) : null}
-                {step === 1 ? (
-                  <button
-                    type="button"
-                    onClick={() => setStep(2)}
-                    className={`rounded-full px-4 py-2 text-sm font-semibold ${GRADIENT_CTA}`}
-                  >
-                    Next
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void saveEditor()}
-                    className={`rounded-full px-5 py-2 text-sm font-semibold disabled:opacity-60 ${GRADIENT_CTA}`}
-                  >
-                    {saving ? 'Saving...' : 'Finalize'}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setEditorOpen(false)}
+                  className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void saveEditor()}
+                  className={`rounded-full px-5 py-2 text-sm font-semibold disabled:opacity-60 ${GRADIENT_CTA}`}
+                >
+                  {saving ? 'Saving...' : 'Finalize'}
+                </button>
               </div>
             </div>
           </div>
