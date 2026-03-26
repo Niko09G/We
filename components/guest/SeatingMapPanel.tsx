@@ -64,6 +64,14 @@ const TABLE_GRADIENT_BY_SLOT: Record<(typeof TABLE_LAYOUT_SLOTS)[number]['key'],
   green: 'linear-gradient(to bottom, #0c8837 0%, #89c97d 100%)',
 }
 
+/** Subtle themed glow for the selected-guest bar (matches table slot). */
+const TABLE_RESULT_GLOW_BY_SLOT: Record<(typeof TABLE_LAYOUT_SLOTS)[number]['key'], string> = {
+  gold: '0 12px 36px rgba(247, 95, 12, 0.28), 0 0 0 1px rgba(247, 95, 12, 0.12)',
+  blue: '0 12px 36px rgba(149, 45, 254, 0.26), 0 0 0 1px rgba(90, 53, 249, 0.14)',
+  red: '0 12px 36px rgba(255, 59, 74, 0.28), 0 0 0 1px rgba(255, 59, 74, 0.12)',
+  green: '0 12px 36px rgba(12, 136, 55, 0.26), 0 0 0 1px rgba(12, 136, 55, 0.12)',
+}
+
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
   const a = parts[0]?.[0] ?? ''
@@ -102,11 +110,14 @@ export function SeatingMapPanel({
   className = '',
   layout = 'page',
   showSectionHeading = true,
+  sectionTitle = 'Find your seat',
 }: {
   className?: string
   layout?: 'page' | 'embedded'
   /** When false, parent renders the h2 (e.g. missions page). */
   showSectionHeading?: boolean
+  /** Team/table page can override (e.g. “Find your people”); standalone seat page keeps default. */
+  sectionTitle?: string
 }) {
   const [rows, setRows] = useState<GuestWithTable[]>([])
   const [loading, setLoading] = useState(true)
@@ -125,6 +136,13 @@ export function SeatingMapPanel({
   const tableRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const seatRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const dragRef = useRef<DragRef | null>(null)
+  const panZoomRef = useRef({ x: 0, y: 0, zoom: DEFAULT_ZOOM })
+  const mapFrameRef = useRef<HTMLDivElement | null>(null)
+  const pinchRef = useRef<{ d0: number; z0: number; wx: number; wy: number } | null>(null)
+
+  useEffect(() => {
+    panZoomRef.current = { x: pan.x, y: pan.y, zoom }
+  }, [pan.x, pan.y, zoom])
 
   useEffect(() => {
     async function load() {
@@ -230,6 +248,13 @@ export function SeatingMapPanel({
     [rows, selectedId]
   )
 
+  const selectedGuestSlotKey = useMemo((): (typeof TABLE_LAYOUT_SLOTS)[number]['key'] | null => {
+    if (!selectedGuest) return null
+    const idx = tableBySlot.findIndex((t) => t?.id === selectedGuest.table_id)
+    if (idx < 0) return null
+    return TABLE_LAYOUT_SLOTS[idx]!.key
+  }, [selectedGuest, tableBySlot])
+
   const matching = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return []
@@ -262,8 +287,75 @@ export function SeatingMapPanel({
 
   useLayoutEffect(() => {
     if (loading) return
-    requestAnimationFrame(() => applyOverviewCamera())
+    const frame = mapFrameRef.current
+    if (!frame) return
+    let raf = 0
+    const schedule = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => applyOverviewCamera())
+    }
+    schedule()
+    const ro = new ResizeObserver(schedule)
+    ro.observe(frame)
+    return () => {
+      ro.disconnect()
+      cancelAnimationFrame(raf)
+    }
   }, [applyOverviewCamera, loading])
+
+  /** Two-finger pinch zoom (non-passive so we can prevent browser zoom/scroll). */
+  useEffect(() => {
+    const el = viewportRef.current
+    if (!el || loading) return
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return
+      const t0 = e.touches[0]!
+      const t1 = e.touches[1]!
+      const d0 = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY)
+      if (d0 < 10) return
+      const mx = (t0.clientX + t1.clientX) / 2
+      const my = (t0.clientY + t1.clientY) / 2
+      const { x: px, y: py, zoom: z } = panZoomRef.current
+      pinchRef.current = {
+        d0,
+        z0: z,
+        wx: (mx - px) / z,
+        wy: (my - py) / z,
+      }
+      setTransitionTransform(false)
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      const p = pinchRef.current
+      if (!p || e.touches.length < 2) return
+      e.preventDefault()
+      const t0 = e.touches[0]!
+      const t1 = e.touches[1]!
+      const d = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY)
+      const mx = (t0.clientX + t1.clientX) / 2
+      const my = (t0.clientY + t1.clientY) / 2
+      const zn = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, p.z0 * (d / p.d0)))
+      setZoom(zn)
+      setPan({ x: mx - p.wx * zn, y: my - p.wy * zn })
+    }
+
+    const endPinch = (e: TouchEvent) => {
+      if (e.touches.length < 2) pinchRef.current = null
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: false })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', endPinch)
+    el.addEventListener('touchcancel', endPinch)
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', endPinch)
+      el.removeEventListener('touchcancel', endPinch)
+    }
+  }, [loading])
 
   /** While dragging the map, block page scroll on touch devices. */
   useEffect(() => {
@@ -364,15 +456,13 @@ export function SeatingMapPanel({
 
   const outerClass =
     layout === 'page'
-      ? 'flex h-[70vh] max-h-[70vh] min-h-0 flex-col overflow-visible'
-      : 'flex h-[min(65vh,560px)] max-h-[70vh] min-h-0 flex-col overflow-visible'
+      ? 'flex min-h-0 flex-col overflow-visible'
+      : 'flex min-h-0 w-full flex-col overflow-visible'
 
   const titleBlock = showSectionHeading ? (
     <div className="shrink-0">
-      <h2 className="text-left text-2xl font-semibold leading-snug text-zinc-900">
-        Find your seat
-      </h2>
-      <p className="mt-1 text-left text-sm text-zinc-500">
+      <h2 className="text-left text-2xl font-semibold leading-snug text-zinc-900">{sectionTitle}</h2>
+      <p className="mt-1 text-left text-base text-zinc-500">
         Search your name or explore the tables
       </p>
     </div>
@@ -452,7 +542,10 @@ export function SeatingMapPanel({
         </p>
       ) : null}
 
-      <div className="relative mt-3 min-h-0 flex-1 overflow-hidden rounded-3xl border border-zinc-200 bg-white">
+      <div
+        ref={mapFrameRef}
+        className="relative mt-3 aspect-square w-full max-h-[min(92vw,360px)] shrink-0 overflow-hidden rounded-3xl border border-zinc-200 bg-zinc-50/90"
+      >
         <div
           className="absolute right-3 top-3 z-20 flex flex-col gap-2"
           onPointerDown={(e) => e.stopPropagation()}
@@ -589,13 +682,13 @@ export function SeatingMapPanel({
                                   e.stopPropagation()
                                   selectGuest(g)
                                 }}
-                                className={`absolute z-10 flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full border-2 text-[9px] font-extrabold leading-none transition-[transform,box-shadow] duration-200 ${
+                                className={`absolute z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center rounded-full border-[3px] text-[10px] font-extrabold leading-none transition-[transform,box-shadow] duration-200 ${
                                   pos.isTop
                                     ? 'top-0 -translate-y-1/2'
                                     : 'bottom-0 translate-y-1/2'
                                 } ${
                                   isSelectedSeat
-                                    ? 'animate-seat-celebrate z-30 scale-125 border-white bg-white text-violet-700 ring-2 ring-violet-400/90'
+                                    ? 'animate-seat-celebrate z-30 scale-[1.28] border-white bg-white text-violet-700 ring-[3px] ring-violet-100'
                                     : 'border-white/70 bg-white/95 text-zinc-800 shadow-sm hover:border-white hover:bg-white'
                                 }`}
                                 style={{
@@ -617,7 +710,14 @@ export function SeatingMapPanel({
         </div>
 
         {selectedGuest ? (
-          <aside className="pointer-events-auto absolute bottom-3 left-3 right-3 z-30 mx-auto max-w-md rounded-2xl border border-violet-200/80 bg-white/95 px-3 py-2.5 shadow-[0_8px_24px_rgba(91,33,182,0.12)] backdrop-blur-sm transition-opacity duration-300">
+          <aside
+            className="pointer-events-auto absolute bottom-3 left-3 right-3 z-30 mx-auto max-w-md rounded-2xl border border-white/80 bg-white/95 px-3 py-2.5 backdrop-blur-sm transition-[box-shadow,opacity] duration-300"
+            style={{
+              boxShadow: selectedGuestSlotKey
+                ? TABLE_RESULT_GLOW_BY_SLOT[selectedGuestSlotKey]
+                : '0 10px 28px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.06)',
+            }}
+          >
             <div className="flex items-center gap-3 text-xs text-violet-950">
               <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-violet-200 bg-white">
                 {selectedGuest.photo_url ? (

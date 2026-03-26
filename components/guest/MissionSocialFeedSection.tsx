@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GuestMissionFeedItem } from '@/lib/guest-mission-feed'
 
@@ -467,6 +468,7 @@ export function MissionSocialFeedSection({
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
+  const [feedDotIndex, setFeedDotIndex] = useState(0)
 
   const slots = useMemo(() => buildEditorialSlots(items), [items])
   const padded = useMemo(() => padToPanels(slots), [slots])
@@ -492,13 +494,42 @@ export function MissionSocialFeedSection({
     [slotToFeedIndex]
   )
 
+  useEffect(() => {
+    const root = scrollerRef.current
+    if (!root || loading || panels.length === 0) return
+
+    const panelsEls = () =>
+      [...root.querySelectorAll('[data-feed-panel]')] as HTMLElement[]
+
+    const updateDot = () => {
+      const kids = panelsEls()
+      if (kids.length === 0) return
+      const cx = root.scrollLeft + root.clientWidth / 2
+      let best = 0
+      let bestDist = Infinity
+      kids.forEach((el, i) => {
+        const mid = el.offsetLeft + el.offsetWidth / 2
+        const d = Math.abs(mid - cx)
+        if (d < bestDist) {
+          bestDist = d
+          best = i
+        }
+      })
+      setFeedDotIndex(best)
+    }
+
+    updateDot()
+    root.addEventListener('scroll', updateDot, { passive: true })
+    return () => root.removeEventListener('scroll', updateDot)
+  }, [loading, panels])
+
   if (!loading && items.length === 0) return null
 
   return (
-    <section className="w-full min-w-0" aria-label="Latest greetings and awful marriage advice">
+    <section className="w-full min-w-0" aria-label="Live feed, and awful marriage advice">
       <div className="mb-3 flex items-baseline justify-between gap-2">
         <h2 className="text-left text-2xl font-semibold leading-snug text-zinc-900">
-          Latest greetings and awful marriage advice
+          Live feed, and awful marriage advice
         </h2>
       </div>
 
@@ -528,13 +559,42 @@ export function MissionSocialFeedSection({
             </>
           ) : (
             panels.map((panel, i) => (
-              <div key={`panel-${panel.kind}-${i}`} className="shrink-0">
+              <div
+                key={`panel-${panel.kind}-${i}`}
+                className="shrink-0"
+                data-feed-panel={i}
+              >
                 <PanelCollage panel={panel} onOpen={openCell} />
               </div>
             ))
           )}
         </div>
       </div>
+
+      {!loading && panels.length > 0 ? (
+        <div
+          className="mt-3 flex justify-center gap-1.5"
+          aria-label="Feed pages"
+          role="tablist"
+        >
+          {panels.map((_, i) => (
+            <span
+              key={`feed-dot-${i}`}
+              role="presentation"
+              className={`h-1.5 w-1.5 shrink-0 rounded-full transition-colors duration-200 ${
+                i === feedDotIndex ? 'bg-zinc-500' : 'bg-zinc-300/90'
+              }`}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <Link
+        href="/greetings"
+        className="mt-4 inline-flex w-fit rounded-md bg-[#6335fb] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-105 active:scale-[0.98]"
+      >
+        View all
+      </Link>
 
       <FeedLightbox
         items={items}

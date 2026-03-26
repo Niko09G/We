@@ -909,7 +909,7 @@ export default function MissionsTablePage({
         </section>
       ) : null}
 
-      <div className="mx-auto w-full min-w-0 max-w-lg space-y-8 px-5 pb-28 pt-6">
+      <div className="mx-auto w-full min-w-0 max-w-lg space-y-10 px-5 pb-28 pt-6">
         <section id="feed" className="scroll-mt-8">
           {!loading && !error && missionsEnabled === true && tableName.trim() ? (
             <MissionSocialFeedSection
@@ -951,9 +951,9 @@ export default function MissionsTablePage({
 
         <section id="seat-finder" className="scroll-mt-8">
           <h2 className="text-left text-2xl font-semibold leading-snug text-zinc-900">
-            Find your seat
+            Find your people
           </h2>
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-base text-zinc-500">
             Search your name or explore the tables
           </p>
           <div className="mt-3 min-h-0">
