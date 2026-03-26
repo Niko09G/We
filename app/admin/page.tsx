@@ -924,7 +924,11 @@ export default function AdminPage() {
                               Cancel
                             </button>
                             {ttPageForm ? (
-                              <TeamPageConfigEditor value={ttPageForm} onChange={setTtPageForm} />
+                              <TeamPageConfigEditor
+                                value={ttPageForm}
+                                onChange={setTtPageForm}
+                                tableName={ttEditName.trim() || t.name}
+                              />
                             ) : null}
                           </>
                         ) : (

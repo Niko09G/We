@@ -1,6 +1,12 @@
 'use client'
 
+import { useRef, useState } from 'react'
 import type { TeamPageAdminFormValues } from '@/lib/team-page-config'
+import { compressImage, isAcceptedImageFile } from '@/lib/image-compress'
+import {
+  removeTeamHeroImageByPublicUrl,
+  uploadTeamHeroImage,
+} from '@/lib/team-hero-image-assets'
 
 function colorForPicker(raw: string): string {
   const t = raw?.trim() ?? ''
@@ -52,11 +58,16 @@ function ColorField({
 export function TeamPageConfigEditor({
   value,
   onChange,
+  tableName,
 }: {
   value: TeamPageAdminFormValues
   onChange: (next: TeamPageAdminFormValues) => void
+  tableName: string
 }) {
   const patch = (p: Partial<TeamPageAdminFormValues>) => onChange({ ...value, ...p })
+  const [heroUploading, setHeroUploading] = useState(false)
+  const [heroError, setHeroError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
 
   const heroBg =
     value.heroMiddle.trim().length > 0
@@ -111,13 +122,85 @@ export function TeamPageConfigEditor({
           />
         </div>
         <div>
-          <span className="mb-1 block text-[10px] font-medium text-zinc-500">Hero image URL</span>
-          <input
-            value={value.heroImageUrl}
-            onChange={(e) => patch({ heroImageUrl: e.target.value })}
-            placeholder="https://… or /path.png"
-            className="w-full rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 py-1.5 text-sm"
-          />
+          <span className="mb-1 block text-[10px] font-medium text-zinc-500">Hero image</span>
+          <div className="rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 p-2">
+            {value.heroImageUrl.trim() ? (
+              <div className="mb-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={value.heroImageUrl.trim()}
+                  alt=""
+                  className="h-24 w-full rounded object-cover"
+                />
+              </div>
+            ) : null}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/webp"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0] ?? null
+                e.currentTarget.value = ''
+                if (!file) return
+                setHeroError(null)
+                if (!isAcceptedImageFile(file)) {
+                  setHeroError('Use JPG, PNG, or WEBP.')
+                  return
+                }
+                const previous = value.heroImageUrl.trim() || null
+                setHeroUploading(true)
+                try {
+                  const { blob, contentType } = await compressImage(file)
+                  const uploadFile = new File([blob], `hero.${contentType.split('/')[1] ?? 'jpg'}`, {
+                    type: contentType,
+                  })
+                  const url = await uploadTeamHeroImage(uploadFile, tableName)
+                  patch({ heroImageUrl: url })
+                  await removeTeamHeroImageByPublicUrl(previous)
+                } catch (err) {
+                  setHeroError(err instanceof Error ? err.message : 'Hero image upload failed.')
+                } finally {
+                  setHeroUploading(false)
+                }
+              }}
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={heroUploading}
+                className="rounded border border-zinc-300 dark:border-zinc-600 px-2 py-1 text-xs font-medium disabled:opacity-50"
+              >
+                {heroUploading ? 'Uploading…' : value.heroImageUrl.trim() ? 'Replace image' : 'Upload image'}
+              </button>
+              {value.heroImageUrl.trim() ? (
+                <button
+                  type="button"
+                  disabled={heroUploading}
+                  onClick={async () => {
+                    const previous = value.heroImageUrl.trim() || null
+                    patch({ heroImageUrl: '' })
+                    try {
+                      await removeTeamHeroImageByPublicUrl(previous)
+                    } catch {
+                      // best effort cleanup
+                    }
+                  }}
+                  className="rounded border border-zinc-300 dark:border-zinc-600 px-2 py-1 text-xs font-medium disabled:opacity-50"
+                >
+                  Remove image
+                </button>
+              ) : null}
+            </div>
+            {heroError ? (
+              <p className="mt-2 text-xs font-medium text-rose-600">{heroError}</p>
+            ) : (
+              <p className="mt-2 text-[11px] text-zinc-500">
+                Uploaded image URL is saved in <code>page_config.hero.heroImage.url</code>.
+              </p>
+            )}
+          </div>
         </div>
         <div>
           <span className="mb-1 block text-[10px] font-medium text-zinc-500">Team text</span>
