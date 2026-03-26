@@ -224,8 +224,9 @@ function PreviewPhone({ form, name }: { form: TeamPageAdminFormValues; name: str
           </div>
         </div>
       </div>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-b from-transparent via-white/70 to-white" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-7 bg-white/85" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[52%] bg-gradient-to-b from-transparent via-white/85 to-white" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-9 bg-white/95" />
+      <div className="pointer-events-none absolute inset-0 rounded-[28px] [mask-image:linear-gradient(to_bottom,black_0%,black_56%,transparent_100%)] border border-zinc-200" />
     </div>
   ) 
 }
@@ -451,7 +452,7 @@ export default function TablesAdminPage() {
 
   return (
     <div className="admin-page-shell">
-      <header className="flex items-center justify-between gap-3">
+      <header className="flex items-end justify-between gap-3">
         <div>
           <h1 className="admin-page-title text-zinc-900">Tables</h1>
           <p className="admin-gap-page-title-intro admin-intro">
@@ -463,7 +464,10 @@ export default function TablesAdminPage() {
           onClick={openCreateEditor}
           className={`rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm ${GRADIENT_CTA}`}
         >
-          Create new table
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden>+</span>
+            <span>Create new table</span>
+          </span>
         </button>
       </header>
 
@@ -661,7 +665,7 @@ export default function TablesAdminPage() {
                       rows={3}
                       value={formTheme.teamText}
                       onChange={(e) => setFormTheme((p) => ({ ...p, teamText: e.target.value }))}
-                      className="mt-1.5 w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-[14px]"
+                        className="mt-1.5 h-[142px] w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-[14px]"
                     />
                   </label>
                       <label className="block">
@@ -671,7 +675,7 @@ export default function TablesAdminPage() {
                           min={1}
                           value={formCapacity}
                           onChange={(e) => setFormCapacity(Math.max(1, Number(e.target.value) || 1))}
-                          className="mt-1.5 h-9 w-28 rounded-xl border border-zinc-300 px-3 text-[14px]"
+                          className="mt-2.5 h-9 w-28 rounded-xl border border-zinc-300 px-3 text-[14px]"
                         />
                       </label>
                     </div>
@@ -702,7 +706,7 @@ export default function TablesAdminPage() {
                       />
                       <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
                         <div className="text-xs font-medium text-zinc-700">Avatar upload</div>
-                        <div className="mt-2 flex items-center justify-between gap-2">
+                        <div className="mt-2 flex min-h-[52px] items-center justify-between gap-2">
                           <button
                             type="button"
                             onClick={() => avatarInputRef.current?.click()}
@@ -721,7 +725,7 @@ export default function TablesAdminPage() {
                       </div>
                       <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
                         <div className="text-xs font-medium text-zinc-700">Hero image upload</div>
-                        <div className="mt-2 flex items-center justify-between gap-2">
+                        <div className="mt-2 flex min-h-[52px] items-center justify-between gap-2">
                           <button
                             type="button"
                             disabled={heroUploading}
@@ -767,12 +771,10 @@ export default function TablesAdminPage() {
                               background: `linear-gradient(to right, ${preset.tableGradTop}, ${preset.tableGradBottom})`,
                             }}
                           >
-                            <div className="aspect-square">
+                            <div className="relative h-10">
                               <div className="text-[11px] font-semibold">{preset.name}</div>
-                            </div>
-                            <span className="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/90">
                               {selected ? (
-                                <span className="inline-flex h-3 w-3 items-center justify-center rounded-full bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white">
+                                <span className="absolute inset-0 flex items-center justify-center text-white">
                                   <svg
                                     viewBox="0 0 24 24"
                                     fill="none"
@@ -780,14 +782,14 @@ export default function TablesAdminPage() {
                                     strokeWidth={2.5}
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    className="h-2 w-2"
+                                    className="h-4 w-4"
                                     aria-hidden
                                   >
                                     <path d="m5 12 5 5L20 7" />
                                   </svg>
                                 </span>
                               ) : null}
-                            </span>
+                            </div>
                           </button>
                         )
                       })}
@@ -895,7 +897,7 @@ export default function TablesAdminPage() {
       ) : null}
 
       {successToast ? (
-        <div className="pointer-events-none fixed right-6 top-6 z-[70]">
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[70] flex justify-center">
           <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-700 shadow-sm animate-[fadeIn_180ms_ease-out]">
             <svg
               viewBox="0 0 24 24"
