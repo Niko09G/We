@@ -30,10 +30,10 @@ type GuestWithTable = SeatFinderGuest & {
 }
 
 const TABLE_LAYOUT_SLOTS = [
-  { key: 'gold', x: 38, y: 18, expectedName: 'gold' },
-  { key: 'blue', x: 38, y: 35, expectedName: 'blue' },
-  { key: 'red', x: 38, y: 52, expectedName: 'red' },
-  { key: 'green', x: 38, y: 69, expectedName: 'green' },
+  { key: 'gold', x: 52, y: 18, expectedName: 'gold' },
+  { key: 'blue', x: 52, y: 35, expectedName: 'blue' },
+  { key: 'red', x: 52, y: 52, expectedName: 'red' },
+  { key: 'green', x: 52, y: 69, expectedName: 'green' },
 ] as const
 
 const LANDMARKS = [
@@ -136,7 +136,11 @@ function tableFillStyle(slotKey: (typeof TABLE_LAYOUT_SLOTS)[number]['key']): {
   }
 }
 
-/** Subtle interior guides — matches `border-zinc-200` map frame; rendered behind tables/labels/seats. */
+/**
+ * Two guides only (zinc-200, 1px — matches map frame):
+ * - vertical: lobby/reception (left) vs table stack (right)
+ * - horizontal: table band (top) vs kitchen/bar (bottom)
+ */
 function SeatMapGuidelines() {
   const w = WORLD_W
   const h = WORLD_H
@@ -149,11 +153,8 @@ function SeatMapGuidelines() {
       aria-hidden
     >
       <g stroke="#e4e4e7" strokeWidth={1} fill="none" strokeLinecap="round" strokeLinejoin="round">
-        <line x1={w * 0.22} y1={42} x2={w * 0.22} y2={h - 44} />
-        <line x1={w * 0.5} y1={52} x2={w * 0.5} y2={h - 52} />
-        <line x1={20} y1={h * 0.28} x2={w - 20} y2={h * 0.28} />
-        <line x1={20} y1={h * 0.42} x2={w - 20} y2={h * 0.42} />
-        <line x1={20} y1={h * 0.58} x2={w - 20} y2={h * 0.58} />
+        <line x1={w * 0.295} y1={28} x2={w * 0.295} y2={h - 36} />
+        <line x1={16} y1={h * 0.765} x2={w - 16} y2={h * 0.765} />
       </g>
     </svg>
   )

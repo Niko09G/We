@@ -84,6 +84,13 @@ function isUuid(value: unknown): value is string {
   )
 }
 
+/** Leaderboard row fill from admin table color (hex) — vertical two-stop gradient for contrast with white type. */
+function leaderboardRowGradient(tableColor: string | null): string {
+  const raw = (tableColor ?? '#52525b').trim()
+  const hex = /^#[0-9A-Fa-f]{6}$/i.test(raw) ? raw : '#52525b'
+  return `linear-gradient(to bottom, ${hex} 0%, color-mix(in srgb, ${hex} 68%, #ffffff) 100%)`
+}
+
 export default function MissionsTablePage({
   params,
 }: {
@@ -962,58 +969,51 @@ export default function MissionsTablePage({
         </section>
 
         <section id="leaderboard" className="scroll-mt-8">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-left text-2xl font-semibold leading-snug text-zinc-900">
-              Leaderboard
-            </h2>
-            <Link
-              href="/display"
-              className="shrink-0 text-xs font-bold text-violet-700 underline-offset-2 hover:underline"
-            >
-              Full board
-            </Link>
-          </div>
+          <h2 className="text-left text-2xl font-semibold leading-snug text-zinc-900">
+            Leaderboard
+          </h2>
 
           {leaderboardPreview.length > 0 ? (
-            <div className="mt-3 rounded-3xl border-2 border-violet-100 bg-white/90 p-5">
-              <ul className="space-y-2">
-                {leaderboardPreview.map((row, i) => {
-                  const isYou = row.tableId === tableId
-                  return (
-                    <li
-                      key={row.tableId}
-                      className={`flex items-center justify-between gap-2 rounded-2xl border px-3 py-2.5 text-xs ${
-                        isYou
-                          ? 'border-violet-300 bg-violet-50'
-                          : 'border-violet-100 bg-violet-50/40'
-                      }`}
-                    >
-                      <span className="flex min-w-0 items-center gap-2 font-bold text-violet-950">
-                        <span className="tabular-nums text-violet-400">{i + 1}.</span>
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-violet-200"
-                          style={{
-                            backgroundColor: row.tableColor || '#8b5cf6',
-                          }}
-                        />
-                        <span className="truncate">{row.tableName}</span>
-                        {isYou ? (
-                          <span className="shrink-0 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-extrabold text-white">
-                            You
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="inline-flex shrink-0 items-center gap-1 font-extrabold tabular-nums text-violet-800">
-                        <RewardUnitIcon size={COIN_SIZE} />
-                        {row.totalPoints}
-                      </span>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
+            <ul className="mt-3 flex w-full flex-col gap-0">
+              {leaderboardPreview.map((row, i) => {
+                const isYou = row.tableId === tableId
+                return (
+                  <li
+                    key={row.tableId}
+                    className="flex items-center justify-between gap-3 px-3 py-3 text-sm"
+                    style={{
+                      background: leaderboardRowGradient(row.tableColor),
+                      ...(isYou
+                        ? {
+                            boxShadow:
+                              '0 0 0 1px rgba(255,255,255,0.42), 0 0 32px rgba(255,255,255,0.18)',
+                          }
+                        : {}),
+                    }}
+                  >
+                    <span className="flex min-w-0 items-center gap-2.5 font-bold text-white">
+                      <span className="tabular-nums text-white">{i + 1}.</span>
+                      <div
+                        className="h-8 w-8 shrink-0 rounded-full border border-white/35 bg-white/20"
+                        aria-hidden
+                      />
+                      <span className="truncate">{row.tableName}</span>
+                      {isYou ? (
+                        <span className="shrink-0 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-extrabold text-white">
+                          You
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="inline-flex shrink-0 items-center gap-1 font-extrabold tabular-nums text-white">
+                      <RewardUnitIcon size={COIN_SIZE} className="brightness-0 invert" />
+                      {row.totalPoints}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
           ) : (
-            <div className="mt-3 rounded-3xl border border-zinc-200 bg-white p-5">
+            <div className="mt-3">
               <p className="text-sm font-medium text-zinc-600">No leaderboard data yet.</p>
             </div>
           )}
