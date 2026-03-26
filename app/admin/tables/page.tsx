@@ -147,7 +147,7 @@ function PreviewPhone({ form, name }: { form: TeamPageAdminFormValues; name: str
   const avatarUrl = form.avatarImageUrl.trim()
   const initials = initialsFromName(name)
   return (
-    <div className="relative h-[520px] w-[255px] overflow-hidden rounded-[28px] bg-white">
+    <div className="relative h-[520px] w-full overflow-hidden rounded-[28px] bg-white">
       <div className="h-full overflow-y-auto">
         <div className="p-0 text-white" style={{ background: heroBg }}>
           <div className="px-3 pb-3 pt-3">
