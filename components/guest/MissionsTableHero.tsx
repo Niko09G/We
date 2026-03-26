@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { GUEST_EMBLEM_PLACEHOLDER_DATA_URL } from '@/lib/guest-emblem-config'
-import { COIN_SIZE } from '@/lib/mission-ui'
+import { COIN_SIZE, safeRewardPoints } from '@/lib/mission-ui'
 import { RewardUnitIcon } from '@/components/reward/RewardUnitIcon'
 import { MISSIONS_HERO_BACKGROUND } from '@/lib/guest-missions-gradients'
 
@@ -19,6 +19,12 @@ export type MissionsTableHeroProps = {
   missionCount: number
   onStartMission: () => void
   onSendGreeting: () => void
+  /** When set, overrides default hero gradient (team `page_config.hero`). */
+  heroBackgroundCss?: string
+  /** Hero art under title; defaults to `/hero/hero-main.png`. */
+  heroImageSrc?: string | null
+  /** Subcopy under HUD (team `page_config.hero.teamText`). */
+  teamSubcopy?: string | null
 }
 
 /**
@@ -38,11 +44,16 @@ export function MissionsTableHero({
   missionCount,
   onStartMission,
   onSendGreeting,
+  heroBackgroundCss,
+  heroImageSrc,
+  teamSubcopy,
 }: MissionsTableHeroProps) {
+  const heroBg = heroBackgroundCss ?? MISSIONS_HERO_BACKGROUND
+  const mainArt = heroImageSrc?.trim() || '/hero/hero-main.png'
   return (
     <section
       className="relative isolate box-border flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] w-full max-w-full min-w-0 flex-col overflow-x-hidden overflow-y-hidden pt-[env(safe-area-inset-top,0px)] text-white"
-      style={{ background: MISSIONS_HERO_BACKGROUND }}
+      style={{ background: heroBg }}
     >
       <nav className="absolute left-0 right-0 top-0 z-20 flex flex-wrap items-center justify-between gap-2 px-5 pt-[calc(env(safe-area-inset-top,0px)+1.25rem)]">
         <Link
@@ -80,7 +91,7 @@ export function MissionsTableHero({
             <>
               <div className="mx-auto mb-4 w-full max-w-xs">
                 <img
-                  src="/hero/hero-main.png"
+                  src={mainArt}
                   alt=""
                   className="mx-auto w-[80%] max-w-[80%] object-contain"
                 />
@@ -121,18 +132,14 @@ export function MissionsTableHero({
                   ) : null}
                 </p>
                 <p className="inline-flex items-center gap-1.5 text-base font-bold text-white sm:text-lg">
-                  <RewardUnitIcon size={COIN_SIZE} />
-                  <span className="tabular-nums">
-                    {Number.isFinite(tablePoints) ? tablePoints : 0}
-                  </span>
+                  <RewardUnitIcon size={COIN_SIZE} displayVariant="onDark" />
+                  <span className="tabular-nums">{safeRewardPoints(tablePoints)}</span>
                 </p>
               </div>
 
-              <p className="mx-auto mt-4 max-w-[22rem] text-sm font-medium leading-relaxed text-white/90">
-                We are Kaypoh Aunties! We see, we hear, we confirm win Bea &amp; Niko&apos;s wedding
-                game.
-                <br />
-                Faster go play!
+              <p className="mx-auto mt-4 max-w-[22rem] whitespace-pre-line text-sm font-medium leading-relaxed text-white/90">
+                {teamSubcopy?.trim() ||
+                  'We are Kaypoh Aunties! We see, we hear, we confirm win Bea & Niko’s wedding game.\nFaster go play!'}
               </p>
 
               <div className="mt-6 flex w-full flex-col items-center gap-2.5">

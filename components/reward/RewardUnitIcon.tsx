@@ -7,12 +7,21 @@ import {
   type RewardUnitConfig,
 } from '@/lib/reward-unit'
 
+type DisplayVariant = 'default' | 'onDark'
+
 type Props = {
   /** Pixel size (width/height) */
   size?: number
   className?: string
   /** Visually hidden label for screen readers when icon is decorative */
   title?: string
+  /**
+   * `onDark`: raster icons get an invert stack for light-on-dark UIs; emoji uses light tone.
+   * Do not pass `brightness-0 invert` in className for rasters — use this instead.
+   */
+  displayVariant?: DisplayVariant
+  /** When no image URL, tint the fallback emoji (e.g. team `page_config.theme.iconColor`). */
+  tintColor?: string
 }
 
 /** Icon from explicit config (e.g. admin form preview before save). */
@@ -21,8 +30,12 @@ export function RewardUnitIconFromConfig({
   size = 18,
   className = '',
   title,
+  displayVariant = 'default',
+  tintColor,
 }: Props & { config: RewardUnitConfig }) {
   const url = rewardUnitMainIconUrl(config)
+  const onDark = displayVariant === 'onDark'
+  const imgTone = onDark ? 'brightness-0 invert' : ''
 
   if (url) {
     return (
@@ -32,17 +45,20 @@ export function RewardUnitIconFromConfig({
         alt=""
         width={size}
         height={size}
-        className={`inline-block shrink-0 object-contain align-middle ${className}`}
+        className={`inline-block shrink-0 object-contain align-middle ${imgTone} ${className}`.trim()}
         title={title}
         loading="lazy"
+        decoding="async"
       />
     )
   }
 
+  const emojiColor = tintColor?.trim() || (onDark ? '#ffffff' : undefined)
+
   return (
     <span
-      className={`inline-flex shrink-0 items-center justify-center align-middle leading-none ${className}`}
-      style={{ fontSize: size }}
+      className={`inline-flex shrink-0 items-center justify-center align-middle leading-none ${!tintColor?.trim() && onDark ? 'text-white' : ''} ${className}`.trim()}
+      style={{ fontSize: size, lineHeight: 1, ...(emojiColor ? { color: emojiColor } : {}) }}
       aria-hidden={title ? undefined : true}
       title={title}
     >
@@ -54,9 +70,22 @@ export function RewardUnitIconFromConfig({
 /**
  * Configured reward icon (image URL) or fallback emoji — uses global event config.
  */
-export function RewardUnitIcon({ size = 18, className = '', title }: Props) {
+export function RewardUnitIcon({
+  size = 18,
+  className = '',
+  title,
+  displayVariant = 'default',
+  tintColor,
+}: Props) {
   const { config } = useRewardUnit()
   return (
-    <RewardUnitIconFromConfig config={config} size={size} className={className} title={title} />
+    <RewardUnitIconFromConfig
+      config={config}
+      size={size}
+      className={className}
+      title={title}
+      displayVariant={displayVariant}
+      tintColor={tintColor}
+    />
   )
 }

@@ -1,3 +1,5 @@
+import { safeRewardPoints } from '@/lib/mission-ui'
+
 /**
  * Per-mission submission caps (per table). Rejected submissions do not count toward the cap.
  *
@@ -41,7 +43,7 @@ export type GuestMissionRewardInput = MissionLimitFields & {
  * Non-repeatable: `points` only. Repeatable auto (`isRepeatableAutoMission`): `points_per_submission ?? points`.
  */
 export function guestMissionDisplayReward(m: GuestMissionRewardInput): number {
-  const base = Math.max(0, Math.floor(Number(m.points) || 0))
+  const base = Math.floor(safeRewardPoints(m.points))
   if (
     isRepeatableAutoMission({
       approval_mode: m.approval_mode,
@@ -51,7 +53,7 @@ export function guestMissionDisplayReward(m: GuestMissionRewardInput): number {
   ) {
     const pps = m.points_per_submission
     if (pps != null && pps !== undefined && Number.isFinite(Number(pps))) {
-      return Math.max(0, Math.floor(Number(pps)))
+      return Math.floor(safeRewardPoints(pps))
     }
     return base
   }

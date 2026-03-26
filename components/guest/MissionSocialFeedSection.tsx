@@ -461,9 +461,12 @@ function FeedLightbox({
 export function MissionSocialFeedSection({
   items,
   loading = false,
+  sectionTitleColor,
 }: {
   items: GuestMissionFeedItem[]
   loading?: boolean
+  /** Team page typography — section title only (missions area unchanged). */
+  sectionTitleColor?: string
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -528,7 +531,10 @@ export function MissionSocialFeedSection({
   return (
     <section className="w-full min-w-0" aria-label="Live feed, and awful marriage advice">
       <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h2 className="text-left text-2xl font-semibold leading-snug text-zinc-900">
+        <h2
+          className="text-left text-2xl font-semibold leading-snug text-zinc-900"
+          style={sectionTitleColor ? { color: sectionTitleColor } : undefined}
+        >
           Live feed, and awful marriage advice
         </h2>
       </div>

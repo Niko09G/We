@@ -1,5 +1,12 @@
 export const COIN_SIZE = 24
 
+/** Non-negative, finite reward/points values for HUD, leaderboard, and overlays. */
+export function safeRewardPoints(value: unknown): number {
+  const n = Number(value ?? 0)
+  if (!Number.isFinite(n)) return 0
+  return Math.max(0, n)
+}
+
 /** Announcement strips: strong readable text + very light matching tint (same model as emerald completed). */
 export const MISSION_SIGNATURE_TEXT = '#6231fb'
 export const MISSION_SIGNATURE_TINT_BG = 'rgba(98, 49, 251, 0.08)'

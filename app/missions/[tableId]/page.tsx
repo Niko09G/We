@@ -32,7 +32,7 @@ import {
   type GuestMissionFeedItem,
 } from '@/lib/guest-mission-feed'
 import { saveGuestTableContext } from '@/lib/guest-table-context'
-import { COIN_SIZE } from '@/lib/mission-ui'
+import { COIN_SIZE, safeRewardPoints } from '@/lib/mission-ui'
 import {
   fetchGuestEmblemsConfig,
   resolveRankEmblemUrl,
@@ -45,6 +45,11 @@ import {
   TRUMPET_STORY_CARD_ARTWORK_PATH,
   guestMissionSurfaceGradient,
 } from '@/lib/guest-missions-gradients'
+import {
+  heroBackgroundStyle,
+  leaderboardRowFill,
+  resolveTeamPageConfig,
+} from '@/lib/team-page-config'
 
 type TableIdParams = { tableId: string }
 
@@ -84,13 +89,6 @@ function isUuid(value: unknown): value is string {
   )
 }
 
-/** Leaderboard row fill from admin table color (hex) — vertical two-stop gradient for contrast with white type. */
-function leaderboardRowGradient(tableColor: string | null): string {
-  const raw = (tableColor ?? '#52525b').trim()
-  const hex = /^#[0-9A-Fa-f]{6}$/i.test(raw) ? raw : '#52525b'
-  return `linear-gradient(to bottom, ${hex} 0%, color-mix(in srgb, ${hex} 68%, #ffffff) 100%)`
-}
-
 export default function MissionsTablePage({
   params,
 }: {
@@ -108,6 +106,7 @@ export default function MissionsTablePage({
 
   const [tableName, setTableName] = useState<string>('')
   const [tableColor, setTableColor] = useState<string | null>(null)
+  const [tablePageConfigRaw, setTablePageConfigRaw] = useState<unknown>(null)
   const [leaderboardRows, setLeaderboardRows] = useState<LeaderboardEntry[]>([])
 
   const [missions, setMissions] = useState<MissionRow[]>([])
@@ -146,11 +145,16 @@ export default function MissionsTablePage({
   const { tablePoints, tableRank, totalTeams } = useMemo(() => {
     const idx = leaderboardRows.findIndex((e) => e.tableId === tableId)
     return {
-      tablePoints: idx >= 0 ? leaderboardRows[idx].totalPoints : 0,
+      tablePoints: idx >= 0 ? safeRewardPoints(leaderboardRows[idx].totalPoints) : 0,
       tableRank: idx >= 0 ? idx + 1 : null,
       totalTeams: leaderboardRows.length,
     }
   }, [leaderboardRows, tableId])
+
+  const teamPage = useMemo(
+    () => resolveTeamPageConfig(tablePageConfigRaw, { tableColor, tableName }),
+    [tablePageConfigRaw, tableColor, tableName]
+  )
 
   const leaderboardPreview = useMemo(
     () => leaderboardRows.slice(0, 4),
@@ -348,7 +352,7 @@ export default function MissionsTablePage({
         const [tRes, enabled] = await Promise.all([
           supabase
             .from('tables')
-            .select('name,color,is_active,is_archived')
+            .select('name,color,is_active,is_archived,page_config')
             .eq('id', tableId)
             .maybeSingle(),
           getMissionsEnabled(),
@@ -363,6 +367,7 @@ export default function MissionsTablePage({
           color?: string | null
           is_active?: boolean
           is_archived?: boolean
+          page_config?: unknown
         } | null
 
         if (!tRow) {
@@ -372,6 +377,7 @@ export default function MissionsTablePage({
         }
 
         if ((tRow.is_archived ?? false) === true) {
+          setTablePageConfigRaw(tRow.page_config ?? null)
           setTableName((tRow.name as string) ?? '')
           setTableColor((tRow.color as string | null) ?? null)
           setMissionsEnabled(enabled)
@@ -380,6 +386,7 @@ export default function MissionsTablePage({
           return
         }
 
+        setTablePageConfigRaw(tRow.page_config ?? null)
         setTableName((tRow.name as string) ?? '')
         setTableColor((tRow.color as string | null) ?? null)
 
@@ -689,7 +696,7 @@ export default function MissionsTablePage({
 
   const showMissionUi = missionsEnabled === true && !error
 
-  const navHighlightColor = (tableColor?.trim() || '#8b5cf6') as string
+  const navHighlightColor = teamPage.theme.primaryColor
 
   return (
     <main className="min-h-screen w-full min-w-0 max-w-full overflow-x-hidden bg-white">
@@ -701,6 +708,9 @@ export default function MissionsTablePage({
           tableRank={tableRank}
           totalTeams={totalTeams}
           tablePoints={tablePoints}
+          heroBackgroundCss={heroBackgroundStyle(teamPage).background}
+          heroImageSrc={teamPage.hero.heroImage.url}
+          teamSubcopy={teamPage.hero.teamText}
           heroTeamEmblemUrl={heroTeamEmblemUrl}
           heroRankEmblemUrl={heroRankEmblemUrl}
           missionsEnabled={missionsEnabled}
@@ -757,7 +767,7 @@ export default function MissionsTablePage({
                 aria-label={`${missionSectionProgress.done} of ${missionSectionProgress.total} missions completed, ${tablePoints} ${rewardUnitCompactLabel(rewardUnit)}`}
               >
                 {missionSectionProgress.done}/{missionSectionProgress.total} completed ·{' '}
-                <RewardUnitIcon size={COIN_SIZE} />
+                <RewardUnitIcon size={COIN_SIZE} displayVariant="onDark" />
                 {tablePoints}
               </span>
             ) : null}
@@ -922,6 +932,7 @@ export default function MissionsTablePage({
             <MissionSocialFeedSection
               items={missionFeedItems}
               loading={missionFeedLoading}
+              sectionTitleColor={teamPage.typography.textColorPrimary}
             />
           ) : null}
         </section>
@@ -957,64 +968,111 @@ export default function MissionsTablePage({
         ) : null}
 
         <section id="seat-finder" className="scroll-mt-8">
-          <h2 className="text-left text-2xl font-semibold leading-snug text-zinc-900">
+          <h2
+            className="text-left text-2xl font-semibold leading-snug text-zinc-900"
+            style={{ color: teamPage.typography.textColorPrimary }}
+          >
             Find your people
           </h2>
-          <p className="mt-1 text-base text-zinc-500">
+          <p
+            className="mt-1 text-base text-zinc-500"
+            style={{ color: teamPage.typography.textColorSecondary }}
+          >
             Search your name or explore the tables
           </p>
           <div className="mt-3 min-h-0">
-            <SeatingMapPanel layout="embedded" showSectionHeading={false} className="w-full" />
+            <SeatingMapPanel
+              layout="embedded"
+              showSectionHeading={false}
+              className="w-full"
+              viewerAccentColor={teamPage.theme.primaryColor}
+            />
           </div>
         </section>
 
         <section id="leaderboard" className="scroll-mt-8">
-          <h2 className="text-left text-2xl font-semibold leading-snug text-zinc-900">
+          <h2
+            className="text-left text-2xl font-semibold leading-snug text-zinc-900"
+            style={{ color: teamPage.typography.textColorPrimary }}
+          >
             Leaderboard
           </h2>
+          <p
+            className="mt-1 text-base text-zinc-500"
+            style={{ color: teamPage.typography.textColorSecondary }}
+          >
+            See how your table stacks up
+          </p>
 
           {leaderboardPreview.length > 0 ? (
-            <ul className="mt-3 flex w-full flex-col gap-0">
-              {leaderboardPreview.map((row, i) => {
-                const isYou = row.tableId === tableId
-                return (
-                  <li
-                    key={row.tableId}
-                    className="flex items-center justify-between gap-3 px-3 py-3 text-sm"
-                    style={{
-                      background: leaderboardRowGradient(row.tableColor),
-                      ...(isYou
-                        ? {
-                            boxShadow:
-                              '0 0 0 1px rgba(255,255,255,0.42), 0 0 32px rgba(255,255,255,0.18)',
-                          }
-                        : {}),
-                    }}
-                  >
-                    <span className="flex min-w-0 items-center gap-2.5 font-bold text-white">
-                      <span className="tabular-nums text-white">{i + 1}.</span>
-                      <div
-                        className="h-8 w-8 shrink-0 rounded-full border border-white/35 bg-white/20"
-                        aria-hidden
-                      />
-                      <span className="truncate">{row.tableName}</span>
-                      {isYou ? (
-                        <span className="shrink-0 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-extrabold text-white">
-                          You
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="inline-flex shrink-0 items-center gap-1 font-extrabold tabular-nums text-white">
-                      <RewardUnitIcon size={COIN_SIZE} className="brightness-0 invert" />
-                      {row.totalPoints}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
+            <>
+              <ul className="mt-3 flex w-full flex-col gap-3">
+                {leaderboardPreview.map((row, i) => {
+                  const isYou = row.tableId === tableId
+                  const pointsShown = safeRewardPoints(row.totalPoints)
+                  return (
+                    <li
+                      key={row.tableId}
+                      className="flex items-center justify-between gap-3 rounded-md px-3 py-3 text-sm"
+                      style={{
+                        background: leaderboardRowFill(row.tableColor, teamPage),
+                        ...(isYou
+                          ? {
+                              boxShadow:
+                                '0 0 0 1px rgba(255,255,255,0.38), inset 0 0 0 1px rgba(255,255,255,0.22), 0 0 36px rgba(255,255,255,0.16)',
+                            }
+                          : {}),
+                      }}
+                    >
+                      <span className="flex min-w-0 items-center gap-2.5 font-bold text-white">
+                        <span className="tabular-nums text-white">{i + 1}.</span>
+                        <div
+                          className="h-8 w-8 shrink-0 rounded-full border border-white/35 bg-white/20"
+                          aria-hidden
+                        />
+                        <span className="truncate">{row.tableName}</span>
+                        {isYou ? (
+                          <span className="shrink-0 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-extrabold text-white">
+                            You
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="inline-flex shrink-0 items-center gap-1 font-extrabold tabular-nums text-white">
+                        <RewardUnitIcon
+                          size={COIN_SIZE}
+                          displayVariant="onDark"
+                          tintColor={teamPage.theme.iconColor}
+                        />
+                        {pointsShown}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+              <div className="mt-4 flex w-full justify-center">
+                <button
+                  type="button"
+                  onClick={() => scrollToQuests()}
+                  className="inline-flex w-[min(300px,78vw)] items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-105 active:scale-[0.98]"
+                  style={{ backgroundColor: teamPage.theme.primaryColor }}
+                >
+                  <RewardUnitIcon
+                    size={COIN_SIZE}
+                    displayVariant="onDark"
+                    tintColor="#ffffff"
+                  />
+                  Earn more coins
+                </button>
+              </div>
+            </>
           ) : (
             <div className="mt-3">
-              <p className="text-sm font-medium text-zinc-600">No leaderboard data yet.</p>
+              <p
+                className="text-sm font-medium text-zinc-600"
+                style={{ color: teamPage.typography.textColorSecondary }}
+              >
+                No leaderboard data yet.
+              </p>
             </div>
           )}
         </section>
@@ -1039,7 +1097,8 @@ export default function MissionsTablePage({
               const missionRewardGuest = guestMissionDisplayReward(m)
               const missionCouldReachNextRank = Boolean(
                 teamAbove != null &&
-                  tablePoints + missionRewardGuest >= teamAbove.totalPoints
+                  tablePoints + missionRewardGuest >=
+                    safeRewardPoints(teamAbove.totalPoints)
               )
               const isTableGreetingMission = /post a table greeting/i.test(m.title)
               const isTrumpetStoryMission =
