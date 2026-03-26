@@ -9,10 +9,6 @@ import {
   useState,
 } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import {
-  MISSION_CARD_BACKGROUNDS,
-  firstStopColorFromMissionGradient,
-} from '@/lib/guest-missions-gradients'
 
 type SeatFinderGuest = {
   id: string
@@ -27,7 +23,6 @@ type SeatFinderTable = {
   name: string
   is_active?: boolean
   is_archived?: boolean
-  color: string | null
 }
 
 type GuestWithTable = SeatFinderGuest & {
@@ -53,11 +48,21 @@ const SEAT_LAYOUT_CAPACITY = 30
 const WORLD_W = 720
 const WORLD_H = 620
 
-const DEFAULT_ZOOM = 0.86
-const FOCUS_ZOOM = 1.06
-const ZOOM_MIN = 0.72
-const ZOOM_MAX = 1.22
+/** Left-aligned overview: zoomed out to show full floor graphic. */
+const DEFAULT_ZOOM = 0.64
+const FOCUS_ZOOM = 1.08
+const ZOOM_MIN = 0.52
+const ZOOM_MAX = 1.28
 const TRANSFORM_MS = 280
+const OVERVIEW_PAD_X = 12
+
+/** Vertical gradients per layout slot (team identity). `blue` slot = Kaypoh Auntie’s. */
+const TABLE_GRADIENT_BY_SLOT: Record<(typeof TABLE_LAYOUT_SLOTS)[number]['key'], string> = {
+  gold: 'linear-gradient(to bottom, #f75f0c 0%, #fca16a 100%)',
+  blue: 'linear-gradient(to bottom, #952dfe 0%, #5a35f9 50%, #889af9 100%)',
+  red: 'linear-gradient(to bottom, #ff3b4a 0%, #ff997a 100%)',
+  green: 'linear-gradient(to bottom, #0c8837 0%, #89c97d 100%)',
+}
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -78,44 +83,16 @@ function seatPosition(
   return { leftPct, isTop }
 }
 
-function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
-  const raw = hex.trim().replace(/^#/, '')
-  if (!raw) return null
-  const full =
-    raw.length === 3
-      ? raw
-          .split('')
-          .map((c) => c + c)
-          .join('')
-      : raw.length === 6
-        ? raw
-        : null
-  if (!full) return null
-  const n = Number.parseInt(full, 16)
-  if (Number.isNaN(n)) return null
-  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }
-}
-
-function rgbAlpha(hex: string, a: number): string {
-  const rgb = hexToRgb(hex)
-  if (!rgb) return `rgba(139, 92, 246, ${a})`
-  return `rgba(${rgb.r},${rgb.g},${rgb.b},${a})`
-}
-
-function softTableBackground(hex: string | null, slotIndex: number): {
+function tableFillStyle(slotKey: (typeof TABLE_LAYOUT_SLOTS)[number]['key']): {
   background: string
   borderColor: string
   shadow: string
 } {
-  const base =
-    hex?.trim() ||
-    firstStopColorFromMissionGradient(
-      MISSION_CARD_BACKGROUNDS[slotIndex % MISSION_CARD_BACKGROUNDS.length]!
-    )
+  const background = TABLE_GRADIENT_BY_SLOT[slotKey]
   return {
-    background: `linear-gradient(165deg, ${rgbAlpha(base, 0.38)} 0%, ${rgbAlpha(base, 0.14)} 48%, rgba(255,255,255,0.96) 100%)`,
-    borderColor: rgbAlpha(base, 0.28),
-    shadow: `0 4px 14px ${rgbAlpha(base, 0.12)}`,
+    background,
+    borderColor: 'rgba(255,255,255,0.28)',
+    shadow: '0 6px 18px rgba(0,0,0,0.12)',
   }
 }
 
@@ -142,7 +119,6 @@ export function SeatingMapPanel({
   const [transitionTransform, setTransitionTransform] = useState(false)
   const [pressedTableId, setPressedTableId] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
-  const [tableColors, setTableColors] = useState<Record<string, string | null>>({})
 
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -164,7 +140,7 @@ export function SeatingMapPanel({
             .not('seat_number', 'is', null),
           supabase
             .from('tables')
-            .select('id, name, is_active, is_archived, color')
+            .select('id, name, is_active, is_archived')
             .order('name'),
         ])
 
@@ -173,11 +149,6 @@ export function SeatingMapPanel({
 
         const tables = (tablesRes.data ?? []) as SeatFinderTable[]
         const tableNameById = new Map(tables.map((t) => [t.id, t.name]))
-        const colorMap: Record<string, string | null> = {}
-        for (const t of tables) {
-          colorMap[t.id] = t.color ?? null
-        }
-        setTableColors(colorMap)
 
         const seatedRows = (attendeesRes.data ?? []) as Array<
           SeatFinderGuest & { table_id: string | null; seat_number: number | null }
@@ -278,22 +249,42 @@ export function SeatingMapPanel({
     }
   }, [])
 
-  const applyDefaultCenter = useCallback(() => {
+  /** Zoomed-out overview: world’s left edge near viewport left, vertically centered. */
+  const applyOverviewCamera = useCallback(() => {
     const vp = viewportRef.current
     if (!vp) return
     const z = DEFAULT_ZOOM
-    const wx = WORLD_W / 2
-    const wy = WORLD_H / 2
-    const Vcx = vp.clientWidth / 2
-    const Vcy = vp.clientHeight / 2
+    const panX = OVERVIEW_PAD_X
+    const panY = vp.clientHeight / 2 - (WORLD_H * z) / 2
     setZoom(z)
-    setPan({ x: Vcx - wx * z, y: Vcy - wy * z })
+    setPan({ x: panX, y: panY })
   }, [])
 
   useLayoutEffect(() => {
     if (loading) return
-    requestAnimationFrame(() => applyDefaultCenter())
-  }, [applyDefaultCenter, loading])
+    requestAnimationFrame(() => applyOverviewCamera())
+  }, [applyOverviewCamera, loading])
+
+  /** While dragging the map, block page scroll on touch devices. */
+  useEffect(() => {
+    if (!dragging) return
+    const blockScroll = (e: TouchEvent) => {
+      e.preventDefault()
+    }
+    document.body.addEventListener('touchmove', blockScroll, { passive: false })
+    return () => document.body.removeEventListener('touchmove', blockScroll)
+  }, [dragging])
+
+  /** Wheel over map stays on the map (no competing page scroll). */
+  useEffect(() => {
+    const el = viewportRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [loading])
 
   const selectGuest = (g: GuestWithTable) => {
     setSelectedId(g.id)
@@ -335,16 +326,10 @@ export function SeatingMapPanel({
     setPan({ x: Vcx - worldX * z, y: Vcy - worldY * z })
   }
 
-  const handleResetView = () => {
-    setTransitionTransform(true)
-    applyDefaultCenter()
-    window.setTimeout(() => setTransitionTransform(false), TRANSFORM_MS + 40)
-  }
-
   const onPointerDownViewport = (e: React.PointerEvent) => {
     if (e.button !== 0) return
     const t = e.target as HTMLElement
-    if (t.closest('button')) return
+    if (t.closest('button') || t.closest('[data-seat-map-table]')) return
     setDragging(true)
     setTransitionTransform(false)
     dragRef.current = {
@@ -377,13 +362,13 @@ export function SeatingMapPanel({
     dragRef.current = null
   }
 
-  const shellClass =
+  const outerClass =
     layout === 'page'
-      ? 'flex h-[70vh] max-h-[70vh] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.07)]'
-      : 'flex h-[min(65vh,560px)] max-h-[70vh] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.07)]'
+      ? 'flex h-[70vh] max-h-[70vh] min-h-0 flex-col overflow-visible'
+      : 'flex h-[min(65vh,560px)] max-h-[70vh] min-h-0 flex-col overflow-visible'
 
   const titleBlock = showSectionHeading ? (
-    <div className="shrink-0 px-5 pt-5">
+    <div className="shrink-0">
       <h2 className="text-left text-2xl font-semibold leading-snug text-zinc-900">
         Find your seat
       </h2>
@@ -394,7 +379,9 @@ export function SeatingMapPanel({
   ) : null
 
   const searchBlock = (
-    <div className={`relative shrink-0 px-5 ${showSectionHeading ? 'pt-4' : 'pt-5'}`}>
+    <div
+      className={`relative shrink-0 ${showSectionHeading ? 'mt-4' : layout === 'embedded' ? 'mt-0' : 'mt-4'}`}
+    >
       <input
         ref={inputRef}
         value={search}
@@ -412,7 +399,7 @@ export function SeatingMapPanel({
         className="relative z-10 w-full rounded-full border border-zinc-200 bg-zinc-50/80 px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition-colors duration-200 focus:border-violet-300 focus:bg-white focus:ring-2 focus:ring-violet-200/60"
       />
       {search.trim().length > 0 && !searchResultsDismissed ? (
-        <div className="absolute left-5 right-5 top-full z-50 mt-1 max-h-52 overflow-auto rounded-2xl border border-zinc-200 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-auto rounded-2xl border border-zinc-200 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
           {loading ? (
             <p className="px-3 py-2.5 text-xs text-zinc-500">Loading seats…</p>
           ) : matching.length === 0 ? (
@@ -455,19 +442,17 @@ export function SeatingMapPanel({
   )
 
   return (
-    <div className={`${shellClass} ${className}`}>
+    <div className={`${outerClass} ${className}`}>
       {titleBlock}
       {searchBlock}
 
       {error ? (
-        <p className="mx-5 mt-2 shrink-0 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+        <p className="mt-2 shrink-0 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
           {error}
         </p>
       ) : null}
 
-      <div className="relative mx-5 mb-5 mt-3 min-h-0 flex-1 overflow-hidden rounded-2xl border border-zinc-100 bg-[#f4f4f5] [background-image:radial-gradient(circle_at_center,rgba(161,161,170,0.14)_1px,transparent_1px)] [background-size:20px_20px]">
-        <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/40 to-transparent" />
-
+      <div className="relative mt-3 min-h-0 flex-1 overflow-hidden rounded-3xl border border-zinc-200 bg-white">
         <div
           className="absolute right-3 top-3 z-20 flex flex-col gap-2"
           onPointerDown={(e) => e.stopPropagation()}
@@ -476,7 +461,7 @@ export function SeatingMapPanel({
             type="button"
             aria-label="Zoom in"
             onClick={() => setZoomAnchored(zoom + 0.08)}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white text-base font-semibold text-zinc-700 shadow-[0_4px_12px_rgba(0,0,0,0.07)] transition-shadow duration-200 hover:shadow-[0_6px_16px_rgba(0,0,0,0.09)] active:scale-95"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-950 bg-zinc-900 text-lg font-semibold leading-none text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)] transition active:scale-95"
           >
             +
           </button>
@@ -484,17 +469,9 @@ export function SeatingMapPanel({
             type="button"
             aria-label="Zoom out"
             onClick={() => setZoomAnchored(zoom - 0.08)}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white text-base font-semibold text-zinc-700 shadow-[0_4px_12px_rgba(0,0,0,0.07)] transition-shadow duration-200 hover:shadow-[0_6px_16px_rgba(0,0,0,0.09)] active:scale-95"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-950 bg-zinc-900 text-lg font-semibold leading-none text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)] transition active:scale-95"
           >
             −
-          </button>
-          <button
-            type="button"
-            aria-label="Reset map view"
-            onClick={handleResetView}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white text-[10px] font-bold uppercase tracking-wide text-zinc-600 shadow-[0_4px_12px_rgba(0,0,0,0.07)] transition-shadow duration-200 hover:shadow-[0_6px_16px_rgba(0,0,0,0.09)] active:scale-95"
-          >
-            ⟲
           </button>
         </div>
 
@@ -502,7 +479,8 @@ export function SeatingMapPanel({
           ref={viewportRef}
           role="application"
           aria-label="Seating map — drag to pan"
-          className="relative h-full w-full cursor-grab touch-pan-y active:cursor-grabbing"
+          className="relative h-full w-full cursor-grab touch-none select-none active:cursor-grabbing"
+          style={{ touchAction: 'none' }}
           onPointerDown={onPointerDownViewport}
           onPointerMove={onPointerMoveViewport}
           onPointerUp={endDrag}
@@ -537,8 +515,7 @@ export function SeatingMapPanel({
                 `${slot.expectedName.charAt(0).toUpperCase()}${slot.expectedName.slice(1)} Table`
 
               const isSelectedTable = Boolean(table && selectedGuest?.table_id === table.id)
-              const tableHex = table ? tableColors[table.id] ?? null : null
-              const tableStyle = softTableBackground(tableHex, idx)
+              const tableStyle = tableFillStyle(slot.key)
 
               return (
                 <div
@@ -550,6 +527,7 @@ export function SeatingMapPanel({
                   style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
                 >
                   <div
+                    data-seat-map-table={table ? '' : undefined}
                     role={table ? 'button' : undefined}
                     tabIndex={table ? 0 : undefined}
                     onKeyDown={(e) => {
@@ -562,23 +540,31 @@ export function SeatingMapPanel({
                     onClick={() => {
                       if (table) setPressedTableId((id) => (id === table.id ? null : table.id))
                     }}
-                    className={`relative flex w-full flex-col overflow-visible rounded-2xl border text-left transition-[transform,box-shadow] duration-200 ease-out outline-none focus-visible:ring-2 focus-visible:ring-violet-300 ${
-                      table ? 'cursor-pointer hover:z-10 active:scale-[1.02]' : 'cursor-default opacity-60'
+                    className={`relative flex w-full flex-col overflow-visible rounded-2xl border text-left transition-[transform,box-shadow] duration-200 ease-out outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900/20 ${
+                      table ? 'cursor-pointer hover:z-10 active:scale-[1.02]' : 'cursor-default opacity-55'
                     } ${
                       isSelectedTable || pressedTableId === table?.id
-                        ? 'z-10 scale-[1.03] shadow-[0_12px_28px_rgba(0,0,0,0.1)]'
-                        : 'shadow-[0_6px_16px_rgba(0,0,0,0.06)]'
-                    }`}
-                    style={{
-                      background: tableStyle.background,
-                      borderColor: tableStyle.borderColor,
-                      boxShadow: isSelectedTable
-                        ? `${tableStyle.shadow}, 0 0 0 2px rgba(139,92,246,0.22)`
-                        : tableStyle.shadow,
-                    }}
+                        ? 'z-10 scale-[1.03] shadow-[0_14px_32px_rgba(0,0,0,0.18)]'
+                        : ''
+                    } ${!table ? 'border-zinc-200 bg-zinc-100 shadow-none' : ''}`}
+                    style={
+                      table
+                        ? {
+                            background: tableStyle.background,
+                            borderColor: tableStyle.borderColor,
+                            boxShadow: isSelectedTable
+                              ? `${tableStyle.shadow}, 0 0 0 3px rgba(255,255,255,0.85)`
+                              : tableStyle.shadow,
+                          }
+                        : undefined
+                    }
                   >
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-8 pt-1">
-                      <span className="max-w-full truncate text-center text-[11px] font-semibold tracking-wide text-zinc-800/95">
+                      <span
+                        className={`max-w-full truncate text-center text-[11px] font-semibold tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)] ${
+                          table ? 'text-white' : 'text-zinc-600'
+                        }`}
+                      >
                         {label}
                       </span>
                     </div>
@@ -603,14 +589,14 @@ export function SeatingMapPanel({
                                   e.stopPropagation()
                                   selectGuest(g)
                                 }}
-                                className={`absolute z-10 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border text-[8px] font-bold leading-none transition-[transform,box-shadow] duration-200 ${
+                                className={`absolute z-10 flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full border-2 text-[9px] font-extrabold leading-none transition-[transform,box-shadow] duration-200 ${
                                   pos.isTop
                                     ? 'top-0 -translate-y-1/2'
                                     : 'bottom-0 translate-y-1/2'
                                 } ${
                                   isSelectedSeat
-                                    ? 'animate-seat-glow border-white/90 z-20 scale-110 bg-white text-violet-700'
-                                    : 'border-zinc-300/80 bg-white/95 text-zinc-600 shadow-sm hover:border-violet-300 hover:text-violet-800'
+                                    ? 'animate-seat-celebrate z-30 scale-125 border-white bg-white text-violet-700 ring-2 ring-violet-400/90'
+                                    : 'border-white/70 bg-white/95 text-zinc-800 shadow-sm hover:border-white hover:bg-white'
                                 }`}
                                 style={{
                                   left: `${pos.leftPct}%`,
