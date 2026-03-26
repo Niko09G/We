@@ -1156,11 +1156,11 @@ export default function MissionsTablePage({
           },
           {
             id: 'seat',
-            label: 'People finder',
+            label: 'Seat finder',
             targetId: 'seat-finder',
             activeIconSrc: '/nav/PinW.svg',
             inactiveIconSrc: '/nav/PinC.svg',
-            iconAlt: 'People finder',
+            iconAlt: 'Seat finder',
           },
           {
             id: 'leaderboard',

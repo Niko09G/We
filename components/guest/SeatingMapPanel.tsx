@@ -37,8 +37,8 @@ const TABLE_LAYOUT_SLOTS = [
 ] as const
 
 const LANDMARKS = [
-  { name: 'Lift Lobby', x: 10, y: 26 },
-  { name: 'Reception', x: 10, y: 73 },
+  { name: 'Lift Lobby', x: 5, y: 26 },
+  { name: 'Reception', x: 5, y: 73 },
   { name: 'Kitchen', x: 19, y: 90 },
   { name: 'Activity / screen', x: 83, y: 34 },
   { name: 'Bar', x: 70, y: 80 },
@@ -48,13 +48,13 @@ const SEAT_LAYOUT_CAPACITY = 30
 const WORLD_W = 720
 const WORLD_H = 620
 
-/** Left-aligned overview: zoomed out to show full floor graphic. */
-const DEFAULT_ZOOM = 0.64
+/** Overview: fully zoomed out; pan X nudged right vs world origin. */
+const DEFAULT_ZOOM = 0.52
 const FOCUS_ZOOM = 1.08
 const ZOOM_MIN = 0.52
 const ZOOM_MAX = 1.28
 const TRANSFORM_MS = 280
-const OVERVIEW_PAD_X = 12
+const OVERVIEW_PAD_X = 38
 
 /** Vertical gradients per layout slot (team identity). `blue` slot = Kaypoh Auntie’s. */
 const TABLE_GRADIENT_BY_SLOT: Record<(typeof TABLE_LAYOUT_SLOTS)[number]['key'], string> = {
@@ -80,12 +80,13 @@ const TABLE_SOLID_ACCENT_BY_SLOT: Record<(typeof TABLE_LAYOUT_SLOTS)[number]['ke
   green: '#0c8837',
 }
 
+/** Side-view table: thin tabletop + two legs (filled silhouette). */
 function MapTableGlyph({ color }: { color: string }) {
   return (
     <svg className="shrink-0" width={17} height={17} viewBox="0 0 24 24" aria-hidden>
       <path
         fill={color}
-        d="M5 8a2 2 0 012-2h10a2 2 0 012 2v2H5V8zm0 4h14v5a2 2 0 01-2 2H7a2 2 0 01-2-2v-5z"
+        d="M3 5.5h18v3.5H3V5.5zM5 9h4v11H5V9zm10 0h4v11h-4V9z"
       />
     </svg>
   )
@@ -133,6 +134,29 @@ function tableFillStyle(slotKey: (typeof TABLE_LAYOUT_SLOTS)[number]['key']): {
     borderColor: 'rgba(255,255,255,0.28)',
     shadow: '0 6px 18px rgba(0,0,0,0.12)',
   }
+}
+
+/** Subtle interior guides — matches `border-zinc-200` map frame; rendered behind tables/labels/seats. */
+function SeatMapGuidelines() {
+  const w = WORLD_W
+  const h = WORLD_H
+  return (
+    <svg
+      className="pointer-events-none absolute inset-0 z-0 h-full w-full"
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      aria-hidden
+    >
+      <g stroke="#e4e4e7" strokeWidth={1} fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <line x1={w * 0.22} y1={42} x2={w * 0.22} y2={h - 44} />
+        <line x1={w * 0.5} y1={52} x2={w * 0.5} y2={h - 52} />
+        <line x1={20} y1={h * 0.28} x2={w - 20} y2={h * 0.28} />
+        <line x1={20} y1={h * 0.42} x2={w - 20} y2={h * 0.42} />
+        <line x1={20} y1={h * 0.58} x2={w - 20} y2={h * 0.58} />
+      </g>
+    </svg>
+  )
 }
 
 type DragRef = { sx: number; sy: number; px: number; py: number }
@@ -622,10 +646,11 @@ export function SeatingMapPanel({
                 : 'none',
             }}
           >
+            <SeatMapGuidelines />
             {LANDMARKS.map((lm) => (
               <div
                 key={lm.name}
-                className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-zinc-200/90 bg-white/95 px-2.5 py-1 text-[10px] font-medium tracking-wide text-zinc-500 shadow-sm"
+                className="absolute z-[5] -translate-x-1/2 -translate-y-1/2 rounded-full border border-zinc-200/90 bg-white/95 px-2.5 py-1 text-[10px] font-medium tracking-wide text-zinc-500 shadow-sm"
                 style={{ left: `${lm.x}%`, top: `${lm.y}%` }}
               >
                 {lm.name}
@@ -647,7 +672,7 @@ export function SeatingMapPanel({
                   ref={(el) => {
                     if (table) tableRefs.current[table.id] = el
                   }}
-                  className="absolute w-[min(90vw,500px)] max-w-[68%] -translate-x-1/2 -translate-y-1/2"
+                  className="absolute z-[6] w-[min(90vw,500px)] max-w-[68%] -translate-x-1/2 -translate-y-1/2"
                   style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
                 >
                   <div
@@ -690,21 +715,19 @@ export function SeatingMapPanel({
                                   seatRefs.current[g.id] = el
                                 }}
                                 onClick={() => selectGuest(g)}
-                                className={`animate-seat-marker-glow absolute z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center overflow-hidden rounded-full border-2 text-[10px] font-extrabold leading-none transition-[transform,box-shadow] duration-200 ${
+                                className={`absolute z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center overflow-hidden rounded-full border-2 text-[10px] font-extrabold leading-none transition-[transform,box-shadow] duration-200 ${
                                   pos.isTop
                                     ? 'top-0 -translate-y-1/2'
                                     : 'bottom-0 translate-y-1/2'
                                 } ${
                                   isSelectedSeat
-                                    ? 'z-30 scale-110 border-white bg-white'
-                                    : 'border-white/90 bg-white shadow-[0_0_0_1px_rgba(255,255,255,0.9),0_0_12px_5px_rgba(255,255,255,0.45),0_0_28px_10px_rgba(255,255,255,0.18)] hover:border-white'
+                                    ? 'animate-seat-selected-glow z-30 scale-110 border-white bg-white'
+                                    : 'border-zinc-300 bg-white shadow-sm hover:border-zinc-400'
                                 }`}
                                 style={{
                                   left: `${pos.leftPct}%`,
                                   ...(isSelectedSeat
-                                    ? {
-                                        boxShadow: `0 0 0 2px #ffffff, 0 0 0 5px ${slotAccent}, 0 0 14px 6px rgba(255,255,255,0.55), 0 0 26px 12px rgba(255,255,255,0.22)`,
-                                      }
+                                    ? ({ ['--seat-accent' as string]: slotAccent } as React.CSSProperties)
                                     : undefined),
                                 }}
                                 title={`${g.full_name} · Seat ${g.seat_number}`}
@@ -735,14 +758,14 @@ export function SeatingMapPanel({
 
         {selectedGuest ? (
           <aside
-            className="pointer-events-auto absolute bottom-3 left-3 right-3 z-30 mx-auto max-w-md rounded-2xl border border-white/80 bg-white/95 px-3 py-3 backdrop-blur-sm transition-[box-shadow,opacity] duration-300"
+            className="pointer-events-auto absolute bottom-3 left-3 right-3 z-30 mx-auto max-w-md rounded-2xl border border-white/80 bg-white/95 px-4 py-3.5 backdrop-blur-sm transition-[box-shadow,opacity] duration-300"
             style={{
               boxShadow: selectedGuestSlotKey
                 ? TABLE_RESULT_GLOW_BY_SLOT[selectedGuestSlotKey]
                 : '0 10px 28px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.06)',
             }}
           >
-            <div className="flex items-center gap-3 text-black">
+            <div className="flex items-center gap-4 text-black">
               <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full border border-zinc-200 bg-white">
                 {selectedGuest.photo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -759,7 +782,7 @@ export function SeatingMapPanel({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-base font-semibold text-black">{selectedGuest.full_name}</p>
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-medium text-black">
+                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm font-medium text-black">
                   <span className="flex min-w-0 max-w-full flex-1 basis-0 items-center gap-2">
                     <MapTableGlyph
                       color={
@@ -772,7 +795,7 @@ export function SeatingMapPanel({
                       {selectedGuest.table_name}
                     </span>
                   </span>
-                  <span className="inline-flex shrink-0 items-center gap-2">
+                  <span className="inline-flex shrink-0 items-center gap-2 pr-1">
                     <MapSeatGlyph
                       color={
                         selectedGuestSlotKey
@@ -780,7 +803,7 @@ export function SeatingMapPanel({
                           : '#71717a'
                       }
                     />
-                    <span className="whitespace-nowrap text-black">Seat {selectedGuest.seat_number}</span>
+                    <span className="whitespace-nowrap pr-1 text-black">Seat {selectedGuest.seat_number}</span>
                   </span>
                 </div>
               </div>

@@ -136,19 +136,27 @@ select {
   }
 }
 
-/* Seat finder: gentle breathe on markers (white glow stays in component styles) */
-@keyframes seatMarkerSoftPulse {
+/* Seat finder: selected seat — white ring + team accent glow (uses --seat-accent on element) */
+@keyframes seatSelectedTeamGlow {
   0%,
   100% {
-    opacity: 1;
+    box-shadow:
+      0 0 0 2px #ffffff,
+      0 0 0 5px var(--seat-accent, #6366f1),
+      0 0 14px 6px color-mix(in srgb, var(--seat-accent, #6366f1) 42%, transparent),
+      0 0 28px 10px color-mix(in srgb, var(--seat-accent, #6366f1) 22%, transparent);
   }
   50% {
-    opacity: 0.9;
+    box-shadow:
+      0 0 0 2px #ffffff,
+      0 0 0 8px var(--seat-accent, #6366f1),
+      0 0 22px 10px color-mix(in srgb, var(--seat-accent, #6366f1) 50%, transparent),
+      0 0 38px 16px color-mix(in srgb, var(--seat-accent, #6366f1) 18%, transparent);
   }
 }
 
-.animate-seat-marker-glow {
-  animation: seatMarkerSoftPulse 2.6s ease-in-out infinite;
+.animate-seat-selected-glow {
+  animation: seatSelectedTeamGlow 1.25s ease-in-out infinite;
 }
 
 /* Seat finder: strong celebratory glow (shadow only — preserves seat transforms) */
