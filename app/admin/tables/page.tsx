@@ -642,219 +642,114 @@ export default function TablesAdminPage() {
               </button>
             </div>
 
-            <div className="overflow-y-auto px-5 py-4 [&_input]:!text-[14px] [&_textarea]:!text-[14px] [&_select]:!text-[14px]">
-              <div className="grid gap-6 lg:grid-cols-[1fr_308px]">
-                <div className="space-y-6">
-                  <input
-                    ref={avatarInputRef}
-                    type="file"
-                    accept="image/jpeg,image/jpg,image/png,image/webp"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null
-                      e.currentTarget.value = ''
-                      if (file) void uploadAvatar(file)
-                    }}
-                  />
-                  <input
-                    ref={heroInputRef}
-                    type="file"
-                    accept="image/jpeg,image/jpg,image/png,image/webp"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null
-                      e.currentTarget.value = ''
-                      if (file) void uploadHero(file)
-                    }}
-                  />
+            <div className="flex-1 overflow-hidden px-5 py-4 [&_input]:!text-[14px] [&_textarea]:!text-[14px] [&_select]:!text-[14px]">
+              <div className="grid h-full gap-6 lg:grid-cols-[minmax(0,1fr)_308px]">
+                <div className="h-full overflow-y-auto pr-2">
+                  <div className="space-y-6">
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] ?? null
+                        e.currentTarget.value = ''
+                        if (file) void uploadAvatar(file)
+                      }}
+                    />
+                    <input
+                      ref={heroInputRef}
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] ?? null
+                        e.currentTarget.value = ''
+                        if (file) void uploadHero(file)
+                      }}
+                    />
 
-                  <section className="space-y-4 pb-5 border-b border-zinc-200/80">
-                    <h4 className="text-sm font-semibold text-zinc-900">Identity</h4>
-                    <label className="block">
-                      <span className="text-xs font-medium text-zinc-600">Table name</span>
-                      <input
-                        value={formName}
-                        onChange={(e) => setFormName(e.target.value)}
-                        className="mt-1.5 h-9 w-full rounded-xl border border-zinc-300 px-3 !text-[14px]"
-                        placeholder="e.g. Kaypoh Aunties"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-xs font-medium text-zinc-600">Description</span>
-                      <textarea
-                        rows={3}
-                        value={formTheme.teamText}
-                        onChange={(e) => setFormTheme((p) => ({ ...p, teamText: e.target.value }))}
-                        className="mt-1.5 w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 !text-[14px]"
-                      />
-                    </label>
-                    <div className="flex items-end gap-4">
-                      <label className="block">
-                        <span className="text-xs font-medium text-zinc-600">Seat capacity</span>
-                        <input
-                          type="number"
-                          min={1}
-                          value={formCapacity}
-                          onChange={(e) => setFormCapacity(Math.max(1, Number(e.target.value) || 1))}
-                          className="mt-2 h-9 w-28 rounded-xl border border-zinc-300 px-3 !text-[14px]"
-                        />
-                      </label>
-                      <label className="inline-flex items-center gap-2 px-1 py-1.5 text-sm font-medium text-zinc-700">
-                        <span
-                          className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
-                            formActive ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]' : 'bg-zinc-300'
-                          }`}
+                    <section className="space-y-4 pb-5 border-b border-zinc-200/80">
+                      <h4 className="text-sm font-semibold text-zinc-900">Identity</h4>
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => heroInputRef.current?.click()}
+                          disabled={heroUploading}
+                          className="group relative h-[116px] w-full overflow-hidden rounded-2xl border border-zinc-300/80 bg-zinc-50 transition-colors hover:border-zinc-400 disabled:opacity-60"
+                          aria-label="Edit hero image"
                         >
-                          <span
-                            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                              formActive ? 'translate-x-4.5' : 'translate-x-0.5'
-                            }`}
-                          />
-                        </span>
-                        <input
-                          type="checkbox"
-                          checked={formActive}
-                          onChange={(e) => setFormActive(e.target.checked)}
-                          className="sr-only"
-                        />
-                        Make active
-                      </label>
-                    </div>
-                  </section>
-
-                  <section className="space-y-4 pb-5 border-b border-zinc-200/80">
-                    <h4 className="text-sm font-semibold text-zinc-900">Theme</h4>
-                    <div className="flex items-center gap-3">
-                      {THEME_PRESETS.map((preset) => {
-                        const selected = formPresetId === preset.id
-                        return (
-                          <button
-                            key={preset.id}
-                            type="button"
-                            onClick={() => applyPreset(preset.id)}
-                            className={`relative h-9 w-9 rounded-full transition-all ${
-                              selected ? 'ring-2 ring-zinc-900 ring-offset-2' : 'ring-1 ring-zinc-200'
-                            }`}
-                            style={{
-                              background: `linear-gradient(to right, ${preset.tableGradTop}, ${preset.tableGradBottom})`,
-                            }}
-                            aria-label={`Theme ${preset.name}`}
-                          >
-                            {selected ? (
-                              <span className="absolute inset-0 flex items-center justify-center text-white">
+                          {formTheme.heroImageUrl.trim() ? (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={formTheme.heroImageUrl.trim()}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                              <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-sm font-medium text-white opacity-0 transition-all group-hover:bg-black/30 group-hover:opacity-100">
+                                Replace cover
+                              </span>
+                            </>
+                          ) : (
+                            <span className="absolute inset-0 grid place-items-center text-sm text-zinc-400">
+                              Add cover image
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => avatarInputRef.current?.click()}
+                          disabled={avatarUploading}
+                          className="group absolute -bottom-7 left-4 h-[72px] w-[72px] overflow-hidden rounded-full border-2 border-white bg-zinc-100 shadow-sm transition-transform hover:scale-[1.02] disabled:opacity-60"
+                          aria-label="Edit avatar"
+                        >
+                          {formTheme.avatarImageUrl.trim() ? (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={formTheme.avatarImageUrl.trim()}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                              <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition-all group-hover:bg-black/30 group-hover:opacity-100">
                                 <svg
                                   viewBox="0 0 24 24"
                                   fill="none"
                                   stroke="currentColor"
-                                  strokeWidth={2.5}
+                                  strokeWidth={2}
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
                                   className="h-4 w-4"
                                   aria-hidden
                                 >
-                                  <path d="m5 12 5 5L20 7" />
+                                  <path d="M12 20h9" />
+                                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
                                 </svg>
                               </span>
-                            ) : null}
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <div className="grid grid-cols-4 gap-3 text-[11px] text-zinc-500">
-                      {THEME_PRESETS.map((preset) => (
-                        <span key={`${preset.id}-label`} className="text-center truncate">
-                          {preset.name}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className="space-y-3">
-                      <div>
-                        <div className="mb-2 text-xs font-semibold text-zinc-700">Hero</div>
-                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                          <ColorCircleField
-                            label="Hero top"
-                            value={formTheme.heroTop}
-                            onChange={(v) => setFormTheme((p) => ({ ...p, heroTop: v }))}
-                          />
-                          <ColorCircleField
-                            label="Hero middle"
-                            value={formTheme.heroMiddle}
-                            onChange={(v) => setFormTheme((p) => ({ ...p, heroMiddle: v }))}
-                          />
-                          <ColorCircleField
-                            label="Hero bottom"
-                            value={formTheme.heroBottom}
-                            onChange={(v) => setFormTheme((p) => ({ ...p, heroBottom: v }))}
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="mb-2 text-xs font-semibold text-zinc-700">Leaderboard</div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <ColorCircleField
-                            label="Leaderboard top"
-                            value={formTheme.lbGradTop}
-                            onChange={(v) => setFormTheme((p) => ({ ...p, lbGradTop: v }))}
-                          />
-                          <ColorCircleField
-                            label="Leaderboard bottom"
-                            value={formTheme.lbGradBottom}
-                            onChange={(v) => setFormTheme((p) => ({ ...p, lbGradBottom: v }))}
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="mb-2 text-xs font-semibold text-zinc-700">CTA</div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <ColorCircleField
-                            label="Primary CTA"
-                            value={formTheme.primaryColor}
-                            onChange={(v) => setFormTheme((p) => ({ ...p, primaryColor: v }))}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section className="space-y-4">
-                    <h4 className="text-sm font-semibold text-zinc-900">Assets</h4>
-                    <div className="grid items-center gap-4 sm:grid-cols-[84px_1fr]">
-                      <button
-                        type="button"
-                        onClick={() => avatarInputRef.current?.click()}
-                        disabled={avatarUploading}
-                        className="group relative h-[72px] w-[72px] overflow-hidden rounded-full border border-zinc-300/80 bg-zinc-50 transition-colors hover:border-zinc-400 disabled:opacity-60"
-                        aria-label="Upload avatar"
-                      >
-                        {formTheme.avatarImageUrl.trim() ? (
-                          <>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={formTheme.avatarImageUrl.trim()}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                            <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition-all group-hover:bg-black/30 group-hover:opacity-100">
+                            </>
+                          ) : (
+                            <span className="grid h-full w-full place-items-center text-zinc-500">
                               <svg
                                 viewBox="0 0 24 24"
                                 fill="none"
                                 stroke="currentColor"
-                                strokeWidth={2}
+                                strokeWidth={1.8}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                className="h-4 w-4"
+                                className="h-5 w-5"
                                 aria-hidden
                               >
-                                <path d="M12 20h9" />
-                                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                                <path d="M12 5v14M5 12h14" />
                               </svg>
                             </span>
-                          </>
-                        ) : (
-                          <span className="grid h-full w-full place-items-center text-zinc-400">
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="pt-8 space-y-4">
+                        <label className="block">
+                          <span className="mb-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600">
                             <svg
                               viewBox="0 0 24 24"
                               fill="none"
@@ -862,45 +757,183 @@ export default function TablesAdminPage() {
                               strokeWidth={1.8}
                               strokeLinecap="round"
                               strokeLinejoin="round"
-                              className="h-5 w-5"
+                              className="h-3.5 w-3.5"
                               aria-hidden
                             >
-                              <path d="M12 5v14M5 12h14" />
+                              <rect x="3" y="5" width="18" height="14" rx="2" />
+                              <path d="M8 9h8M8 13h5" />
                             </svg>
+                            Table name
                           </span>
-                        )}
-                      </button>
+                          <input
+                            value={formName}
+                            onChange={(e) => setFormName(e.target.value)}
+                            className="h-9 w-full border-b border-zinc-300 bg-transparent px-1 text-[14px] outline-none focus:border-zinc-500"
+                            placeholder="Enter team name"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600">
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth={1.8}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="h-3.5 w-3.5"
+                              aria-hidden
+                            >
+                              <path d="M4 6h16M4 12h10M4 18h13" />
+                            </svg>
+                            Tagline
+                          </span>
+                          <input
+                            value={formTheme.teamText}
+                            onChange={(e) => setFormTheme((p) => ({ ...p, teamText: e.target.value }))}
+                            className="h-9 w-full border-b border-zinc-300 bg-transparent px-1 text-[14px] outline-none focus:border-zinc-500"
+                            placeholder="A short line for the team"
+                          />
+                        </label>
+                      </div>
+                    </section>
 
-                      <button
-                        type="button"
-                        disabled={heroUploading}
-                        onClick={() => heroInputRef.current?.click()}
-                        className="group relative h-[96px] w-full overflow-hidden rounded-xl border border-zinc-300/80 bg-zinc-50 text-left transition-colors hover:border-zinc-400 disabled:opacity-60"
-                        aria-label="Upload hero image"
-                      >
-                        {formTheme.heroImageUrl.trim() ? (
-                          <>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={formTheme.heroImageUrl.trim()}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                            <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-sm font-medium text-white opacity-0 transition-all group-hover:bg-black/30 group-hover:opacity-100">
-                              Replace
+                    <section className="space-y-4 pb-5 border-b border-zinc-200/80">
+                      <h4 className="text-sm font-semibold text-zinc-900">Theme</h4>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                          {THEME_PRESETS.map((preset) => {
+                            const selected = formPresetId === preset.id
+                            return (
+                              <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() => applyPreset(preset.id)}
+                                className={`relative h-9 w-9 rounded-full transition-all ${
+                                  selected ? 'ring-2 ring-zinc-900 ring-offset-2' : 'ring-1 ring-zinc-200'
+                                }`}
+                                style={{
+                                  background: `linear-gradient(to right, ${preset.tableGradTop}, ${preset.tableGradBottom})`,
+                                }}
+                                aria-label={`Theme ${preset.name}`}
+                              >
+                                {selected ? (
+                                  <span className="absolute inset-0 flex items-center justify-center text-white">
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2.5}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="h-4 w-4"
+                                      aria-hidden
+                                    >
+                                      <path d="m5 12 5 5L20 7" />
+                                    </svg>
+                                  </span>
+                                ) : null}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <div className="grid grid-cols-4 gap-3 text-[11px] text-zinc-500">
+                          {THEME_PRESETS.map((preset) => (
+                            <span key={`${preset.id}-label`} className="text-center truncate">
+                              {preset.name}
                             </span>
-                          </>
-                        ) : (
-                          <span className="absolute inset-0 grid place-items-center text-sm text-zinc-400">
-                            Add hero image
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <ColorCircleField
+                          label="Hero top"
+                          value={formTheme.heroTop}
+                          onChange={(v) => setFormTheme((p) => ({ ...p, heroTop: v }))}
+                        />
+                        <ColorCircleField
+                          label="Hero middle"
+                          value={formTheme.heroMiddle}
+                          onChange={(v) => setFormTheme((p) => ({ ...p, heroMiddle: v }))}
+                        />
+                        <ColorCircleField
+                          label="Hero bottom"
+                          value={formTheme.heroBottom}
+                          onChange={(v) => setFormTheme((p) => ({ ...p, heroBottom: v }))}
+                        />
+                        <ColorCircleField
+                          label="Primary CTA"
+                          value={formTheme.primaryColor}
+                          onChange={(v) => setFormTheme((p) => ({ ...p, primaryColor: v }))}
+                        />
+                        <ColorCircleField
+                          label="Leaderboard top"
+                          value={formTheme.lbGradTop}
+                          onChange={(v) => setFormTheme((p) => ({ ...p, lbGradTop: v }))}
+                        />
+                        <ColorCircleField
+                          label="Leaderboard bottom"
+                          value={formTheme.lbGradBottom}
+                          onChange={(v) => setFormTheme((p) => ({ ...p, lbGradBottom: v }))}
+                        />
+                      </div>
+                    </section>
+
+                    <section className="space-y-3">
+                      <h4 className="text-sm font-semibold text-zinc-900">Compact settings</h4>
+                      <div className="flex items-end gap-4">
+                        <label className="block">
+                          <span className="mb-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600">
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth={1.8}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="h-3.5 w-3.5"
+                              aria-hidden
+                            >
+                              <path d="M5 19v-5a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v5" />
+                              <path d="M9 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                            </svg>
+                            Seat capacity
                           </span>
-                        )}
-                      </button>
-                    </div>
-                  </section>
+                          <input
+                            type="number"
+                            min={1}
+                            value={formCapacity}
+                            onChange={(e) => setFormCapacity(Math.max(1, Number(e.target.value) || 1))}
+                            className="h-9 w-28 border-b border-zinc-300 bg-transparent px-1 text-[14px] outline-none focus:border-zinc-500"
+                          />
+                        </label>
+                        <label className="inline-flex items-center gap-2 px-1 py-1.5 text-sm font-medium text-zinc-700">
+                          <span
+                            className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
+                              formActive ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]' : 'bg-zinc-300'
+                            }`}
+                          >
+                            <span
+                              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                                formActive ? 'translate-x-4.5' : 'translate-x-0.5'
+                              }`}
+                            />
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={formActive}
+                            onChange={(e) => setFormActive(e.target.checked)}
+                            className="sr-only"
+                          />
+                          Make active
+                        </label>
+                      </div>
+                    </section>
+                  </div>
                 </div>
 
-                <div>
+                <div className="self-start">
                   <div className="mb-1 text-xs font-medium text-zinc-600">Preview</div>
                   <PreviewPhone form={formTheme} name={formName || 'New table'} />
                 </div>
