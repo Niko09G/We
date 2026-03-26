@@ -645,7 +645,7 @@ export default function TablesAdminPage() {
               </button>
             </div>
 
-            <div className="overflow-y-auto px-5 py-4 [&_input]:text-[14px] [&_textarea]:text-[14px] [&_select]:text-[14px]">
+            <div className="overflow-y-auto px-5 py-4 [&_input]:!text-[14px] [&_textarea]:!text-[14px] [&_select]:!text-[14px]">
               <div className="grid gap-5 lg:grid-cols-[1fr_1fr_280px]">
                 <div className="space-y-4 lg:col-span-2">
                   <div className="grid gap-4 lg:grid-cols-2">
@@ -655,7 +655,7 @@ export default function TablesAdminPage() {
                     <input
                       value={formName}
                       onChange={(e) => setFormName(e.target.value)}
-                      className="mt-1.5 h-9 w-full rounded-xl border border-zinc-300 px-3 text-[14px]"
+                      className="mt-1.5 h-9 w-full rounded-xl border border-zinc-300 px-3 !text-[14px]"
                       placeholder="e.g. Kaypoh Aunties"
                     />
                   </label>
@@ -665,17 +665,17 @@ export default function TablesAdminPage() {
                       rows={3}
                       value={formTheme.teamText}
                       onChange={(e) => setFormTheme((p) => ({ ...p, teamText: e.target.value }))}
-                        className="mt-1.5 h-[142px] w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-[14px]"
+                        className="mt-1.5 h-[142px] w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 !text-[14px]"
                     />
                   </label>
                       <label className="block">
-                        <span className="text-xs font-medium text-zinc-600">Seat capacity</span>
+                        <span className="mb-2.5 block text-xs font-medium text-zinc-600">Seat capacity</span>
                         <input
                           type="number"
                           min={1}
                           value={formCapacity}
                           onChange={(e) => setFormCapacity(Math.max(1, Number(e.target.value) || 1))}
-                          className="mt-2.5 h-9 w-28 rounded-xl border border-zinc-300 px-3 text-[14px]"
+                          className="h-9 w-28 rounded-xl border border-zinc-300 px-3 !text-[14px]"
                         />
                       </label>
                     </div>
