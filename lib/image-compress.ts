@@ -115,6 +115,30 @@ export async function compressAvatarImage(file: File): Promise<AvatarCompressRes
   return { blob, contentType: 'image/webp' }
 }
 
+/** Avatar transform with centered square crop, max 512, encoded as WebP. */
+export async function compressAvatarSquareImage(file: File): Promise<AvatarCompressResult> {
+  assertMaxFileSize(file)
+  if (!isAcceptedImageFile(file)) {
+    throw new Error('Invalid image type. Use JPG, PNG, or WebP.')
+  }
+
+  const img = await loadImage(file)
+  const side = Math.min(img.naturalWidth, img.naturalHeight)
+  const srcX = Math.floor((img.naturalWidth - side) / 2)
+  const srcY = Math.floor((img.naturalHeight - side) / 2)
+  const outSide = Math.min(AVATAR_MAX_DIMENSION, side)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = outSide
+  canvas.height = outSide
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Could not get canvas context.')
+  ctx.drawImage(img, srcX, srcY, side, side, 0, 0, outSide, outSide)
+
+  const blob = await canvasToBlob(canvas, 'image/webp', AVATAR_WEBP_QUALITY)
+  return { blob, contentType: 'image/webp' }
+}
+
 function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file)

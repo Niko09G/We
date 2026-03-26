@@ -14,9 +14,15 @@ export type TeamPageHeroImage = {
   url: string | null
 }
 
+export type TeamPageAvatarImage = {
+  /** Optional table avatar used by admin previews and future guest UI. */
+  url: string | null
+}
+
 export type TeamPageHeroConfig = {
   backgroundGradient: TeamPageHeroGradient
   heroImage: TeamPageHeroImage
+  avatarImage: TeamPageAvatarImage
   /** Copy under HUD, above CTAs */
   teamText: string
 }
@@ -42,6 +48,7 @@ export type TeamPageConfigRaw = {
   hero?: Partial<{
     backgroundGradient: Partial<TeamPageHeroGradient>
     heroImage: Partial<TeamPageHeroImage>
+    avatarImage: Partial<TeamPageAvatarImage>
     teamText: string
   }>
   theme?: Partial<TeamPageThemeConfig> & {
@@ -186,6 +193,10 @@ export function resolveTeamPageConfig(
     typeof base.hero?.heroImage?.url === 'string' && base.hero.heroImage.url.trim()
       ? base.hero.heroImage.url.trim()
       : null
+  const avatarImageUrl =
+    typeof base.hero?.avatarImage?.url === 'string' && base.hero.avatarImage.url.trim()
+      ? base.hero.avatarImage.url.trim()
+      : null
 
   const th = base.theme ?? {}
   const tableGrad = parseGradientStop(
@@ -228,6 +239,7 @@ export function resolveTeamPageConfig(
   const hero: TeamPageHeroConfig = {
     backgroundGradient: heroGradient,
     heroImage: { url: heroImageUrl },
+    avatarImage: { url: avatarImageUrl },
     teamText: cleanStr(base.hero?.teamText, defaultTeamText(opts.tableName)),
   }
 
@@ -257,6 +269,7 @@ export type TeamPageAdminFormValues = {
   heroMiddle: string
   heroBottom: string
   heroImageUrl: string
+  avatarImageUrl: string
   teamText: string
   primaryColor: string
   tableGradTop: string
@@ -281,6 +294,7 @@ export function teamPageAdminFormDefaults(
     heroMiddle: r.hero.backgroundGradient.colorMiddle ?? '',
     heroBottom: r.hero.backgroundGradient.colorBottom,
     heroImageUrl: r.hero.heroImage.url ?? '',
+    avatarImageUrl: r.hero.avatarImage.url ?? '',
     teamText: r.hero.teamText,
     primaryColor: r.theme.primaryColor,
     tableGradTop: r.theme.tableGradient.colorTop,
@@ -303,6 +317,7 @@ export function pageConfigJsonFromAdminForm(v: TeamPageAdminFormValues): TeamPag
         ...(v.heroMiddle.trim() ? { colorMiddle: v.heroMiddle.trim() } : {}),
       },
       heroImage: { url: v.heroImageUrl.trim() || null },
+      avatarImage: { url: v.avatarImageUrl.trim() || null },
       teamText: v.teamText,
     },
     theme: {
