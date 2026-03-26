@@ -6,30 +6,14 @@ import { rewardUnitMainIconUrl, type RewardUnitConfig } from '@/lib/reward-unit'
 
 type DisplayVariant = 'default' | 'onDark'
 
-function stripImageFilterUtilities(className: string): string {
-  if (!className.trim()) return ''
-  return className
-    .split(/\s+/)
-    .filter((token) => token !== 'brightness-0' && token !== 'invert')
-    .join(' ')
-}
-
-/** Vector fallback — explicit fills so parent `color` / transparency cannot hide the coin. */
+/** Vector fallback with explicit fills so parent text color can't hide it. */
 function RewardUnitVectorFallback({
   size,
   className,
-  fill,
 }: {
   size: number
   className: string
-  fill: string
 }) {
-  const rim =
-    fill.toLowerCase() === '#ffffff'
-      ? '#e4e4e7'
-      : fill.toLowerCase() === '#111111'
-        ? '#3f3f46'
-        : fill
   return (
     <svg
       width={size}
@@ -39,8 +23,8 @@ function RewardUnitVectorFallback({
       aria-hidden
       focusable="false"
     >
-      <circle cx="12" cy="12" r="10" fill={rim} />
-      <circle cx="12" cy="12" r="6.75" fill={fill} />
+      <circle cx="12" cy="12" r="10" fill="#a16207" />
+      <circle cx="12" cy="12" r="6.75" fill="#f59e0b" />
     </svg>
   )
 }
@@ -51,12 +35,9 @@ type Props = {
   className?: string
   /** Visually hidden label for screen readers when icon is decorative */
   title?: string
-  /**
-   * `onDark`: raster icons get an invert stack for light-on-dark UIs; vector fallback uses light fills.
-   * Do not pass `brightness-0 invert` in className for rasters — use this instead.
-   */
+  /** Kept for API compatibility; renderer intentionally ignores this. */
   displayVariant?: DisplayVariant
-  /** When no image URL, overrides vector fallback fill (otherwise white on dark / near-black on light). */
+  /** Kept for API compatibility; renderer intentionally ignores this. */
   tintColor?: string
 }
 
@@ -75,9 +56,6 @@ export function RewardUnitIconFromConfig({
     setImgFailed(false)
   }, [url])
 
-  const onDark = displayVariant === 'onDark'
-  const imgTone = onDark ? 'brightness-0 invert' : ''
-  const safeClassName = stripImageFilterUtilities(className)
   const showRaster = Boolean(url && !imgFailed)
 
   if (showRaster) {
@@ -88,7 +66,7 @@ export function RewardUnitIconFromConfig({
         alt=""
         width={size}
         height={size}
-        className={`inline-block shrink-0 object-contain align-middle ${imgTone} ${safeClassName}`.trim()}
+        className={`inline-block shrink-0 object-contain align-middle ${className}`.trim()}
         title={title}
         loading="lazy"
         decoding="async"
@@ -98,12 +76,9 @@ export function RewardUnitIconFromConfig({
     )
   }
 
-  const trimmedTint = tintColor?.trim()
-  const vectorFill = trimmedTint || (onDark ? '#ffffff' : '#111111')
-
   return (
     <span
-      className={`inline-flex shrink-0 items-center justify-center align-middle leading-none ${safeClassName}`.trim()}
+      className={`inline-flex shrink-0 items-center justify-center align-middle leading-none ${className}`.trim()}
       style={{
         lineHeight: 1,
         minWidth: size,
@@ -112,7 +87,7 @@ export function RewardUnitIconFromConfig({
       aria-hidden={title ? undefined : true}
       title={title}
     >
-      <RewardUnitVectorFallback size={size} className="" fill={vectorFill} />
+      <RewardUnitVectorFallback size={size} className="" />
     </span>
   )
 }
