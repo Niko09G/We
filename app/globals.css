@@ -135,3 +135,22 @@ select {
     transform: translate3d(var(--tx), var(--ty), 0) scale(1) rotate(var(--rot));
   }
 }
+
+/* Seat finder: gentle pulse on highlighted chair */
+@keyframes seatGlowPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 3px rgba(139, 92, 246, 0.22),
+      0 4px 14px rgba(91, 33, 182, 0.18);
+  }
+  50% {
+    box-shadow:
+      0 0 0 5px rgba(139, 92, 246, 0.12),
+      0 6px 18px rgba(91, 33, 182, 0.12);
+  }
+}
+
+.animate-seat-glow {
+  animation: seatGlowPulse 2.4s ease-in-out infinite;
+}

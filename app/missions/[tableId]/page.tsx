@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MissionSocialFeedSection } from '@/components/guest/MissionSocialFeedSection'
+import { SeatingMapPanel } from '@/components/guest/SeatingMapPanel'
 import { StickySectionNav } from '@/components/guest/StickySectionNav'
 import { MissionsTableHero } from '@/components/guest/MissionsTableHero'
 import { getMissionsEnabled } from '@/lib/app-settings'
@@ -952,8 +953,11 @@ export default function MissionsTablePage({
           <h2 className="text-left text-2xl font-semibold leading-snug text-zinc-900">
             Find your seat
           </h2>
-          <div className="mt-3 rounded-3xl border border-zinc-200 bg-white p-6">
-            <div className="h-10" aria-hidden />
+          <p className="mt-1 text-sm text-zinc-500">
+            Search your name or explore the tables
+          </p>
+          <div className="mt-3 min-h-0">
+            <SeatingMapPanel layout="embedded" showSectionHeading={false} className="w-full" />
           </div>
         </section>
 
