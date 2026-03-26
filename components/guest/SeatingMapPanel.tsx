@@ -72,6 +72,37 @@ const TABLE_RESULT_GLOW_BY_SLOT: Record<(typeof TABLE_LAYOUT_SLOTS)[number]['key
   green: '0 12px 36px rgba(12, 136, 55, 0.26), 0 0 0 1px rgba(12, 136, 55, 0.12)',
 }
 
+/** Solid accent (first gradient stop) for rings and result icons. */
+const TABLE_SOLID_ACCENT_BY_SLOT: Record<(typeof TABLE_LAYOUT_SLOTS)[number]['key'], string> = {
+  gold: '#f75f0c',
+  blue: '#952dfe',
+  red: '#ff3b4a',
+  green: '#0c8837',
+}
+
+function MapTableGlyph({ color }: { color: string }) {
+  return (
+    <svg className="shrink-0" width={17} height={17} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="3" y="6" width="18" height="13" rx="1.5" stroke={color} strokeWidth={2} />
+      <path d="M3 12h18" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function MapSeatGlyph({ color }: { color: string }) {
+  return (
+    <svg className="shrink-0" width={17} height={17} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M7 14v5M5 19h14M5 19v-2.5a2 2 0 012-2h10a2 2 0 012 2V19M7 14V9a3 3 0 013-3h4a3 3 0 013 3v5"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
   const a = parts[0]?.[0] ?? ''
@@ -128,7 +159,6 @@ export function SeatingMapPanel({
   const [zoom, setZoom] = useState(DEFAULT_ZOOM)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [transitionTransform, setTransitionTransform] = useState(false)
-  const [pressedTableId, setPressedTableId] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
 
   const viewportRef = useRef<HTMLDivElement | null>(null)
@@ -421,7 +451,7 @@ export function SeatingMapPanel({
   const onPointerDownViewport = (e: React.PointerEvent) => {
     if (e.button !== 0) return
     const t = e.target as HTMLElement
-    if (t.closest('button') || t.closest('[data-seat-map-table]')) return
+    if (t.closest('button')) return
     setDragging(true)
     setTransitionTransform(false)
     dragRef.current = {
@@ -609,6 +639,7 @@ export function SeatingMapPanel({
 
               const isSelectedTable = Boolean(table && selectedGuest?.table_id === table.id)
               const tableStyle = tableFillStyle(slot.key)
+              const slotAccent = TABLE_SOLID_ACCENT_BY_SLOT[slot.key]
 
               return (
                 <div
@@ -620,25 +651,10 @@ export function SeatingMapPanel({
                   style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
                 >
                   <div
-                    data-seat-map-table={table ? '' : undefined}
-                    role={table ? 'button' : undefined}
-                    tabIndex={table ? 0 : undefined}
-                    onKeyDown={(e) => {
-                      if (!table) return
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        setPressedTableId((id) => (id === table.id ? null : table.id))
-                      }
-                    }}
-                    onClick={() => {
-                      if (table) setPressedTableId((id) => (id === table.id ? null : table.id))
-                    }}
-                    className={`relative flex w-full flex-col overflow-visible rounded-2xl border text-left transition-[transform,box-shadow] duration-200 ease-out outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900/20 ${
-                      table ? 'cursor-pointer hover:z-10 active:scale-[1.02]' : 'cursor-default opacity-55'
+                    className={`pointer-events-none relative flex w-full flex-col overflow-visible rounded-2xl border text-left transition-[transform,box-shadow] duration-200 ease-out ${
+                      table ? '' : 'cursor-default opacity-55'
                     } ${
-                      isSelectedTable || pressedTableId === table?.id
-                        ? 'z-10 scale-[1.03] shadow-[0_14px_32px_rgba(0,0,0,0.18)]'
-                        : ''
+                      isSelectedTable ? 'z-10 shadow-[0_14px_32px_rgba(0,0,0,0.18)]' : ''
                     } ${!table ? 'border-zinc-200 bg-zinc-100 shadow-none' : ''}`}
                     style={
                       table
@@ -661,12 +677,7 @@ export function SeatingMapPanel({
                         {label}
                       </span>
                     </div>
-                    {pressedTableId === table?.id ? (
-                      <div className="pointer-events-none absolute -bottom-7 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full border border-zinc-200/90 bg-white/95 px-2.5 py-1 text-[10px] font-medium text-zinc-600 shadow-md">
-                        Table {idx + 1} – {table?.name ?? label}
-                      </div>
-                    ) : null}
-                    <div className="relative h-[76px] w-full">
+                    <div className="relative h-[104px] w-full pointer-events-auto">
                       {table
                         ? table.guests.map((g) => {
                             const pos = seatPosition(g.seat_number, SEAT_LAYOUT_CAPACITY)
@@ -678,25 +689,38 @@ export function SeatingMapPanel({
                                 ref={(el) => {
                                   seatRefs.current[g.id] = el
                                 }}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  selectGuest(g)
-                                }}
-                                className={`absolute z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center rounded-full border-[3px] text-[10px] font-extrabold leading-none transition-[transform,box-shadow] duration-200 ${
+                                onClick={() => selectGuest(g)}
+                                className={`absolute z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center overflow-hidden rounded-full border-2 text-[10px] font-extrabold leading-none transition-[transform,box-shadow] duration-200 ${
                                   pos.isTop
                                     ? 'top-0 -translate-y-1/2'
                                     : 'bottom-0 translate-y-1/2'
                                 } ${
                                   isSelectedSeat
-                                    ? 'animate-seat-celebrate z-30 scale-[1.28] border-white bg-white text-violet-700 ring-[3px] ring-violet-100'
-                                    : 'border-white/70 bg-white/95 text-zinc-800 shadow-sm hover:border-white hover:bg-white'
+                                    ? 'z-30 scale-110 border-white bg-white'
+                                    : 'border-white/80 bg-white shadow-sm hover:border-white'
                                 }`}
                                 style={{
                                   left: `${pos.leftPct}%`,
+                                  ...(isSelectedSeat
+                                    ? {
+                                        boxShadow: `0 0 0 2px #ffffff, 0 0 0 5px ${slotAccent}`,
+                                      }
+                                    : {}),
                                 }}
                                 title={`${g.full_name} · Seat ${g.seat_number}`}
                               >
-                                {g.seat_number}
+                                {g.photo_url ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={g.photo_url}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="flex h-full w-full items-center justify-center bg-zinc-200 text-[9px] font-bold text-zinc-700">
+                                    {getInitials(g.full_name)}
+                                  </span>
+                                )}
                               </button>
                             )
                           })
@@ -711,15 +735,15 @@ export function SeatingMapPanel({
 
         {selectedGuest ? (
           <aside
-            className="pointer-events-auto absolute bottom-3 left-3 right-3 z-30 mx-auto max-w-md rounded-2xl border border-white/80 bg-white/95 px-3 py-2.5 backdrop-blur-sm transition-[box-shadow,opacity] duration-300"
+            className="pointer-events-auto absolute bottom-3 left-3 right-3 z-30 mx-auto max-w-md rounded-2xl border border-white/80 bg-white/95 px-3 py-3 backdrop-blur-sm transition-[box-shadow,opacity] duration-300"
             style={{
               boxShadow: selectedGuestSlotKey
                 ? TABLE_RESULT_GLOW_BY_SLOT[selectedGuestSlotKey]
                 : '0 10px 28px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.06)',
             }}
           >
-            <div className="flex items-center gap-3 text-xs text-violet-950">
-              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-violet-200 bg-white">
+            <div className="flex items-center gap-3 text-black">
+              <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full border border-zinc-200 bg-white">
                 {selectedGuest.photo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -728,18 +752,35 @@ export function SeatingMapPanel({
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-violet-800">
+                  <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-zinc-600">
                     {getInitials(selectedGuest.full_name)}
                   </div>
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-zinc-900">{selectedGuest.full_name}</p>
-                <p className="mt-0.5 text-[11px] text-violet-800/85">
-                  <span className="font-medium">{selectedGuest.table_name}</span>
-                  <span className="mx-1.5 text-violet-400">·</span>
-                  <span>Seat {selectedGuest.seat_number}</span>
-                </p>
+                <p className="truncate text-base font-semibold text-black">{selectedGuest.full_name}</p>
+                <div className="mt-1 flex flex-col gap-0.5 text-sm font-medium text-black">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <MapTableGlyph
+                      color={
+                        selectedGuestSlotKey
+                          ? TABLE_SOLID_ACCENT_BY_SLOT[selectedGuestSlotKey]
+                          : '#71717a'
+                      }
+                    />
+                    <span className="truncate">{selectedGuest.table_name}</span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <MapSeatGlyph
+                      color={
+                        selectedGuestSlotKey
+                          ? TABLE_SOLID_ACCENT_BY_SLOT[selectedGuestSlotKey]
+                          : '#71717a'
+                      }
+                    />
+                    <span>Seat {selectedGuest.seat_number}</span>
+                  </span>
+                </div>
               </div>
             </div>
           </aside>

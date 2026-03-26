@@ -909,7 +909,7 @@ export default function MissionsTablePage({
         </section>
       ) : null}
 
-      <div className="mx-auto w-full min-w-0 max-w-lg space-y-10 px-5 pb-28 pt-6">
+      <div className="mx-auto w-full min-w-0 max-w-lg space-y-12 px-5 pb-28 pt-6">
         <section id="feed" className="scroll-mt-8">
           {!loading && !error && missionsEnabled === true && tableName.trim() ? (
             <MissionSocialFeedSection
@@ -1156,11 +1156,11 @@ export default function MissionsTablePage({
           },
           {
             id: 'seat',
-            label: 'Seat Finder',
+            label: 'People finder',
             targetId: 'seat-finder',
             activeIconSrc: '/nav/PinW.svg',
             inactiveIconSrc: '/nav/PinC.svg',
-            iconAlt: 'Seat Finder',
+            iconAlt: 'People finder',
           },
           {
             id: 'leaderboard',

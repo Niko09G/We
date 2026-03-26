@@ -589,12 +589,14 @@ export function MissionSocialFeedSection({
         </div>
       ) : null}
 
-      <Link
-        href="/greetings"
-        className="mt-4 inline-flex w-fit rounded-md bg-[#6335fb] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-105 active:scale-[0.98]"
-      >
-        View all
-      </Link>
+      <div className="mt-4 flex w-full justify-center">
+        <Link
+          href="/greetings"
+          className="inline-flex w-full max-w-xs items-center justify-center rounded-md bg-[#6335fb] px-6 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-105 active:scale-[0.98]"
+        >
+          View all
+        </Link>
+      </div>
 
       <FeedLightbox
         items={items}
