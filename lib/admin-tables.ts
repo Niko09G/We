@@ -10,6 +10,8 @@ export type AdminTableRow = {
   created_at: string
   /** Max seats for seating planner (per-table seat numbers 1..capacity). */
   capacity: number
+  /** Guest team page JSON (`/missions/[tableId]`). */
+  page_config: unknown | null
 }
 
 export async function listTablesForAdmin(): Promise<AdminTableRow[]> {
@@ -32,6 +34,7 @@ export async function listTablesForAdmin(): Promise<AdminTableRow[]> {
       archived_at: (r.archived_at as string | null) ?? null,
       created_at: (row.created_at as string) ?? new Date().toISOString(),
       capacity,
+      page_config: (r.page_config as unknown) ?? null,
     }
   })
   rows.sort((a, b) => {
@@ -78,6 +81,8 @@ export async function updateTable(
     color?: string | null
     is_active?: boolean
     capacity?: number
+    /** JSON object for `tables.page_config` (omit to leave unchanged). */
+    page_config?: Record<string, unknown> | null
   }
 ): Promise<void> {
   const row: Record<string, unknown> = {}
@@ -88,6 +93,7 @@ export async function updateTable(
     const c = Math.max(1, Math.trunc(patch.capacity))
     row.capacity = c
   }
+  if (patch.page_config !== undefined) row.page_config = patch.page_config
   if (Object.keys(row).length === 0) return
 
   const { error } = await supabase.from('tables').update(row).eq('id', id)

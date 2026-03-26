@@ -250,3 +250,76 @@ export function leaderboardRowFill(
   const bottom = page.theme.leaderboardGradient.colorBottom
   return `linear-gradient(to bottom, ${top} 0%, ${bottom} 100%)`
 }
+
+/** Flat form model for the admin team-page editor (maps to `tables.page_config`). */
+export type TeamPageAdminFormValues = {
+  heroTop: string
+  heroMiddle: string
+  heroBottom: string
+  heroImageUrl: string
+  teamText: string
+  primaryColor: string
+  tableGradTop: string
+  tableGradBottom: string
+  lbGradTop: string
+  lbGradBottom: string
+  iconColor: string
+  textPrimary: string
+  textSecondary: string
+}
+
+/**
+ * Pre-fill admin fields: merge stored JSON with the same defaults as the guest page.
+ */
+export function teamPageAdminFormDefaults(
+  raw: unknown,
+  opts: { tableColor: string | null; tableName: string }
+): TeamPageAdminFormValues {
+  const r = resolveTeamPageConfig(raw, opts)
+  return {
+    heroTop: r.hero.backgroundGradient.colorTop,
+    heroMiddle: r.hero.backgroundGradient.colorMiddle ?? '',
+    heroBottom: r.hero.backgroundGradient.colorBottom,
+    heroImageUrl: r.hero.heroImage.url ?? '',
+    teamText: r.hero.teamText,
+    primaryColor: r.theme.primaryColor,
+    tableGradTop: r.theme.tableGradient.colorTop,
+    tableGradBottom: r.theme.tableGradient.colorBottom,
+    lbGradTop: r.theme.leaderboardGradient.colorTop,
+    lbGradBottom: r.theme.leaderboardGradient.colorBottom,
+    iconColor: r.theme.iconColor,
+    textPrimary: r.typography.textColorPrimary,
+    textSecondary: r.typography.textColorSecondary,
+  }
+}
+
+/** Persistable JSON for `tables.page_config`. */
+export function pageConfigJsonFromAdminForm(v: TeamPageAdminFormValues): TeamPageConfigRaw {
+  return {
+    hero: {
+      backgroundGradient: {
+        colorTop: v.heroTop.trim(),
+        colorBottom: v.heroBottom.trim(),
+        ...(v.heroMiddle.trim() ? { colorMiddle: v.heroMiddle.trim() } : {}),
+      },
+      heroImage: { url: v.heroImageUrl.trim() || null },
+      teamText: v.teamText,
+    },
+    theme: {
+      primaryColor: v.primaryColor.trim(),
+      tableGradient: {
+        colorTop: v.tableGradTop.trim(),
+        colorBottom: v.tableGradBottom.trim(),
+      },
+      leaderboardGradient: {
+        colorTop: v.lbGradTop.trim(),
+        colorBottom: v.lbGradBottom.trim(),
+      },
+      iconColor: v.iconColor.trim(),
+    },
+    typography: {
+      textColorPrimary: v.textPrimary.trim(),
+      textColorSecondary: v.textSecondary.trim(),
+    },
+  }
+}

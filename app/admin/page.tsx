@@ -44,6 +44,12 @@ import {
   updateTable,
   type AdminTableRow,
 } from '@/lib/admin-tables'
+import {
+  pageConfigJsonFromAdminForm,
+  teamPageAdminFormDefaults,
+  type TeamPageAdminFormValues,
+} from '@/lib/team-page-config'
+import { TeamPageConfigEditor } from '@/app/admin/_components/TeamPageConfigEditor'
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
@@ -255,6 +261,7 @@ export default function AdminPage() {
   const [ttEditName, setTtEditName] = useState('')
   const [ttEditColor, setTtEditColor] = useState('')
   const [ttEditCapacity, setTtEditCapacity] = useState('10')
+  const [ttPageForm, setTtPageForm] = useState<TeamPageAdminFormValues | null>(null)
   const [ttSavingId, setTtSavingId] = useState<string | null>(null)
   const [ttArchivingId, setTtArchivingId] = useState<string | null>(null)
   const [ttRestoringId, setTtRestoringId] = useState<string | null>(null)
@@ -837,7 +844,7 @@ export default function AdminPage() {
                         )}
                         {isEditing ? (
                           <>
-                            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                            <div className="flex min-w-0 w-full flex-1 flex-wrap items-center gap-2">
                               <input
                                 value={ttEditName}
                                 onChange={(e) => setTtEditName(e.target.value)}
@@ -868,9 +875,9 @@ export default function AdminPage() {
                             </div>
                             <button
                               type="button"
-                              disabled={ttSavingId !== null || !ttEditName.trim()}
+                              disabled={ttSavingId !== null || !ttEditName.trim() || !ttPageForm}
                               onClick={async () => {
-                                if (!ttEditName.trim()) return
+                                if (!ttEditName.trim() || !ttPageForm) return
                                 setTtError(null)
                                 setTtSuccess(null)
                                 setTtSavingId(t.id)
@@ -880,12 +887,16 @@ export default function AdminPage() {
                                     name: ttEditName.trim(),
                                     color: ttEditColor.trim() || null,
                                     capacity: Number.isFinite(cap) ? cap : t.capacity,
+                                    page_config: pageConfigJsonFromAdminForm(
+                                      ttPageForm
+                                    ) as Record<string, unknown>,
                                   })
                                   setTtSuccess('Table updated.')
                                   setTtEditingId(null)
                                   setTtEditName('')
                                   setTtEditColor('')
                                   setTtEditCapacity('10')
+                                  setTtPageForm(null)
                                   await refreshTables()
                                   await refreshMissionData()
                                 } catch (e) {
@@ -905,12 +916,16 @@ export default function AdminPage() {
                                 setTtEditName('')
                                 setTtEditColor('')
                                 setTtEditCapacity('10')
+                                setTtPageForm(null)
                                 setTtError(null)
                               }}
                               className="rounded border border-zinc-300 dark:border-zinc-600 px-2 py-1 text-xs disabled:opacity-50"
                             >
                               Cancel
                             </button>
+                            {ttPageForm ? (
+                              <TeamPageConfigEditor value={ttPageForm} onChange={setTtPageForm} />
+                            ) : null}
                           </>
                         ) : (
                           <>
@@ -933,6 +948,12 @@ export default function AdminPage() {
                                   setTtEditName(t.name)
                                   setTtEditColor(t.color ?? '')
                                   setTtEditCapacity(String(t.capacity ?? 10))
+                                  setTtPageForm(
+                                    teamPageAdminFormDefaults(t.page_config, {
+                                      tableColor: t.color,
+                                      tableName: t.name,
+                                    })
+                                  )
                                   setTtError(null)
                                 }}
                                 className="rounded border border-zinc-200 dark:border-zinc-700 px-2 py-0.5 text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
@@ -963,6 +984,7 @@ export default function AdminPage() {
                                       setTtEditingId(null)
                                       setTtEditName('')
                                       setTtEditColor('')
+                                      setTtPageForm(null)
                                     }
                                     await refreshTables()
                                     await refreshMissionData()
