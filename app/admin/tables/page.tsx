@@ -226,7 +226,6 @@ function PreviewPhone({ form, name }: { form: TeamPageAdminFormValues; name: str
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[52%] bg-gradient-to-b from-transparent via-white/85 to-white" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-9 bg-white/95" />
-      <div className="pointer-events-none absolute inset-0 rounded-[28px] [mask-image:linear-gradient(to_bottom,black_0%,black_56%,transparent_100%)] border border-zinc-200" />
     </div>
   ) 
 }
@@ -645,7 +644,7 @@ export default function TablesAdminPage() {
               </button>
             </div>
 
-            <div className="overflow-y-auto px-5 py-4">
+            <div className="overflow-y-auto px-5 py-4 [&_input]:text-[14px] [&_textarea]:text-[14px] [&_select]:text-[14px]">
               <div className="grid gap-5 lg:grid-cols-[1fr_1fr_280px]">
                 <div className="space-y-4 lg:col-span-2">
                   <div className="grid gap-4 lg:grid-cols-2">
