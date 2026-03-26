@@ -240,7 +240,6 @@ export default function TablesAdminPage() {
   const [mode, setMode] = useState<EditorMode>('create')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [showAdvanced, setShowAdvanced] = useState(false)
   const [formName, setFormName] = useState('')
   const [formCapacity, setFormCapacity] = useState(10)
   const [formActive, setFormActive] = useState(true)
@@ -299,7 +298,6 @@ export default function TablesAdminPage() {
   function openCreateEditor() {
     setMode('create')
     setEditingId(null)
-    setShowAdvanced(false)
     setFormName('')
     setFormCapacity(10)
     setFormActive(true)
@@ -316,7 +314,6 @@ export default function TablesAdminPage() {
   function openEditEditor(row: AdminTableRow) {
     setMode('edit')
     setEditingId(row.id)
-    setShowAdvanced(false)
     setFormName(row.name)
     setFormCapacity(row.capacity || 10)
     setFormActive(row.is_active)
@@ -646,119 +643,88 @@ export default function TablesAdminPage() {
             </div>
 
             <div className="overflow-y-auto px-5 py-4 [&_input]:!text-[14px] [&_textarea]:!text-[14px] [&_select]:!text-[14px]">
-              <div className="grid gap-5 lg:grid-cols-[308px_308px_308px]">
-                <div className="space-y-4 lg:col-span-2">
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <div className="space-y-4">
+              <div className="grid gap-6 lg:grid-cols-[1fr_308px]">
+                <div className="space-y-6">
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null
+                      e.currentTarget.value = ''
+                      if (file) void uploadAvatar(file)
+                    }}
+                  />
+                  <input
+                    ref={heroInputRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null
+                      e.currentTarget.value = ''
+                      if (file) void uploadHero(file)
+                    }}
+                  />
+
+                  <section className="space-y-4 pb-5 border-b border-zinc-200/80">
+                    <h4 className="text-sm font-semibold text-zinc-900">Identity</h4>
+                    <label className="block">
+                      <span className="text-xs font-medium text-zinc-600">Table name</span>
+                      <input
+                        value={formName}
+                        onChange={(e) => setFormName(e.target.value)}
+                        className="mt-1.5 h-9 w-full rounded-xl border border-zinc-300 px-3 !text-[14px]"
+                        placeholder="e.g. Kaypoh Aunties"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-medium text-zinc-600">Description</span>
+                      <textarea
+                        rows={3}
+                        value={formTheme.teamText}
+                        onChange={(e) => setFormTheme((p) => ({ ...p, teamText: e.target.value }))}
+                        className="mt-1.5 w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 !text-[14px]"
+                      />
+                    </label>
+                    <div className="flex items-end gap-4">
                       <label className="block">
-                        <span className="text-xs font-medium text-zinc-600">Table name</span>
-                        <input
-                          value={formName}
-                          onChange={(e) => setFormName(e.target.value)}
-                          className="mt-1.5 h-9 w-full rounded-xl border border-zinc-300 px-3 !text-[14px]"
-                          placeholder="e.g. Kaypoh Aunties"
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="mb-2.5 block text-xs font-medium text-zinc-600">Seat capacity</span>
+                        <span className="text-xs font-medium text-zinc-600">Seat capacity</span>
                         <input
                           type="number"
                           min={1}
                           value={formCapacity}
                           onChange={(e) => setFormCapacity(Math.max(1, Number(e.target.value) || 1))}
-                          className="h-9 w-28 rounded-xl border border-zinc-300 px-3 !text-[14px]"
+                          className="mt-2 h-9 w-28 rounded-xl border border-zinc-300 px-3 !text-[14px]"
                         />
                       </label>
-                    </div>
-
-                    <div className="space-y-3">
-                      <label className="block">
-                        <span className="text-xs font-medium text-zinc-600">Description</span>
-                        <textarea
-                          rows={3}
-                          value={formTheme.teamText}
-                          onChange={(e) => setFormTheme((p) => ({ ...p, teamText: e.target.value }))}
-                          className="mt-1.5 h-[100px] w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 !text-[14px]"
+                      <label className="inline-flex items-center gap-2 px-1 py-1.5 text-sm font-medium text-zinc-700">
+                        <span
+                          className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
+                            formActive ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]' : 'bg-zinc-300'
+                          }`}
+                        >
+                          <span
+                            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                              formActive ? 'translate-x-4.5' : 'translate-x-0.5'
+                            }`}
+                          />
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={formActive}
+                          onChange={(e) => setFormActive(e.target.checked)}
+                          className="sr-only"
                         />
+                        Make active
                       </label>
-                      <div className="text-xs font-medium text-zinc-600">Team identity</div>
-                      <input
-                        ref={avatarInputRef}
-                        type="file"
-                        accept="image/jpeg,image/jpg,image/png,image/webp"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0] ?? null
-                          e.currentTarget.value = ''
-                          if (file) void uploadAvatar(file)
-                        }}
-                      />
-                      <input
-                        ref={heroInputRef}
-                        type="file"
-                        accept="image/jpeg,image/jpg,image/png,image/webp"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0] ?? null
-                          e.currentTarget.value = ''
-                          if (file) void uploadHero(file)
-                        }}
-                      />
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
-                          <div className="text-xs font-medium text-zinc-700">Avatar upload</div>
-                          <div className="mt-2 flex min-h-[52px] items-center justify-between gap-2">
-                            <button
-                              type="button"
-                              onClick={() => avatarInputRef.current?.click()}
-                              disabled={avatarUploading}
-                              className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700"
-                            >
-                              {avatarUploading ? 'Uploading...' : 'Upload avatar'}
-                            </button>
-                            <span className="h-12 w-12 overflow-hidden rounded-full border border-zinc-300 bg-white">
-                              {formTheme.avatarImageUrl.trim() ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={formTheme.avatarImageUrl.trim()} alt="" className="h-full w-full object-cover" />
-                              ) : null}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
-                          <div className="text-xs font-medium text-zinc-700">Hero image upload</div>
-                          <div className="mt-2 flex min-h-[52px] items-center justify-between gap-2">
-                            <button
-                              type="button"
-                              disabled={heroUploading}
-                              onClick={() => heroInputRef.current?.click()}
-                              className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700"
-                            >
-                              {heroUploading ? 'Uploading...' : 'Upload hero'}
-                            </button>
-                            <span className="h-10 w-16 overflow-hidden rounded-md border border-zinc-300 bg-white">
-                              {formTheme.heroImageUrl.trim() ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={formTheme.heroImageUrl.trim()} alt="" className="h-full w-full object-cover" />
-                              ) : null}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
                     </div>
-                  </div>
+                  </section>
 
-                  <div>
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-zinc-700">Theme preset</span>
-                      <button
-                        type="button"
-                        onClick={() => setShowAdvanced((v) => !v)}
-                        className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700"
-                      >
-                        {showAdvanced ? 'Hide customize' : 'Customize'}
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-4 gap-2">
+                  <section className="space-y-4 pb-5 border-b border-zinc-200/80">
+                    <h4 className="text-sm font-semibold text-zinc-900">Theme</h4>
+                    <div className="flex items-center gap-3">
                       {THEME_PRESETS.map((preset) => {
                         const selected = formPresetId === preset.id
                         return (
@@ -766,75 +732,147 @@ export default function TablesAdminPage() {
                             key={preset.id}
                             type="button"
                             onClick={() => applyPreset(preset.id)}
-                            className={`relative rounded-xl border p-2 text-left text-white transition-colors ${
-                              selected ? 'border-zinc-900' : 'border-zinc-200'
+                            className={`relative h-9 w-9 rounded-full transition-all ${
+                              selected ? 'ring-2 ring-zinc-900 ring-offset-2' : 'ring-1 ring-zinc-200'
                             }`}
                             style={{
                               background: `linear-gradient(to right, ${preset.tableGradTop}, ${preset.tableGradBottom})`,
                             }}
+                            aria-label={`Theme ${preset.name}`}
                           >
-                            <div className="relative h-10">
-                              <div className="text-[11px] font-semibold">{preset.name}</div>
-                              {selected ? (
-                                <span className="absolute inset-0 flex items-center justify-center text-white">
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2.5}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    className="h-4 w-4"
-                                    aria-hidden
-                                  >
-                                    <path d="m5 12 5 5L20 7" />
-                                  </svg>
-                                </span>
-                              ) : null}
-                            </div>
+                            {selected ? (
+                              <span className="absolute inset-0 flex items-center justify-center text-white">
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2.5}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="h-4 w-4"
+                                  aria-hidden
+                                >
+                                  <path d="m5 12 5 5L20 7" />
+                                </svg>
+                              </span>
+                            ) : null}
                           </button>
                         )
                       })}
                     </div>
-                  </div>
-
-                  {showAdvanced ? (
-                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
-                      <p className="text-xs font-medium text-zinc-800">Advanced customization (table instance only)</p>
-                      <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
-                        <ColorCircleField
-                          label="Primary CTA"
-                          value={formTheme.primaryColor}
-                          onChange={(v) => setFormTheme((p) => ({ ...p, primaryColor: v }))}
-                        />
-                        <ColorCircleField
-                          label="Hero top"
-                          value={formTheme.heroTop}
-                          onChange={(v) => setFormTheme((p) => ({ ...p, heroTop: v }))}
-                        />
-                        <ColorCircleField
-                          label="Hero middle"
-                          value={formTheme.heroMiddle}
-                          onChange={(v) => setFormTheme((p) => ({ ...p, heroMiddle: v }))}
-                        />
-                        <ColorCircleField
-                          label="Hero bottom"
-                          value={formTheme.heroBottom}
-                          onChange={(v) => setFormTheme((p) => ({ ...p, heroBottom: v }))}
-                        />
-                        <ColorCircleField
-                          label="Leaderboard top"
-                          value={formTheme.lbGradTop}
-                          onChange={(v) => setFormTheme((p) => ({ ...p, lbGradTop: v }))}
-                        />
-                        <ColorCircleField
-                          label="Leaderboard bottom"
-                          value={formTheme.lbGradBottom}
-                          onChange={(v) => setFormTheme((p) => ({ ...p, lbGradBottom: v }))}
-                        />
-                      </div>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <ColorCircleField
+                        label="Hero top"
+                        value={formTheme.heroTop}
+                        onChange={(v) => setFormTheme((p) => ({ ...p, heroTop: v }))}
+                      />
+                      <ColorCircleField
+                        label="Hero middle"
+                        value={formTheme.heroMiddle}
+                        onChange={(v) => setFormTheme((p) => ({ ...p, heroMiddle: v }))}
+                      />
+                      <ColorCircleField
+                        label="Hero bottom"
+                        value={formTheme.heroBottom}
+                        onChange={(v) => setFormTheme((p) => ({ ...p, heroBottom: v }))}
+                      />
+                      <ColorCircleField
+                        label="Leaderboard top"
+                        value={formTheme.lbGradTop}
+                        onChange={(v) => setFormTheme((p) => ({ ...p, lbGradTop: v }))}
+                      />
+                      <ColorCircleField
+                        label="Leaderboard bottom"
+                        value={formTheme.lbGradBottom}
+                        onChange={(v) => setFormTheme((p) => ({ ...p, lbGradBottom: v }))}
+                      />
+                      <ColorCircleField
+                        label="Primary CTA"
+                        value={formTheme.primaryColor}
+                        onChange={(v) => setFormTheme((p) => ({ ...p, primaryColor: v }))}
+                      />
                     </div>
-                  ) : null}
+                  </section>
+
+                  <section className="space-y-4">
+                    <h4 className="text-sm font-semibold text-zinc-900">Assets</h4>
+                    <div className="grid items-center gap-4 sm:grid-cols-[84px_1fr]">
+                      <button
+                        type="button"
+                        onClick={() => avatarInputRef.current?.click()}
+                        disabled={avatarUploading}
+                        className="group relative h-[72px] w-[72px] overflow-hidden rounded-full border border-zinc-300/80 bg-zinc-50 transition-colors hover:border-zinc-400 disabled:opacity-60"
+                        aria-label="Upload avatar"
+                      >
+                        {formTheme.avatarImageUrl.trim() ? (
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={formTheme.avatarImageUrl.trim()}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                            <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition-all group-hover:bg-black/30 group-hover:opacity-100">
+                              <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="h-4 w-4"
+                                aria-hidden
+                              >
+                                <path d="M12 20h9" />
+                                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                              </svg>
+                            </span>
+                          </>
+                        ) : (
+                          <span className="grid h-full w-full place-items-center text-zinc-400">
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth={1.8}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="h-5 w-5"
+                              aria-hidden
+                            >
+                              <path d="M12 5v14M5 12h14" />
+                            </svg>
+                          </span>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={heroUploading}
+                        onClick={() => heroInputRef.current?.click()}
+                        className="group relative h-[96px] w-full overflow-hidden rounded-xl border border-zinc-300/80 bg-zinc-50 text-left transition-colors hover:border-zinc-400 disabled:opacity-60"
+                        aria-label="Upload hero image"
+                      >
+                        {formTheme.heroImageUrl.trim() ? (
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={formTheme.heroImageUrl.trim()}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                            <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-sm font-medium text-white opacity-0 transition-all group-hover:bg-black/30 group-hover:opacity-100">
+                              Replace
+                            </span>
+                          </>
+                        ) : (
+                          <span className="absolute inset-0 grid place-items-center text-sm text-zinc-400">
+                            Add hero image
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  </section>
                 </div>
 
                 <div>
@@ -857,26 +895,6 @@ export default function TablesAdminPage() {
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
-                <label className="inline-flex items-center gap-2 px-1 py-1.5 text-sm font-medium text-zinc-700">
-                  <span
-                    className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
-                      formActive ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]' : 'bg-zinc-300'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                        formActive ? 'translate-x-4.5' : 'translate-x-0.5'
-                      }`}
-                    />
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={formActive}
-                    onChange={(e) => setFormActive(e.target.checked)}
-                    className="sr-only"
-                  />
-                  Mark active
-                </label>
                 <button
                   type="button"
                   onClick={() => setEditorOpen(false)}
