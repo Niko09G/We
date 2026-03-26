@@ -147,7 +147,7 @@ function PreviewPhone({ form, name }: { form: TeamPageAdminFormValues; name: str
   const avatarUrl = form.avatarImageUrl.trim()
   const initials = initialsFromName(name)
   return (
-    <div className="relative h-[520px] w-[255px] overflow-hidden rounded-[28px] border border-zinc-200 bg-white">
+    <div className="relative h-[520px] w-[255px] overflow-hidden rounded-[28px] bg-white">
       <div className="h-full overflow-y-auto">
         <div className="p-0 text-white" style={{ background: heroBg }}>
           <div className="px-3 pb-3 pt-3">
@@ -226,6 +226,7 @@ function PreviewPhone({ form, name }: { form: TeamPageAdminFormValues; name: str
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[52%] bg-gradient-to-b from-transparent via-white/85 to-white" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-9 bg-white/95" />
+      <div className="pointer-events-none absolute inset-0 rounded-[28px] border border-zinc-200 [mask-image:linear-gradient(to_bottom,black_0%,black_60%,transparent_100%)]" />
     </div>
   ) 
 }
