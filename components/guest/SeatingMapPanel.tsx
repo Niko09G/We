@@ -82,22 +82,22 @@ const TABLE_SOLID_ACCENT_BY_SLOT: Record<(typeof TABLE_LAYOUT_SLOTS)[number]['ke
 
 function MapTableGlyph({ color }: { color: string }) {
   return (
-    <svg className="shrink-0" width={17} height={17} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <rect x="3" y="6" width="18" height="13" rx="1.5" stroke={color} strokeWidth={2} />
-      <path d="M3 12h18" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    <svg className="shrink-0" width={17} height={17} viewBox="0 0 24 24" aria-hidden>
+      <path
+        fill={color}
+        d="M5 8a2 2 0 012-2h10a2 2 0 012 2v2H5V8zm0 4h14v5a2 2 0 01-2 2H7a2 2 0 01-2-2v-5z"
+      />
     </svg>
   )
 }
 
 function MapSeatGlyph({ color }: { color: string }) {
   return (
-    <svg className="shrink-0" width={17} height={17} viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg className="shrink-0" width={17} height={17} viewBox="0 0 24 24" aria-hidden>
+      {/* Filled chair: back + seat block — reads clearly at 17px */}
       <path
-        d="M7 14v5M5 19h14M5 19v-2.5a2 2 0 012-2h10a2 2 0 012 2V19M7 14V9a3 3 0 013-3h4a3 3 0 013 3v5"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        fill={color}
+        d="M8 5h8a2 2 0 012 2v2H6V7a2 2 0 012-2zm-2 7h12v7a1 1 0 01-1 1H7a1 1 0 01-1-1v-7z"
       />
     </svg>
   )
@@ -515,7 +515,7 @@ export function SeatingMapPanel({
             selectGuest(matching[0]!)
           }
         }}
-        placeholder="Search your name"
+        placeholder="Search name"
         className="relative z-10 w-full rounded-full border border-zinc-200 bg-zinc-50/80 px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition-colors duration-200 focus:border-violet-300 focus:bg-white focus:ring-2 focus:ring-violet-200/60"
       />
       {search.trim().length > 0 && !searchResultsDismissed ? (
@@ -647,7 +647,7 @@ export function SeatingMapPanel({
                   ref={(el) => {
                     if (table) tableRefs.current[table.id] = el
                   }}
-                  className="absolute w-[min(52vw,440px)] max-w-[92%] -translate-x-1/2 -translate-y-1/2"
+                  className="absolute w-[min(90vw,500px)] max-w-[68%] -translate-x-1/2 -translate-y-1/2"
                   style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
                 >
                   <div
@@ -677,7 +677,7 @@ export function SeatingMapPanel({
                         {label}
                       </span>
                     </div>
-                    <div className="relative h-[104px] w-full pointer-events-auto">
+                    <div className="relative h-[76px] w-full pointer-events-auto">
                       {table
                         ? table.guests.map((g) => {
                             const pos = seatPosition(g.seat_number, SEAT_LAYOUT_CAPACITY)
@@ -690,22 +690,22 @@ export function SeatingMapPanel({
                                   seatRefs.current[g.id] = el
                                 }}
                                 onClick={() => selectGuest(g)}
-                                className={`absolute z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center overflow-hidden rounded-full border-2 text-[10px] font-extrabold leading-none transition-[transform,box-shadow] duration-200 ${
+                                className={`animate-seat-marker-glow absolute z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center overflow-hidden rounded-full border-2 text-[10px] font-extrabold leading-none transition-[transform,box-shadow] duration-200 ${
                                   pos.isTop
                                     ? 'top-0 -translate-y-1/2'
                                     : 'bottom-0 translate-y-1/2'
                                 } ${
                                   isSelectedSeat
                                     ? 'z-30 scale-110 border-white bg-white'
-                                    : 'border-white/80 bg-white shadow-sm hover:border-white'
+                                    : 'border-white/90 bg-white shadow-[0_0_0_1px_rgba(255,255,255,0.9),0_0_12px_5px_rgba(255,255,255,0.45),0_0_28px_10px_rgba(255,255,255,0.18)] hover:border-white'
                                 }`}
                                 style={{
                                   left: `${pos.leftPct}%`,
                                   ...(isSelectedSeat
                                     ? {
-                                        boxShadow: `0 0 0 2px #ffffff, 0 0 0 5px ${slotAccent}`,
+                                        boxShadow: `0 0 0 2px #ffffff, 0 0 0 5px ${slotAccent}, 0 0 14px 6px rgba(255,255,255,0.55), 0 0 26px 12px rgba(255,255,255,0.22)`,
                                       }
-                                    : {}),
+                                    : undefined),
                                 }}
                                 title={`${g.full_name} · Seat ${g.seat_number}`}
                               >
@@ -759,8 +759,8 @@ export function SeatingMapPanel({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-base font-semibold text-black">{selectedGuest.full_name}</p>
-                <div className="mt-1 flex flex-col gap-0.5 text-sm font-medium text-black">
-                  <span className="flex min-w-0 items-center gap-2">
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-medium text-black">
+                  <span className="flex min-w-0 max-w-full flex-1 basis-0 items-center gap-2">
                     <MapTableGlyph
                       color={
                         selectedGuestSlotKey
@@ -768,9 +768,11 @@ export function SeatingMapPanel({
                           : '#71717a'
                       }
                     />
-                    <span className="truncate">{selectedGuest.table_name}</span>
+                    <span className="min-w-0 break-words leading-snug text-black [overflow-wrap:anywhere]">
+                      {selectedGuest.table_name}
+                    </span>
                   </span>
-                  <span className="flex items-center gap-2">
+                  <span className="inline-flex shrink-0 items-center gap-2">
                     <MapSeatGlyph
                       color={
                         selectedGuestSlotKey
@@ -778,7 +780,7 @@ export function SeatingMapPanel({
                           : '#71717a'
                       }
                     />
-                    <span>Seat {selectedGuest.seat_number}</span>
+                    <span className="whitespace-nowrap text-black">Seat {selectedGuest.seat_number}</span>
                   </span>
                 </div>
               </div>

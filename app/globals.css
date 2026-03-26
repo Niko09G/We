@@ -136,6 +136,21 @@ select {
   }
 }
 
+/* Seat finder: gentle breathe on markers (white glow stays in component styles) */
+@keyframes seatMarkerSoftPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.animate-seat-marker-glow {
+  animation: seatMarkerSoftPulse 2.6s ease-in-out infinite;
+}
+
 /* Seat finder: strong celebratory glow (shadow only — preserves seat transforms) */
 @keyframes seatCelebratePulse {
   0%,

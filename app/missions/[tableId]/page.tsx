@@ -909,7 +909,7 @@ export default function MissionsTablePage({
         </section>
       ) : null}
 
-      <div className="mx-auto w-full min-w-0 max-w-lg space-y-12 px-5 pb-28 pt-6">
+      <div className="mx-auto w-full min-w-0 max-w-lg space-y-16 px-5 pb-28 pt-6">
         <section id="feed" className="scroll-mt-8">
           {!loading && !error && missionsEnabled === true && tableName.trim() ? (
             <MissionSocialFeedSection
