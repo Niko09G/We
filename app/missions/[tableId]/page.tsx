@@ -218,20 +218,9 @@ export default function MissionsTablePage({
     }
     return { kind: 'fallback' as const }
   }, [guestEmblems, leaderboardRows, tablePoints, tableRank])
-  const deltaAccentBase = (teamPage.theme.primaryColor || tableColor || '#6335fb').trim()
-  const deltaAccentLight = (tableColor || teamPage.theme.tableGradient.colorBottom || '').trim()
-  const hasDeltaGradient = Boolean(
-    deltaAccentBase &&
-      deltaAccentLight &&
-      deltaAccentLight.toLowerCase() !== deltaAccentBase.toLowerCase()
-  )
-  const deltaAccentStyle: CSSProperties = hasDeltaGradient
-    ? {
-        backgroundImage: `linear-gradient(to right, ${deltaAccentLight}, ${deltaAccentBase})`,
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-      }
-    : { color: deltaAccentBase }
+  const teamAccentColor = (teamPage.theme.primaryColor || '#6335fb').trim()
+  const deltaAccentStyle: CSSProperties = { color: teamAccentColor }
+  const coinWord = (n: number) => (n === 1 ? 'coin' : 'coins')
   const sharedLeaderboardGradient =
     'linear-gradient(to right, rgb(23, 163, 214), rgb(56, 105, 233), rgb(95, 50, 243))'
 
@@ -253,7 +242,7 @@ export default function MissionsTablePage({
     setMomentumFeed((prev) => {
       const seen = new Set(prev.map((e) => e.id))
       const fresh = entries.filter((e) => !seen.has(e.id))
-      return [...fresh, ...prev].slice(0, 8)
+      return [...fresh, ...prev].slice(0, 6)
     })
   }, [])
 
@@ -344,7 +333,7 @@ export default function MissionsTablePage({
 
       return out
         .sort((a, b) => b.createdAt - a.createdAt)
-        .slice(0, 5)
+        .slice(0, 6)
     },
     []
   )
@@ -433,7 +422,6 @@ export default function MissionsTablePage({
       try {
         const lb = await fetchLeaderboard()
         setLeaderboardRows(lb)
-        pushMomentum(buildMomentumEntries(lb))
       } catch {
         /* keep previous leaderboard */
       }
@@ -505,17 +493,8 @@ export default function MissionsTablePage({
   }, [
     tableId,
     loadMissionFeed,
-    pushMomentum,
     buildMomentumEntries,
   ])
-
-  useEffect(() => {
-    if (loading) return
-    const timer = window.setInterval(() => {
-      refreshTableData()
-    }, 20000)
-    return () => window.clearInterval(timer)
-  }, [loading, refreshTableData])
 
   useEffect(() => {
     if (missionsEnabled !== true) {
@@ -614,9 +593,16 @@ export default function MissionsTablePage({
         setMissionsEnabled(enabled)
 
         try {
-          const lb = await fetchLeaderboard()
+          const lb1 = await fetchLeaderboard()
           if (!cancelled) {
-            setLeaderboardRows(lb)
+            setLeaderboardRows(lb1)
+            prevLeaderboardRef.current = lb1
+          }
+          const lb2 = await fetchLeaderboard()
+          if (!cancelled) {
+            setLeaderboardRows(lb2)
+            const entries = buildMomentumEntries(lb2)
+            pushMomentum(entries)
           }
         } catch {
           if (!cancelled) setLeaderboardRows([])
@@ -1238,19 +1224,19 @@ export default function MissionsTablePage({
             style={{ color: teamPage.typography.textColorSecondary }}
           >
             {leaderboardMotivation.kind === 'close_chase' ? (
-              <span className="inline-flex flex-wrap items-center gap-1">
-                <span>⚠️ Only</span>
+              <span className="inline-flex flex-wrap items-center gap-1 font-bold">
+                <span>Only</span>
                 <span
                   key={`lb-delta-close-${leaderboardMotivation.delta}`}
-                  className={`inline-flex items-center gap-0.5 font-semibold tracking-tight tabular-nums motion-safe:animate-[lbPointsPop_0.45s_ease-out] ${
-                    hasDeltaGradient ? 'bg-clip-text text-transparent' : ''
-                  }`}
+                  className="inline-flex items-center gap-0.5 font-semibold tracking-tight tabular-nums motion-safe:animate-[lbPointsPop_0.45s_ease-out]"
                   style={deltaAccentStyle}
                 >
                   <span>{leaderboardMotivation.delta}</span>
                   <RewardUnitIcon size={COIN_SIZE} className="align-middle" />
                 </span>
-                <span>coins to reach</span>
+                <span>
+                  {coinWord(leaderboardMotivation.delta)} to reach
+                </span>
                 <span className="inline-flex items-center gap-1 font-semibold">
                   {leaderboardMotivation.targetRankEmblemUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -1261,27 +1247,25 @@ export default function MissionsTablePage({
                     />
                   ) : null}
                   <span
-                    className={hasDeltaGradient ? 'bg-clip-text text-transparent' : ''}
                     style={deltaAccentStyle}
                   >
                     #{leaderboardMotivation.targetRank}
                   </span>
                 </span>
+                <span>.</span>
               </span>
             ) : leaderboardMotivation.kind === 'chase' ? (
-              <span className="inline-flex flex-wrap items-center gap-1">
+              <span className="inline-flex flex-wrap items-center gap-1 font-bold">
                 <span>You need</span>
                 <span
                   key={`lb-delta-chase-${leaderboardMotivation.delta}`}
-                  className={`inline-flex items-center gap-0.5 font-semibold tracking-tight tabular-nums motion-safe:animate-[lbPointsPop_0.45s_ease-out] ${
-                    hasDeltaGradient ? 'bg-clip-text text-transparent' : ''
-                  }`}
+                  className="inline-flex items-center gap-0.5 font-semibold tracking-tight tabular-nums motion-safe:animate-[lbPointsPop_0.45s_ease-out]"
                   style={deltaAccentStyle}
                 >
                   <span>{leaderboardMotivation.delta}</span>
                   <RewardUnitIcon size={COIN_SIZE} className="align-middle" />
                 </span>
-                <span>coins to overtake</span>
+                <span>{coinWord(leaderboardMotivation.delta)} to overtake</span>
                 <span className="inline-flex items-center gap-1 font-semibold">
                   {leaderboardMotivation.targetRankEmblemUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -1292,27 +1276,27 @@ export default function MissionsTablePage({
                     />
                   ) : null}
                   <span
-                    className={hasDeltaGradient ? 'bg-clip-text text-transparent' : ''}
                     style={deltaAccentStyle}
                   >
                     #{leaderboardMotivation.targetRank}
                   </span>
                 </span>
+                <span>.</span>
               </span>
             ) : leaderboardMotivation.kind === 'leading' ? (
-              <span className="inline-flex flex-wrap items-center gap-1">
+              <span className="inline-flex flex-wrap items-center gap-1 font-bold">
                 <span>You&apos;re leading by</span>
                 <span
                   key={`lb-delta-lead-${leaderboardMotivation.delta}`}
-                  className={`inline-flex items-center gap-0.5 font-semibold tracking-tight tabular-nums motion-safe:animate-[lbPointsPop_0.45s_ease-out] ${
-                    hasDeltaGradient ? 'bg-clip-text text-transparent' : ''
-                  }`}
+                  className="inline-flex items-center gap-0.5 font-semibold tracking-tight tabular-nums motion-safe:animate-[lbPointsPop_0.45s_ease-out]"
                   style={deltaAccentStyle}
                 >
                   <span>{leaderboardMotivation.delta}</span>
                   <RewardUnitIcon size={COIN_SIZE} className="align-middle" />
                 </span>
-                <span>coins — increase the gap!</span>
+                <span>
+                  {coinWord(leaderboardMotivation.delta)} — increase the gap!
+                </span>
                 {leaderboardMotivation.targetRankEmblemUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -1377,7 +1361,7 @@ export default function MissionsTablePage({
               </ul>
               <div className="mt-4">
                 <h3
-                  className="text-base font-medium text-zinc-500"
+                  className="text-xs font-semibold tracking-wide text-zinc-500"
                   style={{ color: teamPage.typography.textColorSecondary }}
                 >
                   Momentum feed
@@ -1399,7 +1383,7 @@ export default function MissionsTablePage({
                         <div
                           key={item.id}
                           data-momentum-card
-                          className={`w-[min(300px,82vw)] shrink-0 snap-start rounded-lg border border-zinc-200/80 bg-white/85 px-3 py-2 ${
+                          className={`w-[min(300px,82vw)] shrink-0 snap-start rounded-lg border border-zinc-200/80 bg-white/85 px-3 py-3 min-h-[96px] ${
                             momentumEnterIds.has(item.id)
                               ? 'motion-safe:animate-[fadeIn_0.45s_ease-out]'
                               : ''
@@ -1407,17 +1391,19 @@ export default function MissionsTablePage({
                             idx >= 5 ? 'opacity-70' : idx >= 3 ? 'opacity-85' : 'opacity-100'
                           }`}
                         >
-                          <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-start justify-between gap-3">
                             <span className="inline-flex min-w-0 items-center gap-2">
                               <div
                                 className="h-8 w-8 shrink-0 rounded-full border border-white/35 bg-white/20"
                                 style={{ background: sharedLeaderboardGradient }}
                                 aria-hidden
                               />
-                              <span className="truncate text-base text-zinc-700">{item.message}</span>
+                              <span className="line-clamp-2 text-sm font-medium leading-snug text-zinc-700">
+                                {item.message}
+                              </span>
                             </span>
                             {item.coinChange > 0 ? (
-                              <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold tabular-nums text-zinc-700">
+                              <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold tabular-nums text-sm text-zinc-700">
                                 +{item.coinChange}
                                 <RewardUnitIcon size={COIN_SIZE} className="align-middle" />
                               </span>
