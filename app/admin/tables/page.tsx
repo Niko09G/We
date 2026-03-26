@@ -254,6 +254,19 @@ export default function TablesAdminPage() {
     return () => window.clearTimeout(t)
   }, [successToast])
 
+  useEffect(() => {
+    if (!editorOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setEditorOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [editorOpen])
+
   const activeRows = useMemo(() => rows.filter((r) => !r.is_archived), [rows])
   const archivedRows = useMemo(() => rows.filter((r) => r.is_archived), [rows])
 
