@@ -1,5 +1,3 @@
-import { v4 as uuidv4 } from 'uuid'
-
 import { supabase } from '@/lib/supabase/client'
 import type { ParsedAttendeeRow } from '@/lib/attendees-csv'
 import {
@@ -29,6 +27,7 @@ const SELECT =
   'id,full_name,email,phone,rsvp_status,table_id,seat_number,group_id,is_placeholder,party_role,photo_url,checked_in_at,gift_amount_cents,created_at,updated_at'
 
 const BUCKET = 'attendees'
+const AVATAR_PREFIX = 'avatars'
 
 /** Normalize DB row so client state always matches listAttendeesForAdmin(). */
 export function normalizeAttendeeRow(row: AttendeeRow): AttendeeRow {
@@ -322,17 +321,17 @@ export async function mergeAttendeesFromCsvRows(
  * Upload image to storage and return public URL (does not update DB).
  */
 export async function uploadAttendeePhoto(params: {
-  attendeeId: string
+  attendeeFirstName: string
   blob: Blob
   contentType: string
 }): Promise<string> {
-  const ext =
-    params.contentType === 'image/png'
-      ? 'png'
-      : params.contentType === 'image/webp'
-        ? 'webp'
-        : 'jpg'
-  const path = `${params.attendeeId}/${uuidv4()}.${ext}`
+  if (params.contentType !== 'image/webp') {
+    throw new Error('Avatar upload expects WebP content.')
+  }
+  const existingNames = await listAvatarFileNames()
+  const base = sanitizeFilenameBase(params.attendeeFirstName)
+  const filename = nextAvailableAvatarFilename(base, existingNames)
+  const path = `${AVATAR_PREFIX}/${filename}`
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
@@ -346,6 +345,68 @@ export async function uploadAttendeePhoto(params: {
     data: { publicUrl },
   } = supabase.storage.from(BUCKET).getPublicUrl(path)
   return publicUrl
+}
+
+function sanitizeFilenameBase(value: string): string {
+  const normalized = value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return normalized || 'attendee'
+}
+
+function nextAvailableAvatarFilename(base: string, existing: Set<string>): string {
+  const first = `${base}.webp`
+  if (!existing.has(first)) return first
+  let n = 2
+  while (existing.has(`${base}-${n}.webp`)) n += 1
+  return `${base}-${n}.webp`
+}
+
+async function listAvatarFileNames(): Promise<Set<string>> {
+  const names = new Set<string>()
+  let offset = 0
+  while (true) {
+    const { data, error } = await supabase.storage.from(BUCKET).list(AVATAR_PREFIX, {
+      limit: 100,
+      offset,
+      sortBy: { column: 'name', order: 'asc' },
+    })
+    if (error) throw new Error(error.message || 'Failed to inspect avatar filenames.')
+    const items = data ?? []
+    for (const item of items) {
+      if (typeof item.name === 'string' && item.name.trim()) names.add(item.name.trim())
+    }
+    if (items.length < 100) break
+    offset += 100
+  }
+  return names
+}
+
+function storagePathFromPublicUrl(publicUrl: string): string | null {
+  const marker = `/storage/v1/object/public/${BUCKET}/`
+  const idx = publicUrl.indexOf(marker)
+  if (idx === -1) return null
+  const path = publicUrl.slice(idx + marker.length).split('?')[0]
+  return path || null
+}
+
+/** Best-effort cleanup for replaced/removed attendee avatars. */
+export async function removeAttendeePhotoByPublicUrl(
+  publicUrl: string | null | undefined
+): Promise<void> {
+  const url = typeof publicUrl === 'string' ? publicUrl.trim() : ''
+  if (!url) return
+  const path = storagePathFromPublicUrl(url)
+  if (!path) return
+  if (!path.startsWith(`${AVATAR_PREFIX}/`)) return
+  try {
+    await supabase.storage.from(BUCKET).remove([path])
+  } catch {
+    // Best-effort cleanup only.
+  }
 }
 
 /** Placeholder guest for a group (e.g. "Guest"); rename later in admin. */

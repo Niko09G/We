@@ -35,6 +35,11 @@ export interface CompressResult {
   contentType: string
 }
 
+export interface AvatarCompressResult {
+  blob: Blob
+  contentType: 'image/webp'
+}
+
 /**
  * Compress image in the browser: max width 1600, preserve aspect ratio,
  * JPEG (or PNG if transparency). Quality ~0.75–0.82. Aim under 1MB.
@@ -81,6 +86,33 @@ export async function compressImage(file: File): Promise<CompressResult> {
   }
 
   return { blob, contentType }
+}
+
+const AVATAR_MAX_DIMENSION = 512
+const AVATAR_WEBP_QUALITY = 0.8
+
+/** Avatar-specific transform: resize to max 512px and encode as WebP. */
+export async function compressAvatarImage(file: File): Promise<AvatarCompressResult> {
+  assertMaxFileSize(file)
+  if (!isAcceptedImageFile(file)) {
+    throw new Error('Invalid image type. Use JPG, PNG, or WebP.')
+  }
+
+  const img = await loadImage(file)
+  const maxSide = Math.max(img.naturalWidth, img.naturalHeight)
+  const scale = maxSide > AVATAR_MAX_DIMENSION ? AVATAR_MAX_DIMENSION / maxSide : 1
+  const width = Math.max(1, Math.round(img.naturalWidth * scale))
+  const height = Math.max(1, Math.round(img.naturalHeight * scale))
+
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Could not get canvas context.')
+  ctx.drawImage(img, 0, 0, width, height)
+
+  const blob = await canvasToBlob(canvas, 'image/webp', AVATAR_WEBP_QUALITY)
+  return { blob, contentType: 'image/webp' }
 }
 
 function loadImage(file: File): Promise<HTMLImageElement> {

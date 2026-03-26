@@ -14,6 +14,7 @@ import {
   archiveAttendee,
   listAttendeesForAdmin,
   mergeAttendeesFromCsvRows,
+  removeAttendeePhotoByPublicUrl,
   updateAttendee,
   updateRsvpForGroup,
   uploadAttendeePhoto,
@@ -28,6 +29,7 @@ import {
 } from '@/lib/admin-attendee-groups'
 import { attendeeRowsFromCsv } from '@/lib/attendees-csv'
 import { listTablesForAdmin, type AdminTableRow } from '@/lib/admin-tables'
+import { compressAvatarImage } from '@/lib/image-compress'
 
 const RSVP_OPTIONS = [
   { value: '', label: '—' },
@@ -835,13 +837,17 @@ export default function AdminAttendeesPage() {
       if (!ok.includes(file.type)) {
         throw new Error('Use JPG, PNG, or WebP.')
       }
-      const blob = await file.arrayBuffer().then((b) => new Blob([b], { type: file.type }))
+      const row = rows.find((r) => r.id === attendeeId)
+      const firstName = row?.full_name.trim().split(/\s+/).filter(Boolean)[0] ?? 'attendee'
+      const previousPhotoUrl = row?.photo_url ?? null
+      const { blob, contentType } = await compressAvatarImage(file)
       const url = await uploadAttendeePhoto({
-        attendeeId,
+        attendeeFirstName: firstName,
         blob,
-        contentType: file.type,
+        contentType,
       })
       await updateAttendee(attendeeId, { photo_url: url })
+      await removeAttendeePhotoByPublicUrl(previousPhotoUrl)
       setSuccess('Photo updated.')
       updateRowLocal(attendeeId, { photo_url: url })
     } catch (e) {
@@ -855,7 +861,9 @@ export default function AdminAttendeesPage() {
   async function clearPhoto(attendeeId: string) {
     setPhotoBusyId(attendeeId)
     try {
+      const previousPhotoUrl = rows.find((r) => r.id === attendeeId)?.photo_url ?? null
       await updateAttendee(attendeeId, { photo_url: null })
+      await removeAttendeePhotoByPublicUrl(previousPhotoUrl)
       setSuccess('Photo removed.')
       updateRowLocal(attendeeId, { photo_url: null })
     } catch (e) {
