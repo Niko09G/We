@@ -617,7 +617,7 @@ export default function TablesAdminPage() {
             if (e.target === e.currentTarget) setEditorOpen(false)
           }}
         >
-          <div className="flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm animate-[fadeIn_180ms_ease-out]">
+          <div className="flex max-h-[88vh] w-full max-w-[1004px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm animate-[fadeIn_180ms_ease-out]">
             <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3">
               <div>
                 <h3 className="text-lg font-semibold text-zinc-900">
@@ -646,7 +646,7 @@ export default function TablesAdminPage() {
             </div>
 
             <div className="overflow-y-auto px-5 py-4 [&_input]:!text-[14px] [&_textarea]:!text-[14px] [&_select]:!text-[14px]">
-              <div className="grid gap-5 lg:grid-cols-[280px_280px_280px]">
+              <div className="grid gap-5 lg:grid-cols-[308px_308px_308px]">
                 <div className="space-y-4 lg:col-span-2">
                   <div className="grid gap-4 lg:grid-cols-2">
                     <div className="space-y-4">
