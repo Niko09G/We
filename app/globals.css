@@ -185,10 +185,10 @@ select {
 @layer utilities {
   /* Admin typography tokens (used only in /app/admin routes). */
   .admin-page-title {
-    font-size: 40px;
+    font-size: 32px;
     font-weight: 700;
-    line-height: 1.1;
-    letter-spacing: -0.03em;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
   }
   .admin-intro {
     font-size: 16px;
@@ -265,5 +265,16 @@ select {
   }
   .admin-gap-card-title-body {
     margin-top: 12px;
+  }
+
+  .admin-page-shell {
+    width: 100%;
+    max-width: 1120px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 24px;
+    padding-right: 24px;
+    padding-top: 24px;
+    padding-bottom: 24px;
   }
 }

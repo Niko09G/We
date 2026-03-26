@@ -101,15 +101,15 @@ export default function MissionBoardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-50 px-4 py-8 dark:bg-zinc-950 md:px-6">
+      <div className="admin-page-shell">
         <p className="text-sm text-zinc-500">Loading board…</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 px-4 py-6 dark:bg-zinc-950 md:px-6">
-      <div className="mx-auto w-full max-w-5xl space-y-6">
+    <div className="admin-page-shell">
+      <div className="space-y-6">
         <header>
           <Link
             href="/admin/missions"

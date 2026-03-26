@@ -217,7 +217,7 @@ export default function TokensAdminPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl">
+    <div className="admin-page-shell space-y-6">
       <div>
         <h1 className="admin-page-title text-zinc-900 dark:text-zinc-100">Tokens</h1>
         <p className="admin-gap-page-title-intro admin-intro">

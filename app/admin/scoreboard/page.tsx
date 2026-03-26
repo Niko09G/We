@@ -152,7 +152,7 @@ export default function ScoreboardAdminPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="admin-page-shell space-y-6">
       <div>
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
           Scoreboard breakdown

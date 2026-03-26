@@ -546,8 +546,8 @@ export default function AdminPage() {
         ? null
         : msSubmissions.filter((s) => s.status === 'pending').length
     return (
-      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 px-4 py-6 md:px-6">
-        <div className="mx-auto w-full max-w-5xl">
+      <div className="admin-page-shell">
+        <div className="w-full">
           <div className="mb-6">
             <h1 className="admin-page-title text-zinc-900 dark:text-zinc-100">
               Admin overview
@@ -684,8 +684,8 @@ export default function AdminPage() {
 
   if (mode === 'display') {
     return (
-      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 px-4 py-6 md:px-6">
-        <div className="mx-auto w-full max-w-3xl rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <div className="admin-page-shell">
+        <div className="w-full max-w-3xl rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
           <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             Display controls coming soon
           </h1>
@@ -698,8 +698,8 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 px-4 py-6 md:px-6">
-      <div className="mx-auto w-full max-w-5xl">
+    <div className="admin-page-shell">
+      <div className="w-full">
         {mode === 'tables' && (
           <section className="mb-8 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
