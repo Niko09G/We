@@ -924,7 +924,7 @@ export default function TablesAdminPage() {
                       key={row.id}
                       type="button"
                       onClick={(e) => openEditEditor(row, e.currentTarget)}
-                      className={`grid min-h-[50px] cursor-pointer grid-cols-12 items-center gap-x-2 rounded-lg px-3 py-1.5 transition-colors ${
+                      className={`grid w-full min-h-[50px] cursor-pointer grid-cols-12 items-center gap-x-2 rounded-lg px-3 py-1.5 text-left transition-colors ${
                         row.is_archived ? `${rowBgClass} opacity-80` : rowBgClass
                       }`}
                     >
