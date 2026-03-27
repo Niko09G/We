@@ -19,8 +19,10 @@ import { compressAvatarSquareImage, compressImage, isAcceptedImageFile } from '@
 import { removeTeamHeroImageByPublicUrl, uploadTeamHeroImage } from '@/lib/team-hero-image-assets'
 
 type EditorMode = 'create' | 'edit'
-type OverlayStep = 1 | 2
+type OverlayStep = 1 | 2 | 3
 type ThemeColorKey = 'heroTop' | 'heroMiddle' | 'heroBottom' | 'lbGradTop' | 'lbGradBottom' | 'primaryColor'
+
+const NAME_SUGGESTION_CHIPS = ['Power Rangers', 'Turtle Table', 'VIP Legends', 'Chaos Crew'] as const
 
 type ThemePreset = {
   id: 'violet' | 'ocean' | 'rose' | 'forest'
@@ -127,14 +129,16 @@ function PreviewPhone({ form, name }: { form: TeamPageAdminFormValues; name: str
       <div className="h-full overflow-y-auto">
         <div className="p-0 text-white" style={{ background: heroBg }}>
           <div className="px-3 pb-3 pt-3">
-            {form.heroImageUrl.trim() ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={form.heroImageUrl.trim()}
-                alt=""
-                className="mx-auto mb-2 h-16 w-[82%] rounded-md object-contain"
-              />
-            ) : null}
+            <div className="mx-auto mb-2 flex h-20 w-[82%] items-center justify-center rounded-md bg-white/12">
+              {form.heroImageUrl.trim() ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={form.heroImageUrl.trim()}
+                  alt=""
+                  className="max-h-20 w-full object-contain"
+                />
+              ) : null}
+            </div>
             <div className="text-center text-[13px] font-semibold">{name || 'Table name'}</div>
             <div className="mx-auto mt-1 line-clamp-2 w-[90%] text-center text-[10px] font-medium opacity-95">
               {form.teamText.trim() || 'Team description preview'}
@@ -216,7 +220,6 @@ export default function TablesAdminPage() {
   const [editorClosing, setEditorClosing] = useState(false)
   const [mode, setMode] = useState<EditorMode>('create')
   const [overlayStep, setOverlayStep] = useState<OverlayStep>(1)
-  const [showAdvancedStyle, setShowAdvancedStyle] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [formName, setFormName] = useState('')
@@ -287,6 +290,10 @@ export default function TablesAdminPage() {
     return () => window.clearTimeout(t)
   }, [editorOpen, overlayStep])
 
+  useEffect(() => {
+    setOpenColorField(null)
+  }, [overlayStep])
+
   const activeRows = useMemo(() => rows.filter((r) => !r.is_archived), [rows])
   const archivedRows = useMemo(() => rows.filter((r) => r.is_archived), [rows])
 
@@ -327,7 +334,6 @@ export default function TablesAdminPage() {
   function openCreateEditor() {
     setMode('create')
     setOverlayStep(1)
-    setShowAdvancedStyle(false)
     setEditingId(null)
     setFormName('')
     setFormCapacity(10)
@@ -350,7 +356,6 @@ export default function TablesAdminPage() {
   ) {
     setMode('edit')
     setOverlayStep(1)
-    setShowAdvancedStyle(false)
     setEditingId(row.id)
     setFormName(row.name)
     setFormCapacity(row.capacity || 10)
@@ -369,6 +374,16 @@ export default function TablesAdminPage() {
   function setColorField(key: ThemeColorKey, next: string) {
     setFormTheme((prev) => ({ ...prev, [key]: next }))
   }
+
+  const advanceFromStep1 = useCallback(() => {
+    const n = formName.trim()
+    if (!n) {
+      setError('Table name is required.')
+      return
+    }
+    setError(null)
+    setOverlayStep(2)
+  }, [formName])
 
   async function uploadAvatar(file: File) {
     if (!isAcceptedImageFile(file)) {
@@ -674,13 +689,18 @@ export default function TablesAdminPage() {
                 </h3>
                 <div className="mt-1 inline-flex items-center gap-1.5">
                   <span
-                    className={`h-1.5 w-7 rounded-full transition-colors ${
+                    className={`h-1.5 w-7 rounded-full transition-colors duration-200 ${
                       overlayStep === 1 ? 'bg-zinc-900' : 'bg-zinc-200'
                     }`}
                   />
                   <span
-                    className={`h-1.5 w-7 rounded-full transition-colors ${
+                    className={`h-1.5 w-7 rounded-full transition-colors duration-200 ${
                       overlayStep === 2 ? 'bg-zinc-900' : 'bg-zinc-200'
+                    }`}
+                  />
+                  <span
+                    className={`h-1.5 w-7 rounded-full transition-colors duration-200 ${
+                      overlayStep === 3 ? 'bg-zinc-900' : 'bg-zinc-200'
                     }`}
                   />
                 </div>
@@ -741,281 +761,339 @@ export default function TablesAdminPage() {
                     <h4 className="text-center text-3xl font-semibold tracking-tight text-zinc-900">
                       What are we calling this table?
                     </h4>
-                    <div className="rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_24px_rgba(28,160,216,0.15)]">
-                      <label className="flex h-14 items-center rounded-2xl bg-white px-4">
+                    <div className="rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
+                      <div className="flex h-14 items-center gap-2 rounded-2xl bg-white pl-4 pr-2">
                         <input
                           ref={nameInputRef}
                           value={formName}
                           onChange={(e) => setFormName(e.target.value)}
-                          className="w-full bg-transparent !text-[16px] outline-none"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              advanceFromStep1()
+                            }
+                          }}
+                          className="min-w-0 flex-1 bg-transparent !text-[16px] outline-none"
                           placeholder="What’s your table name?"
                         />
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth={1.8}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="h-4 w-4 text-zinc-400"
-                          aria-hidden
+                        <button
+                          type="button"
+                          onClick={advanceFromStep1}
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black text-white transition-transform hover:scale-[1.03] active:scale-[0.98]"
+                          aria-label="Continue"
                         >
-                          <path d="m5 12 14 0" />
-                          <path d="m13 6 6 6-6 6" />
-                        </svg>
-                      </label>
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="h-4 w-4"
+                            aria-hidden
+                          >
+                            <path d="M5 12h14M13 6l6 6-6 6" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {NAME_SUGGESTION_CHIPS.map((chip) => (
+                        <button
+                          key={chip}
+                          type="button"
+                          onClick={() => {
+                            setFormName(chip)
+                            setError(null)
+                          }}
+                          className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
+                        >
+                          {chip}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
               </div>
 
               <div
-                className={`absolute inset-0 px-5 py-4 transition-all duration-200 ease-out ${
-                  overlayStep === 2
+                className={`absolute inset-0 flex flex-col overflow-hidden transition-all duration-200 ease-out ${
+                  overlayStep >= 2
                     ? 'translate-x-0 opacity-100'
-                    : 'translate-x-3 pointer-events-none opacity-0'
+                    : 'pointer-events-none translate-x-3 opacity-0'
                 }`}
               >
-                <div className="grid h-full min-h-0 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-                  <div className="h-full min-h-0 overflow-y-auto pr-2">
-                    <section className="space-y-4 pb-5">
-                      <div className="rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px]">
-                        <label className="flex h-12 items-center rounded-2xl bg-white px-4">
-                          <input
-                            value={formTheme.teamText}
-                            onChange={(e) => setFormTheme((p) => ({ ...p, teamText: e.target.value }))}
-                            className="w-full bg-transparent !text-[15px] outline-none"
-                            placeholder="Add a short tagline"
-                          />
-                        </label>
-                      </div>
-
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <button
-                          type="button"
-                          onClick={() => avatarInputRef.current?.click()}
-                          disabled={avatarUploading}
-                          className="group relative flex h-16 items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-800 transition-all hover:border-transparent disabled:opacity-60"
-                        >
-                          <span className="absolute inset-0 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-                          <span className="relative z-10 group-hover:text-white">Add Avatar</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => heroInputRef.current?.click()}
-                          disabled={heroUploading}
-                          className="group relative flex h-16 items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-800 transition-all hover:border-transparent disabled:opacity-60"
-                        >
-                          <span className="absolute inset-0 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-                          <span className="relative z-10 group-hover:text-white">Add Hero Image</span>
-                        </button>
-                      </div>
-                    </section>
-
-                    <section className="space-y-4 pb-5">
-                      <h4 className="text-sm font-semibold text-zinc-900">Theme</h4>
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap gap-3">
-                          {THEME_PRESETS.map((preset) => {
-                            const selected = formPresetId === preset.id
-                            return (
-                              <button
-                                key={preset.id}
-                                type="button"
-                                onClick={() => applyPreset(preset.id)}
-                                className="group inline-flex flex-col items-center gap-1.5"
-                              >
-                                <span
-                                  className={`h-10 w-10 rounded-full transition-all duration-200 group-hover:brightness-105 ${
-                                    selected ? 'ring-2 ring-zinc-900/50 ring-offset-2' : 'ring-1 ring-zinc-200'
-                                  }`}
-                                  style={{
-                                    background: `linear-gradient(to bottom right, ${preset.tableGradTop}, ${preset.tableGradBottom})`,
-                                  }}
-                                />
-                                <span className="text-[11px] font-medium text-zinc-600">{preset.name}</span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    </section>
-
-                    <section className="space-y-3 pb-5">
-                      <button
-                        type="button"
-                        onClick={() => setShowAdvancedStyle((v) => !v)}
-                        className="inline-flex items-center gap-2 rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+                <div className="flex min-h-0 flex-1 flex-col px-5 py-3">
+                  <div className="mx-auto flex h-full min-h-0 w-full max-w-[700px] flex-col">
+                    <div className="relative h-[min(280px,32vh)] min-h-[248px] w-full shrink-0 sm:h-[min(300px,34vh)] sm:min-h-[260px]">
+                      <div
+                        className={`absolute inset-0 overflow-y-auto overflow-x-hidden transition-all duration-200 ease-out ${
+                          overlayStep === 2
+                            ? 'z-10 translate-x-0 opacity-100'
+                            : 'pointer-events-none z-0 -translate-x-2 opacity-0'
+                        }`}
                       >
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth={1.8}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="h-3.5 w-3.5"
-                          aria-hidden
-                        >
-                          <path d="M12 2 9.8 7.2 4.5 9.5l5.3 2.3L12 17l2.2-5.2 5.3-2.3-5.3-2.3L12 2Z" />
-                        </svg>
-                        Customize
-                      </button>
-                      {showAdvancedStyle ? (
-                        <div className="space-y-4 rounded-xl border border-zinc-200 p-3">
-                          <h4 className="text-xs font-semibold text-zinc-900">Hero gradient</h4>
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            {[
-                              { key: 'heroTop', label: 'Hero top' },
-                              { key: 'heroMiddle', label: 'Hero middle' },
-                              { key: 'heroBottom', label: 'Hero bottom' },
-                            ].map(({ key, label }) => {
-                              const k = key as ThemeColorKey
-                              const value = formTheme[k]
-                              return (
-                                <div key={key} className="relative">
-                                  <button
-                                    type="button"
-                                    onClick={() => setOpenColorField((prev) => (prev === k ? null : k))}
-                                    className="h-10 w-full rounded-lg border border-zinc-200 px-3 text-left text-xs font-medium text-zinc-700 transition-all hover:border-zinc-300"
-                                    style={{ backgroundColor: value }}
-                                  >
-                                    <span className="rounded bg-white/85 px-2 py-1">{label}</span>
-                                  </button>
-                                  {openColorField === k ? (
-                                    <div className="absolute z-20 mt-2 w-44 rounded-lg border border-zinc-200 bg-white p-2 shadow-sm">
-                                      <input
-                                        type="color"
-                                        value={value}
-                                        onChange={(e) => setColorField(k, e.target.value)}
-                                        className="h-8 w-full cursor-pointer rounded"
-                                      />
-                                      <input
-                                        value={value}
-                                        onChange={(e) => setColorField(k, e.target.value)}
-                                        className="mt-2 h-8 w-full rounded border border-zinc-200 px-2 text-xs"
-                                      />
-                                    </div>
-                                  ) : null}
-                                </div>
-                              )
-                            })}
+                        <div className="flex flex-col items-center space-y-4 pb-2 pt-1">
+                          <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
+                            What’s the team identity?
+                          </h4>
+                          <div className="w-full rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
+                            <label className="flex h-12 items-center rounded-2xl bg-white px-4">
+                              <input
+                                value={formTheme.teamText}
+                                onChange={(e) => setFormTheme((p) => ({ ...p, teamText: e.target.value }))}
+                                className="w-full bg-transparent !text-[15px] outline-none"
+                                placeholder="Add a short tagline"
+                              />
+                            </label>
                           </div>
-                          <h4 className="text-xs font-semibold text-zinc-900">Leaderboard gradient</h4>
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            {[
-                              { key: 'lbGradTop', label: 'Top' },
-                              { key: 'lbGradBottom', label: 'Bottom' },
-                            ].map(({ key, label }) => {
-                              const k = key as ThemeColorKey
-                              const value = formTheme[k]
-                              return (
-                                <div key={key} className="relative">
-                                  <button
-                                    type="button"
-                                    onClick={() => setOpenColorField((prev) => (prev === k ? null : k))}
-                                    className="h-10 w-full rounded-lg border border-zinc-200 px-3 text-left text-xs font-medium text-zinc-700 transition-all hover:border-zinc-300"
-                                    style={{ backgroundColor: value }}
-                                  >
-                                    <span className="rounded bg-white/85 px-2 py-1">{label}</span>
-                                  </button>
-                                  {openColorField === k ? (
-                                    <div className="absolute z-20 mt-2 w-44 rounded-lg border border-zinc-200 bg-white p-2 shadow-sm">
-                                      <input
-                                        type="color"
-                                        value={value}
-                                        onChange={(e) => setColorField(k, e.target.value)}
-                                        className="h-8 w-full cursor-pointer rounded"
-                                      />
-                                      <input
-                                        value={value}
-                                        onChange={(e) => setColorField(k, e.target.value)}
-                                        className="mt-2 h-8 w-full rounded border border-zinc-200 px-2 text-xs"
-                                      />
-                                    </div>
-                                  ) : null}
-                                </div>
-                              )
-                            })}
-                          </div>
-                          <h4 className="text-xs font-semibold text-zinc-900">CTA color</h4>
-                          <div className="relative">
+                          <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-3">
                             <button
                               type="button"
-                              onClick={() =>
-                                setOpenColorField((prev) => (prev === 'primaryColor' ? null : 'primaryColor'))
-                              }
-                              className="h-10 w-full rounded-lg border border-zinc-200 px-3 text-left text-xs font-medium text-zinc-700 transition-all hover:border-zinc-300"
-                              style={{ backgroundColor: formTheme.primaryColor }}
+                              onClick={() => avatarInputRef.current?.click()}
+                              disabled={avatarUploading}
+                              className="group relative flex h-14 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-800 transition-all hover:border-transparent disabled:opacity-60"
                             >
-                              <span className="rounded bg-white/85 px-2 py-1">Primary CTA</span>
+                              <span className="absolute inset-0 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                              <span className="relative z-10 group-hover:text-white">Add Avatar</span>
                             </button>
-                            {openColorField === 'primaryColor' ? (
-                              <div className="absolute z-20 mt-2 w-44 rounded-lg border border-zinc-200 bg-white p-2 shadow-sm">
-                                <input
-                                  type="color"
-                                  value={formTheme.primaryColor}
-                                  onChange={(e) => setColorField('primaryColor', e.target.value)}
-                                  className="h-8 w-full cursor-pointer rounded"
+                            <button
+                              type="button"
+                              onClick={() => heroInputRef.current?.click()}
+                              disabled={heroUploading}
+                              className="group relative flex h-14 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-800 transition-all hover:border-transparent disabled:opacity-60"
+                            >
+                              <span className="absolute inset-0 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                              <span className="relative z-10 group-hover:text-white">Add Hero Image</span>
+                            </button>
+                          </div>
+                          <div className="flex justify-center gap-3">
+                            {THEME_PRESETS.map((preset) => {
+                              const selected = formPresetId === preset.id
+                              return (
+                                <button
+                                  key={preset.id}
+                                  type="button"
+                                  onClick={() => applyPreset(preset.id)}
+                                  aria-label={`Theme preset ${preset.name}`}
+                                  className={`h-11 w-11 rounded-full transition-all duration-200 hover:brightness-105 ${
+                                    selected
+                                      ? 'ring-2 ring-zinc-900/55 ring-offset-[3px]'
+                                      : 'ring-1 ring-zinc-200/90'
+                                  }`}
+                                  style={{
+                                    background: `linear-gradient(145deg, ${preset.tableGradTop}, ${preset.tableGradBottom})`,
+                                  }}
                                 />
-                                <input
-                                  value={formTheme.primaryColor}
-                                  onChange={(e) => setColorField('primaryColor', e.target.value)}
-                                  className="mt-2 h-8 w-full rounded border border-zinc-200 px-2 text-xs"
+                              )
+                            })}
+                          </div>
+                          <div className="flex flex-wrap items-end justify-center gap-5">
+                            <label className="flex flex-col">
+                              <span className="mb-1 text-[11px] font-medium text-zinc-500">Seats</span>
+                              <input
+                                type="number"
+                                min={1}
+                                value={formCapacity}
+                                onChange={(e) => setFormCapacity(Math.max(1, Number(e.target.value) || 1))}
+                                className="h-9 w-20 rounded-lg border border-zinc-200 bg-white px-2 text-center text-[14px] outline-none transition-colors focus:border-zinc-300"
+                              />
+                            </label>
+                            <label className="inline-flex cursor-pointer items-center gap-2 pb-1 text-sm font-medium text-zinc-700">
+                              <span
+                                className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
+                                  formActive ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]' : 'bg-zinc-300'
+                                }`}
+                              >
+                                <span
+                                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                                    formActive ? 'translate-x-4.5' : 'translate-x-0.5'
+                                  }`}
                                 />
+                              </span>
+                              <input
+                                type="checkbox"
+                                checked={formActive}
+                                onChange={(e) => setFormActive(e.target.checked)}
+                                className="sr-only"
+                              />
+                              Active
+                            </label>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setOverlayStep(3)}
+                            className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3.5 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth={1.8}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="h-3.5 w-3.5"
+                              aria-hidden
+                            >
+                              <path d="M12 2 9.8 7.2 4.5 9.5l5.3 2.3L12 17l2.2-5.2 5.3-2.3-5.3-2.3L12 2Z" />
+                            </svg>
+                            Customize
+                          </button>
+                        </div>
+                      </div>
+                      <div
+                        className={`absolute inset-0 overflow-y-auto overflow-x-hidden transition-all duration-200 ease-out ${
+                          overlayStep === 3
+                            ? 'z-10 translate-x-0 opacity-100'
+                            : 'pointer-events-none z-0 translate-x-2 opacity-0'
+                        }`}
+                      >
+                        <div className="flex flex-col items-center space-y-4 pb-2 pt-1">
+                          <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
+                            How should we color it?
+                          </h4>
+                          <div className="flex justify-center gap-3">
+                            {THEME_PRESETS.map((preset) => {
+                              const selected = formPresetId === preset.id
+                              return (
+                                <button
+                                  key={preset.id}
+                                  type="button"
+                                  onClick={() => applyPreset(preset.id)}
+                                  aria-label={`Theme preset ${preset.name}`}
+                                  className={`h-11 w-11 rounded-full transition-all duration-200 hover:brightness-105 ${
+                                    selected
+                                      ? 'ring-2 ring-zinc-900/55 ring-offset-[3px]'
+                                      : 'ring-1 ring-zinc-200/90'
+                                  }`}
+                                  style={{
+                                    background: `linear-gradient(145deg, ${preset.tableGradTop}, ${preset.tableGradBottom})`,
+                                  }}
+                                />
+                              )
+                            })}
+                          </div>
+                          <div className="w-full space-y-2.5 rounded-2xl border border-zinc-100 bg-zinc-50/60 p-3">
+                            <p className="text-center text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+                              Hero
+                            </p>
+                            <div className="grid grid-cols-3 gap-2">
+                              {[
+                                { key: 'heroTop' as const, label: 'Top' },
+                                { key: 'heroMiddle' as const, label: 'Mid' },
+                                { key: 'heroBottom' as const, label: 'Bot' },
+                              ].map(({ key, label }) => {
+                                const value = formTheme[key]
+                                return (
+                                  <div key={key} className="relative flex flex-col items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => setOpenColorField((prev) => (prev === key ? null : key))}
+                                      className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
+                                      style={{ backgroundColor: value }}
+                                      aria-label={`${label} hero color`}
+                                    />
+                                    <span className="text-[9px] font-medium text-zinc-500">{label}</span>
+                                    {openColorField === key ? (
+                                      <div className="absolute left-1/2 top-full z-30 mt-1 w-36 -translate-x-1/2 rounded-lg border border-zinc-200 bg-white p-2 shadow-md">
+                                        <input
+                                          type="color"
+                                          value={value}
+                                          onChange={(e) => setColorField(key, e.target.value)}
+                                          className="h-7 w-full cursor-pointer rounded border-0"
+                                        />
+                                        <input
+                                          value={value}
+                                          onChange={(e) => setColorField(key, e.target.value)}
+                                          className="mt-1.5 w-full rounded border border-zinc-100 px-1.5 py-1 text-[10px] text-zinc-600"
+                                        />
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                            <p className="pt-1 text-center text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+                              Leaderboard
+                            </p>
+                            <div className="grid grid-cols-2 gap-3">
+                              {[
+                                { key: 'lbGradTop' as const, label: 'Top' },
+                                { key: 'lbGradBottom' as const, label: 'Bot' },
+                              ].map(({ key, label }) => {
+                                const value = formTheme[key]
+                                return (
+                                  <div key={key} className="relative flex flex-col items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => setOpenColorField((prev) => (prev === key ? null : key))}
+                                      className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
+                                      style={{ backgroundColor: value }}
+                                      aria-label={`Leaderboard ${label}`}
+                                    />
+                                    <span className="text-[9px] font-medium text-zinc-500">{label}</span>
+                                    {openColorField === key ? (
+                                      <div className="absolute left-1/2 top-full z-30 mt-1 w-36 -translate-x-1/2 rounded-lg border border-zinc-200 bg-white p-2 shadow-md">
+                                        <input
+                                          type="color"
+                                          value={value}
+                                          onChange={(e) => setColorField(key, e.target.value)}
+                                          className="h-7 w-full cursor-pointer rounded border-0"
+                                        />
+                                        <input
+                                          value={value}
+                                          onChange={(e) => setColorField(key, e.target.value)}
+                                          className="mt-1.5 w-full rounded border border-zinc-100 px-1.5 py-1 text-[10px] text-zinc-600"
+                                        />
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                            <p className="pt-1 text-center text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+                              CTA
+                            </p>
+                            <div className="flex justify-center">
+                              <div className="relative flex flex-col items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setOpenColorField((prev) => (prev === 'primaryColor' ? null : 'primaryColor'))
+                                  }
+                                  className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
+                                  style={{ backgroundColor: formTheme.primaryColor }}
+                                  aria-label="Primary CTA color"
+                                />
+                                {openColorField === 'primaryColor' ? (
+                                  <div className="absolute left-1/2 top-full z-30 mt-1 w-36 -translate-x-1/2 rounded-lg border border-zinc-200 bg-white p-2 shadow-md">
+                                    <input
+                                      type="color"
+                                      value={formTheme.primaryColor}
+                                      onChange={(e) => setColorField('primaryColor', e.target.value)}
+                                      className="h-7 w-full cursor-pointer rounded border-0"
+                                    />
+                                    <input
+                                      value={formTheme.primaryColor}
+                                      onChange={(e) => setColorField('primaryColor', e.target.value)}
+                                      className="mt-1.5 w-full rounded border border-zinc-100 px-1.5 py-1 text-[10px] text-zinc-600"
+                                    />
+                                  </div>
+                                ) : null}
                               </div>
-                            ) : null}
+                            </div>
                           </div>
                         </div>
-                      ) : null}
-                    </section>
-
-                    <section className="space-y-3">
-                      <h4 className="text-sm font-semibold text-zinc-900">Compact settings</h4>
-                      <div className="flex items-end gap-4">
-                        <label className="block">
-                          <span className="mb-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600">
-                            Seat capacity
-                          </span>
-                          <input
-                            type="number"
-                            min={1}
-                            value={formCapacity}
-                            onChange={(e) => setFormCapacity(Math.max(1, Number(e.target.value) || 1))}
-                            className="h-9 w-28 border-b border-zinc-300 bg-transparent px-1 text-[14px] outline-none focus:border-zinc-500"
-                          />
-                        </label>
-                        <label className="inline-flex items-center gap-2 px-1 py-1.5 text-sm font-medium text-zinc-700">
-                          <span
-                            className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
-                              formActive ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]' : 'bg-zinc-300'
-                            }`}
-                          >
-                            <span
-                              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                                formActive ? 'translate-x-4.5' : 'translate-x-0.5'
-                              }`}
-                            />
-                          </span>
-                          <input
-                            type="checkbox"
-                            checked={formActive}
-                            onChange={(e) => setFormActive(e.target.checked)}
-                            className="sr-only"
-                          />
-                          Make active
-                        </label>
                       </div>
-                    </section>
-                  </div>
+                    </div>
 
-                  <div className="sticky top-0 self-start">
-                    <div className="mb-1 text-xs font-medium text-zinc-600">Preview</div>
-                    <div className="relative h-[640px] overflow-hidden rounded-[28px] border border-zinc-200 transition-all duration-200">
-                      <div className="scale-[1.03] origin-top">
-                        <PreviewPhone form={formTheme} name={formName || 'New table'} />
+                    <div className="mx-auto mt-2 w-full max-w-[540px] shrink-0 pb-1">
+                      <div className="relative h-[420px] w-full overflow-hidden rounded-[28px] border border-zinc-200 transition-[box-shadow] duration-200">
+                        <div className="origin-top scale-[1.09] transition-transform duration-200">
+                          <PreviewPhone form={formTheme} name={formName || 'New table'} />
+                        </div>
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%] bg-gradient-to-b from-transparent via-white/72 to-white" />
                       </div>
-                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-b from-transparent via-white/65 to-white" />
                     </div>
                   </div>
                 </div>
@@ -1024,7 +1102,7 @@ export default function TablesAdminPage() {
 
             <div className="flex items-center justify-between gap-2 border-t border-zinc-200 px-5 py-3">
               <div className="flex items-center gap-2">
-                {mode === 'edit' && editingId && overlayStep === 2 ? (
+                {mode === 'edit' && editingId && (overlayStep === 2 || overlayStep === 3) ? (
                   <button
                     type="button"
                     onClick={() => void onArchive(editingId)}
@@ -1038,11 +1116,9 @@ export default function TablesAdminPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (overlayStep === 1) {
-                      closeOverlay()
-                    } else {
-                      setOverlayStep(1)
-                    }
+                    if (overlayStep === 1) closeOverlay()
+                    else if (overlayStep === 3) setOverlayStep(2)
+                    else setOverlayStep(1)
                   }}
                   className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700"
                 >
@@ -1051,7 +1127,7 @@ export default function TablesAdminPage() {
                 {overlayStep === 1 ? (
                   <button
                     type="button"
-                    onClick={() => setOverlayStep(2)}
+                    onClick={advanceFromStep1}
                     className="rounded-full bg-black px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
                   >
                     Next
