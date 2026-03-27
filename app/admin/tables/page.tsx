@@ -257,6 +257,7 @@ export default function TablesAdminPage() {
   const avatarInputRef = useRef<HTMLInputElement | null>(null)
   const heroInputRef = useRef<HTMLInputElement | null>(null)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
+  const taglineInputRef = useRef<HTMLInputElement | null>(null)
   const colorPickerRef = useRef<HTMLDivElement | null>(null)
   const overlayCloseTimerRef = useRef<number | null>(null)
   const overlayTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -319,6 +320,14 @@ export default function TablesAdminPage() {
     if (!editorOpen || overlayStep !== 1) return
     const t = window.setTimeout(() => {
       nameInputRef.current?.focus()
+    }, 40)
+    return () => window.clearTimeout(t)
+  }, [editorOpen, overlayStep])
+
+  useEffect(() => {
+    if (!editorOpen || overlayStep !== 2) return
+    const t = window.setTimeout(() => {
+      taglineInputRef.current?.focus()
     }, 40)
     return () => window.clearTimeout(t)
   }, [editorOpen, overlayStep])
@@ -391,7 +400,7 @@ export default function TablesAdminPage() {
       tableColor: '#6335fb',
       tableName: 'New Table',
     })
-    setFormTheme({ ...d, avatarImageUrl: '', teamText: d.teamText.trim() || 'Add a short tagline' })
+    setFormTheme({ ...d, avatarImageUrl: '', teamText: '' })
     overlayTriggerRef.current = null
     setEditorClosing(false)
     setEditorOpen(true)
@@ -414,11 +423,7 @@ export default function TablesAdminPage() {
       tableColor: row.color,
       tableName: row.name,
     })
-    setFormTheme({
-      ...d,
-      avatarImageUrl: d.avatarImageUrl ?? '',
-      teamText: d.teamText.trim() || 'Add a short tagline',
-    })
+    setFormTheme({ ...d, avatarImageUrl: d.avatarImageUrl ?? '' })
     overlayTriggerRef.current = triggerEl ?? null
     setEditorClosing(false)
     setEditorOpen(true)
@@ -492,6 +497,9 @@ export default function TablesAdminPage() {
       setHeroUploading(false)
     }
   }
+
+  const avatarReady = formTheme.avatarImageUrl.trim().length > 0
+  const heroReady = formTheme.heroImageUrl.trim().length > 0
 
   async function saveEditor() {
     const name = formName.trim()
@@ -916,7 +924,7 @@ export default function TablesAdminPage() {
                   <div className="mx-auto flex h-full min-h-0 w-full max-w-[760px] flex-1 flex-col overflow-visible">
                     <div className="relative h-[min(260px,30vh)] min-h-[220px] w-full shrink-0 sm:h-[min(280px,32vh)] sm:min-h-[240px]">
                       <div
-                        className={`absolute inset-0 overflow-hidden transition-all duration-200 ease-out ${
+                        className={`absolute inset-0 overflow-visible transition-all duration-200 ease-out ${
                           overlayStep === 2
                             ? 'z-10 translate-x-0 opacity-100'
                             : 'pointer-events-none z-0 -translate-x-2 opacity-0'
@@ -929,9 +937,11 @@ export default function TablesAdminPage() {
                           <div className="w-full rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
                             <label className="flex h-12 items-center rounded-2xl bg-white px-4">
                               <input
+                                ref={taglineInputRef}
                                 value={formTheme.teamText}
                                 onChange={(e) => setFormTheme((p) => ({ ...p, teamText: e.target.value }))}
-                                className="w-full bg-transparent !text-[15px] outline-none"
+                                className="w-full max-w-[680px] bg-transparent !text-[15px] outline-none"
+                                placeholder="What's your team tagline?"
                               />
                             </label>
                           </div>
@@ -940,7 +950,11 @@ export default function TablesAdminPage() {
                               type="button"
                               onClick={() => avatarInputRef.current?.click()}
                               disabled={avatarUploading}
-                              className="group relative flex h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50/90 text-sm font-medium text-zinc-800 transition-all duration-200 ease-out hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white disabled:opacity-60"
+                              className={`group relative flex h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 text-sm font-medium transition-all duration-200 ease-out disabled:opacity-60 ${
+                                avatarUploading || avatarReady
+                                  ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white'
+                                  : 'bg-zinc-50/90 text-zinc-800 hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white'
+                              }`}
                             >
                               <svg
                                 viewBox="0 0 24 24"
@@ -949,21 +963,58 @@ export default function TablesAdminPage() {
                                 strokeWidth={1.7}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                className="relative z-10 h-4 w-4 text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white"
+                                className={`relative z-10 h-4 w-4 transition-colors duration-200 ease-out ${
+                                  avatarUploading || avatarReady ? 'text-white' : 'text-zinc-500 group-hover:text-white'
+                                }`}
                                 aria-hidden
                               >
                                 <circle cx="12" cy="8" r="3.5" />
                                 <path d="M5 20a7 7 0 0 1 14 0" />
                               </svg>
-                              <span className="relative z-10 transition-colors duration-200 ease-out group-hover:text-white">
+                              <span
+                                className={`relative z-10 transition-colors duration-200 ease-out ${
+                                  avatarUploading || avatarReady ? 'text-white' : 'group-hover:text-white'
+                                }`}
+                              >
                                 Avatar image
                               </span>
+                              {avatarUploading ? (
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="absolute right-3 h-4 w-4 animate-spin text-white"
+                                  aria-hidden
+                                >
+                                  <path d="M21 12a9 9 0 1 1-3.2-6.9" />
+                                </svg>
+                              ) : avatarReady ? (
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="absolute right-3 h-4 w-4 text-white"
+                                  aria-hidden
+                                >
+                                  <path d="m5 12 5 5L20 7" />
+                                </svg>
+                              ) : null}
                             </button>
                             <button
                               type="button"
                               onClick={() => heroInputRef.current?.click()}
                               disabled={heroUploading}
-                              className="group relative flex h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50/90 text-sm font-medium text-zinc-800 transition-all duration-200 ease-out hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white disabled:opacity-60"
+                              className={`group relative flex h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 text-sm font-medium transition-all duration-200 ease-out disabled:opacity-60 ${
+                                heroUploading || heroReady
+                                  ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white'
+                                  : 'bg-zinc-50/90 text-zinc-800 hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white'
+                              }`}
                             >
                               <svg
                                 viewBox="0 0 24 24"
@@ -972,16 +1023,49 @@ export default function TablesAdminPage() {
                                 strokeWidth={1.7}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                className="relative z-10 h-4 w-4 text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white"
+                                className={`relative z-10 h-4 w-4 transition-colors duration-200 ease-out ${
+                                  heroUploading || heroReady ? 'text-white' : 'text-zinc-500 group-hover:text-white'
+                                }`}
                                 aria-hidden
                               >
                                 <rect x="3" y="5" width="18" height="14" rx="2" />
                                 <circle cx="8.5" cy="10" r="1.2" />
                                 <path d="m21 15-6-5-4 4-3-3-5 5" />
                               </svg>
-                              <span className="relative z-10 transition-colors duration-200 ease-out group-hover:text-white">
+                              <span
+                                className={`relative z-10 transition-colors duration-200 ease-out ${
+                                  heroUploading || heroReady ? 'text-white' : 'group-hover:text-white'
+                                }`}
+                              >
                                 Hero image
                               </span>
+                              {heroUploading ? (
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="absolute right-3 h-4 w-4 animate-spin text-white"
+                                  aria-hidden
+                                >
+                                  <path d="M21 12a9 9 0 1 1-3.2-6.9" />
+                                </svg>
+                              ) : heroReady ? (
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="absolute right-3 h-4 w-4 text-white"
+                                  aria-hidden
+                                >
+                                  <path d="m5 12 5 5L20 7" />
+                                </svg>
+                              ) : null}
                             </button>
                           </div>
                           <div className="flex flex-wrap items-center justify-center gap-3">
@@ -1084,7 +1168,7 @@ export default function TablesAdminPage() {
                           <div className="relative w-full space-y-3 rounded-2xl border border-zinc-100/90 bg-zinc-50/50 p-3">
                             <div className="grid grid-cols-2 gap-4">
                               <div className="flex items-center justify-center gap-3">
-                                <span className="text-xs font-medium text-zinc-600">Main color</span>
+                                <span className="text-xs font-semibold text-zinc-600">Main color</span>
                                 <button
                                   type="button"
                                   data-color-dot="true"
@@ -1095,7 +1179,7 @@ export default function TablesAdminPage() {
                                 />
                               </div>
                               <div className="flex items-center justify-center gap-3">
-                                <span className="text-xs font-medium text-zinc-600">Leaderboard gradient</span>
+                                <span className="text-xs font-semibold text-zinc-600">Leaderboard gradient</span>
                                 <div className="flex items-center gap-2">
                                   <button
                                     type="button"
@@ -1117,7 +1201,7 @@ export default function TablesAdminPage() {
                               </div>
                             </div>
                             <div className="flex items-center justify-center gap-3 border-t border-zinc-100/80 pt-3">
-                              <span className="text-xs font-medium text-zinc-600">Hero section gradient</span>
+                              <span className="text-xs font-semibold text-zinc-600">Hero section gradient</span>
                               <div className="flex items-center gap-2">
                                 <button
                                   type="button"
@@ -1169,7 +1253,7 @@ export default function TablesAdminPage() {
                     </div>
 
                     <div className="flex w-full shrink-0 justify-center overflow-hidden px-2 pt-8">
-                      <div className="relative w-full max-w-[340px] overflow-visible rounded-[28px] border border-zinc-200/90 shadow-sm">
+                      <div className="relative w-full max-w-[340px] overflow-visible rounded-[28px] border border-zinc-200/90">
                         <div className="relative overflow-visible pt-1">
                           <div className="origin-top scale-[1.06] transition-transform duration-200 ease-out">
                             <PreviewPhone form={formTheme} name={formName || 'New table'} />
@@ -1189,7 +1273,7 @@ export default function TablesAdminPage() {
                 <button
                   type="button"
                   onClick={() => void onArchive(editingId)}
-                  className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700"
+                  className="rounded-full border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700"
                 >
                   Archive table
                 </button>
@@ -1246,6 +1330,7 @@ export default function TablesAdminPage() {
                 </h2>
                 <div className="mt-6 flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-3 sm:flex-nowrap">
                   <div className="flex flex-1 items-center gap-2">
+                    <span className="text-sm font-medium text-zinc-700">Seats</span>
                     <input
                       type="number"
                       min={1}
@@ -1254,7 +1339,6 @@ export default function TablesAdminPage() {
                       className="w-14 shrink-0 rounded-lg border-0 border-b border-zinc-200 bg-transparent py-1 text-center text-sm font-medium text-zinc-900 outline-none transition-colors duration-200 ease-out focus:border-zinc-400"
                       aria-label="Seat capacity"
                     />
-                    <span className="text-sm font-medium text-zinc-700">Seats</span>
                   </div>
                   <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-zinc-700">
                     <span
