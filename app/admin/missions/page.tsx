@@ -78,6 +78,47 @@ function missionStatusBadge(isActive: boolean): { label: string; className: stri
   return { label: 'Inactive', className: 'bg-zinc-100 text-zinc-600' }
 }
 
+function missionValidationIcon(type: ValidationType, className: string) {
+  if (type === 'photo') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+        <path d="M4 7h4l1.4-2h5.2L16 7h4v12H4z" />
+        <circle cx="12" cy="13" r="3.2" />
+      </svg>
+    )
+  }
+  if (type === 'video') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+        <rect x="3" y="6" width="14" height="12" rx="2" />
+        <path d="m17 10 4-2v8l-4-2z" />
+      </svg>
+    )
+  }
+  if (type === 'signature') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+        <path d="m4 20 4.5-1 9.7-9.7a2.3 2.3 0 0 0-3.2-3.3L5.3 15.7z" />
+        <path d="M13 7l3.8 3.8" />
+      </svg>
+    )
+  }
+  if (type === 'beatcoin') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+        <circle cx="12" cy="12" r="8" />
+        <path d="M9.2 12h5.6M12 9.2v5.6" />
+      </svg>
+    )
+  }
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M7 4h8l4 4v12H7z" />
+      <path d="M15 4v4h4M9 13h6M9 17h6" />
+    </svg>
+  )
+}
+
 export default function MissionsLibraryPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -95,9 +136,11 @@ export default function MissionsLibraryPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [step, setStep] = useState<MissionStep>(1)
   const [step1Hint, setStep1Hint] = useState<string | null>(null)
+  const [categoryMenuOpen, setCategoryMenuOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<MissionForm>(emptyForm)
   const missionTitleInputRef = useRef<HTMLInputElement | null>(null)
+  const categoryMenuRef = useRef<HTMLDivElement | null>(null)
 
   const showToast = useCallback((message: string, kind: 'success' | 'error') => {
     setToast({ kind, message })
@@ -140,6 +183,31 @@ export default function MissionsLibraryPage() {
     return () => window.clearTimeout(t)
   }, [editorOpen, step])
 
+  useEffect(() => {
+    if (!categoryMenuOpen) return
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (categoryMenuRef.current?.contains(target)) return
+      setCategoryMenuOpen(false)
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setCategoryMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [categoryMenuOpen])
+
+  useEffect(() => {
+    if (editorOpen && step === 1) return
+    setCategoryMenuOpen(false)
+  }, [editorOpen, step])
+
   const statusCounts = useMemo(() => {
     const active = missions.filter((m) => m.is_active).length
     const inactive = missions.filter((m) => !m.is_active).length
@@ -174,6 +242,7 @@ export default function MissionsLibraryPage() {
     setEditingId(null)
     setStep(1)
     setStep1Hint(null)
+    setCategoryMenuOpen(false)
     setForm(emptyForm())
     setEditorOpen(true)
   }
@@ -183,6 +252,7 @@ export default function MissionsLibraryPage() {
     setEditingId(mission.id)
     setStep(1)
     setStep1Hint(null)
+    setCategoryMenuOpen(false)
     setForm(formFromMission(mission))
     setEditorOpen(true)
   }
@@ -578,10 +648,10 @@ export default function MissionsLibraryPage() {
                 setEditorOpen(false)
               }}
             >
-              <div
-                        className="relative z-10 flex h-[90vh] max-h-[900px] min-h-0 w-full max-w-[1080px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm"
-                onMouseDown={(e) => e.stopPropagation()}
-              >
+                      <div
+                        className="relative z-10 flex h-[90vh] max-h-[900px] min-h-0 w-full max-w-[1080px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white font-sans shadow-sm"
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
                 <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3">
                   <div>
                     <h3 className="text-lg font-semibold text-zinc-900">
@@ -637,7 +707,7 @@ export default function MissionsLibraryPage() {
                                     </h4>
                                     <div className="rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
                                       <div
-                                        className={`flex h-14 items-center gap-2 rounded-2xl bg-white pl-4 pr-2 transition-[box-shadow] duration-200 ease-out ${
+                                        className={`flex h-14 items-stretch rounded-2xl bg-white pl-4 transition-[box-shadow] duration-200 ease-out ${
                                           step1Hint ? 'shadow-[inset_0_0_0_1px_rgba(248,113,113,0.55)]' : ''
                                         }`}
                                       >
@@ -657,36 +727,55 @@ export default function MissionsLibraryPage() {
                                           className="min-w-0 flex-1 bg-transparent !text-[16px] outline-none"
                                           placeholder="What's your mission called?"
                                         />
-                                        <div className="relative shrink-0">
-                                          <select
-                                            value={form.validation_type}
-                                            onChange={(e) =>
-                                              setForm((s) => ({
-                                                ...s,
-                                                validation_type: e.target.value as ValidationType,
-                                              }))
-                                            }
-                                            className="h-9 min-w-[126px] appearance-none rounded-full border border-zinc-200 bg-white px-3 pr-8 text-[13px] font-medium text-zinc-800 outline-none transition-colors duration-150 ease-out hover:border-zinc-300 focus:border-zinc-400"
+                                        <div ref={categoryMenuRef} className="relative h-full shrink-0">
+                                          <button
+                                            type="button"
+                                            onClick={() => setCategoryMenuOpen((s) => !s)}
+                                            className="inline-flex h-full items-center gap-2 rounded-l-none rounded-r-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] px-3 text-white transition-opacity hover:opacity-95"
+                                            aria-haspopup="menu"
+                                            aria-expanded={categoryMenuOpen}
                                             aria-label="Mission category"
                                           >
-                                            {VALIDATION_TYPES.map((v) => (
-                                              <option key={v} value={v}>
-                                                {adminValidationTypeLabel(v)}
-                                              </option>
-                                            ))}
-                                          </select>
-                                          <svg
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth={2}
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500"
-                                            aria-hidden
-                                          >
-                                            <path d="m6 9 6 6 6-6" />
-                                          </svg>
+                                            {missionValidationIcon(form.validation_type, 'h-3.5 w-3.5')}
+                                            <span className="text-[13px] font-medium">{adminValidationTypeLabel(form.validation_type)}</span>
+                                            <svg
+                                              viewBox="0 0 24 24"
+                                              fill="none"
+                                              stroke="currentColor"
+                                              strokeWidth={2}
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                              className="h-3.5 w-3.5"
+                                              aria-hidden
+                                            >
+                                              <path d="m6 9 6 6 6-6" />
+                                            </svg>
+                                          </button>
+                                          {categoryMenuOpen ? (
+                                            <div
+                                              role="menu"
+                                              className="absolute right-0 top-[calc(100%+8px)] z-20 w-[210px] overflow-hidden rounded-[10px] border border-[#ebebeb] bg-white py-1 shadow-[0_10px_30px_rgba(24,24,27,0.14)]"
+                                            >
+                                              {VALIDATION_TYPES.map((v) => (
+                                                <button
+                                                  key={v}
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setForm((s) => ({ ...s, validation_type: v }))
+                                                    setCategoryMenuOpen(false)
+                                                  }}
+                                                  className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] transition-colors ${
+                                                    form.validation_type === v
+                                                      ? 'bg-zinc-100 text-zinc-900'
+                                                      : 'text-zinc-700 hover:bg-zinc-50'
+                                                  }`}
+                                                >
+                                                  {missionValidationIcon(v, 'h-4 w-4')}
+                                                  <span className="font-medium">{adminValidationTypeLabel(v)}</span>
+                                                </button>
+                                              ))}
+                                            </div>
+                                          ) : null}
                                         </div>
                                       </div>
                                     </div>
