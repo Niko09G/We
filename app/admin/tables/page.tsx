@@ -360,6 +360,10 @@ export default function TablesAdminPage() {
   const [publishOpen, setPublishOpen] = useState(false)
   const [step1Hint, setStep1Hint] = useState<string | null>(null)
   const [overlayError, setOverlayError] = useState<string | null>(null)
+  const [tableSearch, setTableSearch] = useState('')
+  const [tableSort, setTableSort] = useState<'name-asc' | 'name-desc' | 'seats-desc' | 'recent'>('name-asc')
+  const [tableStatusFilter, setTableStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [tableView, setTableView] = useState<'cards' | 'list'>('cards')
   const [colorPopoverPos, setColorPopoverPos] = useState<{ left: number; top: number } | null>(null)
   const [pickerHsv, setPickerHsv] = useState<{ h: number; s: number; v: number }>({ h: 260, s: 0.74, v: 0.98 })
   const [pickerHex, setPickerHex] = useState('#6d28ff')
@@ -467,6 +471,30 @@ export default function TablesAdminPage() {
 
   const activeRows = useMemo(() => rows.filter((r) => !r.is_archived), [rows])
   const archivedRows = useMemo(() => rows.filter((r) => r.is_archived), [rows])
+  const visibleActiveRows = useMemo(() => {
+    const search = tableSearch.trim().toLowerCase()
+    const filtered = activeRows.filter((row) => {
+      if (search && !row.name.toLowerCase().includes(search)) return false
+      if (tableStatusFilter === 'active' && !row.is_active) return false
+      if (tableStatusFilter === 'inactive' && row.is_active) return false
+      return true
+    })
+    const sorted = [...filtered]
+    if (tableSort === 'name-asc') {
+      sorted.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+    } else if (tableSort === 'name-desc') {
+      sorted.sort((a, b) => b.name.localeCompare(a.name, undefined, { sensitivity: 'base' }))
+    } else if (tableSort === 'seats-desc') {
+      sorted.sort((a, b) => (b.capacity || 0) - (a.capacity || 0))
+    } else {
+      sorted.sort((a, b) => {
+        const ad = new Date(a.created_at).getTime()
+        const bd = new Date(b.created_at).getTime()
+        return bd - ad
+      })
+    }
+    return sorted
+  }, [activeRows, tableSearch, tableStatusFilter, tableSort])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -783,11 +811,155 @@ export default function TablesAdminPage() {
         </p>
       ) : null}
       <section className="admin-gap-intro-first-section">
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200/90 bg-white px-3 py-2">
+          <div className="relative min-w-[210px] flex-1">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+              aria-hidden
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              value={tableSearch}
+              onChange={(e) => setTableSearch(e.target.value)}
+              placeholder="Search tables..."
+              className="h-9 w-full rounded-lg border border-zinc-200 bg-white pl-8 pr-2 text-sm text-zinc-800 outline-none transition-colors focus:border-zinc-400"
+            />
+          </div>
+          <select
+            value={tableSort}
+            onChange={(e) => setTableSort(e.target.value as typeof tableSort)}
+            className="h-9 rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-700 outline-none transition-colors focus:border-zinc-400"
+          >
+            <option value="name-asc">Name A-Z</option>
+            <option value="name-desc">Name Z-A</option>
+            <option value="seats-desc">Most seats</option>
+            <option value="recent">Recently created</option>
+          </select>
+          <select
+            value={tableStatusFilter}
+            onChange={(e) => setTableStatusFilter(e.target.value as typeof tableStatusFilter)}
+            className="h-9 rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-700 outline-none transition-colors focus:border-zinc-400"
+          >
+            <option value="all">All status</option>
+            <option value="active">Active only</option>
+            <option value="inactive">Inactive only</option>
+          </select>
+          <div className="inline-flex h-9 items-center rounded-lg border border-zinc-200 bg-zinc-50 p-1">
+            <button
+              type="button"
+              onClick={() => setTableView('cards')}
+              className={`inline-flex h-7 items-center rounded-md px-2 text-xs font-medium transition-all ${
+                tableView === 'cards' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'
+              }`}
+            >
+              Cards
+            </button>
+            <button
+              type="button"
+              onClick={() => setTableView('list')}
+              className={`inline-flex h-7 items-center rounded-md px-2 text-xs font-medium transition-all ${
+                tableView === 'list' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'
+              }`}
+            >
+              List
+            </button>
+          </div>
+        </div>
         {loading ? (
           <p className="text-sm text-zinc-500">Loading tables...</p>
+        ) : tableView === 'list' ? (
+          <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+            <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 border-b border-zinc-200/80 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              <span>Table</span>
+              <span>Status</span>
+              <span>Seats</span>
+              <span className="text-right">Actions</span>
+            </div>
+            {visibleActiveRows.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-zinc-500">No tables match your filters.</div>
+            ) : (
+              visibleActiveRows.map((row) => {
+                const resolved = teamPageAdminFormDefaults(row.page_config, {
+                  tableColor: row.color,
+                  tableName: row.name,
+                })
+                const avatarUrl = resolved.avatarImageUrl.trim()
+                return (
+                  <div
+                    key={row.id}
+                    className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 border-b border-zinc-100 px-4 py-3 last:border-b-0"
+                  >
+                    <div className="inline-flex items-center gap-3">
+                      <span className="h-8 w-8 overflow-hidden rounded-full border border-zinc-200">
+                        {avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <span
+                            className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-white"
+                            style={{ backgroundColor: avatarFallbackColor(row.name) }}
+                          >
+                            {initialsFromName(row.name)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-sm font-medium text-zinc-900">{row.name}</span>
+                    </div>
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                        row.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-600'
+                      }`}
+                    >
+                      {row.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                    <span className="text-sm text-zinc-700">{row.capacity}</span>
+                    <div className="text-right">
+                      <button
+                        type="button"
+                        onClick={(e) => openEditEditor(row, e.currentTarget)}
+                        className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+                      >
+                        Open
+                      </button>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {activeRows.map((row) => {
+            <button
+              type="button"
+              onClick={openCreateEditor}
+              className="group relative flex h-[290px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-white text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm"
+            >
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 text-zinc-800 transition-colors group-hover:bg-zinc-900 group-hover:text-white">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-5 w-5"
+                  aria-hidden
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </span>
+              <p className="mt-4 text-base font-semibold text-zinc-900">Add new table</p>
+              <p className="mt-1 text-sm text-zinc-500">Create a styled team/table experience</p>
+            </button>
+            {visibleActiveRows.map((row) => {
               const resolved = teamPageAdminFormDefaults(row.page_config, {
                 tableColor: row.color,
                 tableName: row.name,
