@@ -25,7 +25,9 @@ type ThemeColorKey = 'heroTop' | 'heroMiddle' | 'heroBottom' | 'lbGradTop' | 'lb
 type ThemePreset = {
   id: 'violet' | 'ocean' | 'rose' | 'forest'
   name: string
+  character: string
   primaryColor: string
+  accent: string
   tableGradTop: string
   tableGradBottom: string
   lbGradTop: string
@@ -39,50 +41,58 @@ const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'violet',
     name: 'Violet',
-    primaryColor: '#6335fb',
-    tableGradTop: '#6d28d9',
-    tableGradBottom: '#8b5cf6',
-    lbGradTop: '#6d28d9',
-    lbGradBottom: '#8b5cf6',
-    heroTop: '#5b21b6',
-    heroMiddle: '#7c3aed',
-    heroBottom: '#fafafa',
+    character: 'Bold / expressive / vibrant',
+    primaryColor: '#6d28ff',
+    accent: '#f59e0b',
+    tableGradTop: '#5f24f5',
+    tableGradBottom: '#9f6bff',
+    lbGradTop: '#5921de',
+    lbGradBottom: '#7f44f6',
+    heroTop: '#3f167c',
+    heroMiddle: '#6c2cff',
+    heroBottom: '#f7f2ff',
   },
   {
     id: 'ocean',
     name: 'Ocean',
-    primaryColor: '#1ca0d8',
-    tableGradTop: '#0ea5e9',
-    tableGradBottom: '#2563eb',
-    lbGradTop: '#0ea5e9',
-    lbGradBottom: '#2563eb',
-    heroTop: '#0369a1',
-    heroMiddle: '#0ea5e9',
-    heroBottom: '#ecfeff',
+    character: 'Clean / modern / productized',
+    primaryColor: '#0d8fd6',
+    accent: '#38bdf8',
+    tableGradTop: '#0b8dcb',
+    tableGradBottom: '#2b67dc',
+    lbGradTop: '#0a7fb5',
+    lbGradBottom: '#1e5fd0',
+    heroTop: '#0a4f78',
+    heroMiddle: '#0d8fd6',
+    heroBottom: '#eef7ff',
   },
   {
     id: 'rose',
     name: 'Rose',
-    primaryColor: '#db2777',
-    tableGradTop: '#e11d48',
-    tableGradBottom: '#f43f5e',
-    lbGradTop: '#e11d48',
-    lbGradBottom: '#f43f5e',
-    heroTop: '#be123c',
-    heroMiddle: '#f43f5e',
-    heroBottom: '#fff1f2',
+    character: 'Warm / social / celebratory',
+    primaryColor: '#e44b7a',
+    accent: '#fb7185',
+    tableGradTop: '#d93868',
+    tableGradBottom: '#f26a8f',
+    lbGradTop: '#cf2f5d',
+    lbGradBottom: '#ea5f86',
+    heroTop: '#9f294f',
+    heroMiddle: '#e14b79',
+    heroBottom: '#fff4f6',
   },
   {
     id: 'forest',
     name: 'Forest',
-    primaryColor: '#059669',
-    tableGradTop: '#059669',
-    tableGradBottom: '#16a34a',
-    lbGradTop: '#059669',
-    lbGradBottom: '#16a34a',
-    heroTop: '#065f46',
-    heroMiddle: '#10b981',
-    heroBottom: '#f0fdf4',
+    character: 'Grounded / premium / calm',
+    primaryColor: '#0d8b65',
+    accent: '#84cc16',
+    tableGradTop: '#0a7a58',
+    tableGradBottom: '#2fa06d',
+    lbGradTop: '#0d6f52',
+    lbGradBottom: '#26895f',
+    heroTop: '#0f3f30',
+    heroMiddle: '#1d8c62',
+    heroBottom: '#f3fbf7',
   },
 ]
 
@@ -776,14 +786,50 @@ export default function TablesAdminPage() {
                               key={preset.id}
                               type="button"
                               onClick={() => applyPreset(preset.id)}
-                              className={`h-9 w-full rounded-lg px-3 text-center text-xs font-semibold text-white transition-all duration-200 hover:brightness-105 ${
-                                selected ? 'ring-2 ring-zinc-900/60 ring-offset-1' : 'ring-1 ring-zinc-200'
+                              className={`w-full rounded-xl border px-3 py-2 text-left transition-all duration-200 hover:brightness-105 ${
+                                selected
+                                  ? 'border-zinc-900/40 ring-2 ring-zinc-900/20 ring-offset-1'
+                                  : 'border-zinc-200'
                               }`}
-                              style={{
-                                background: `linear-gradient(to right, ${preset.tableGradTop}, ${preset.tableGradBottom})`,
-                              }}
+                              aria-label={`Theme ${preset.name}`}
                             >
-                              {preset.name}
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <div className="text-xs font-semibold text-zinc-900">{preset.name}</div>
+                                  <div className="text-[11px] text-zinc-500">{preset.character}</div>
+                                </div>
+                                <span
+                                  className="h-2.5 w-2.5 rounded-full"
+                                  style={{ backgroundColor: preset.accent }}
+                                  aria-hidden
+                                />
+                              </div>
+                              <div className="mt-2 space-y-1.5">
+                                <div
+                                  className="h-2 w-full rounded-full"
+                                  style={{
+                                    background: `linear-gradient(to right, ${preset.heroTop}, ${preset.heroMiddle}, ${preset.heroBottom})`,
+                                  }}
+                                />
+                                <div
+                                  className="h-2 w-full rounded-full"
+                                  style={{
+                                    background: `linear-gradient(to right, ${preset.lbGradTop}, ${preset.lbGradBottom})`,
+                                  }}
+                                />
+                                <div className="flex items-center gap-1.5">
+                                  <div
+                                    className="h-2 flex-1 rounded-full"
+                                    style={{
+                                      background: `linear-gradient(to right, ${preset.tableGradTop}, ${preset.tableGradBottom})`,
+                                    }}
+                                  />
+                                  <div
+                                    className="h-2 w-12 rounded-full"
+                                    style={{ backgroundColor: preset.primaryColor }}
+                                  />
+                                </div>
+                              </div>
                             </button>
                           )
                         })}
