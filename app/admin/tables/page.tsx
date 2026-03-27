@@ -864,7 +864,7 @@ export default function TablesAdminPage() {
                 onClick={() => setTableStatusFilter(value)}
                 className={`inline-flex h-8 items-center rounded-full px-[12px] text-[14px] font-medium transition-all ${
                   tableStatusFilter === value
-                    ? 'bg-[#f2f2f2] text-[#171717]'
+                    ? 'bg-black text-white'
                     : 'text-[#4d4d4d] hover:text-[#171717]'
                 }`}
               >
@@ -924,7 +924,7 @@ export default function TablesAdminPage() {
                       key={row.id}
                       type="button"
                       onClick={(e) => openEditEditor(row, e.currentTarget)}
-                      className={`grid h-[50px] cursor-pointer grid-cols-12 items-center gap-x-2 rounded-lg px-3 transition-colors ${
+                      className={`grid min-h-[50px] cursor-pointer grid-cols-12 items-center gap-x-2 rounded-lg px-3 py-1.5 transition-colors ${
                         row.is_archived ? `${rowBgClass} opacity-80` : rowBgClass
                       }`}
                     >
