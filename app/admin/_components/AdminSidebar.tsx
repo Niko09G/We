@@ -201,7 +201,10 @@ export default function AdminSidebar() {
 
           <nav className="flex-1 overflow-y-auto px-2 pb-4 pt-2">
             {(['event', 'scoring', 'system'] as const).map((sectionKey, idx) => (
-              <div key={sectionKey} className={idx === 0 ? '' : 'mt-3'}>
+              <div
+                key={sectionKey}
+                className={idx === 0 ? '' : 'mt-4 border-t border-zinc-200/75 pt-4'}
+              >
                 <ul className="space-y-1">
                   {grouped[sectionKey].map((item) => {
                     const isActive = activeKey === item.key
@@ -254,8 +257,8 @@ export default function AdminSidebar() {
         {mobileOpen && (
           <nav className="border-b border-zinc-200 bg-[#fafafa]">
             <div className="space-y-2 p-2">
-              {(['event', 'scoring', 'system'] as const).map((sectionKey) => (
-                <div key={sectionKey}>
+              {(['event', 'scoring', 'system'] as const).map((sectionKey, idx) => (
+                <div key={sectionKey} className={idx === 0 ? '' : 'border-t border-zinc-200/75 pt-3'}>
                   <ul className="space-y-1">
                     {grouped[sectionKey].map((item) => {
                       const isActive = activeKey === item.key

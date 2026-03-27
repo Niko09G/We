@@ -286,4 +286,10 @@ select {
     padding-top: 18px;
     padding-bottom: 12px;
   }
+
+  /* Scoped form-control typography for normal admin page content (not overlays). */
+  .admin-page-controls :is(input, textarea, select) {
+    font-size: 14px;
+    font-family: inherit;
+  }
 }

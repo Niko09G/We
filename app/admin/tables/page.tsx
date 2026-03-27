@@ -799,17 +799,18 @@ export default function TablesAdminPage() {
       <p className="sr-only" aria-live="polite">
         {error ?? ''}
       </p>
-      <header className="flex items-end justify-between gap-3">
-        <div>
-          <h1 className="admin-page-title text-zinc-900">Tables</h1>
-          <p className="admin-gap-page-title-intro admin-intro">
-            Create and edit teams/tables. Names must be unique.
-          </p>
-        </div>
-      </header>
+      <div className="admin-page-controls">
+        <header className="flex items-end justify-between gap-3">
+          <div>
+            <h1 className="admin-page-title text-zinc-900">Tables</h1>
+            <p className="admin-gap-page-title-intro admin-intro">
+              Create and edit teams/tables. Names must be unique.
+            </p>
+          </div>
+        </header>
 
-      <section className="admin-gap-intro-first-section">
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+        <section className="admin-gap-intro-first-section">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
           <div className="relative w-full md:w-[360px]">
             <svg
               viewBox="0 0 24 24"
@@ -828,14 +829,14 @@ export default function TablesAdminPage() {
               value={tableSearch}
               onChange={(e) => setTableSearch(e.target.value)}
               placeholder="Search tables..."
-              className="h-10 w-full rounded-[6px] border border-[#ebebeb] bg-white pl-8 pr-[10px] text-[14px] font-normal text-[#171717] placeholder:text-[14px] placeholder:font-normal placeholder:text-[#767676] outline-none transition-colors focus:border-zinc-400 font-[inherit]"
+              className="h-10 w-full rounded-full border border-[#ebebeb] bg-white pl-8 pr-[12px] text-[14px] font-normal text-[#171717] placeholder:text-[14px] placeholder:font-normal placeholder:text-[#767676] outline-none transition-colors focus:border-zinc-400 font-[inherit]"
             />
           </div>
-          <div className="inline-flex h-10 items-center rounded-[6px] border border-[#ebebeb] bg-white p-1">
+          <div className="inline-flex h-10 items-center rounded-full border border-[#ebebeb] bg-white p-1">
             <button
               type="button"
               onClick={() => setTableView('cards')}
-              className={`inline-flex h-8 items-center rounded-[6px] px-[10px] text-[14px] font-medium transition-all ${
+              className={`inline-flex h-8 items-center rounded-full px-[12px] text-[14px] font-medium transition-all ${
                 tableView === 'cards' ? 'bg-[#f2f2f2] text-[#171717]' : 'text-[#4d4d4d] hover:text-[#171717]'
               }`}
             >
@@ -844,7 +845,7 @@ export default function TablesAdminPage() {
             <button
               type="button"
               onClick={() => setTableView('list')}
-              className={`inline-flex h-8 items-center rounded-[6px] px-[10px] text-[14px] font-medium transition-all ${
+              className={`inline-flex h-8 items-center rounded-full px-[12px] text-[14px] font-medium transition-all ${
                 tableView === 'list' ? 'bg-[#f2f2f2] text-[#171717]' : 'text-[#4d4d4d] hover:text-[#171717]'
               }`}
             >
@@ -855,7 +856,7 @@ export default function TablesAdminPage() {
             <select
               value={tableStatusFilter}
               onChange={(e) => setTableStatusFilter(e.target.value as typeof tableStatusFilter)}
-              className="h-10 appearance-none rounded-[6px] border border-[#ebebeb] bg-white px-[10px] pr-9 text-[14px] font-medium text-[#171717] outline-none transition-colors focus:border-zinc-400 font-[inherit]"
+              className="h-10 appearance-none rounded-full border border-[#ebebeb] bg-white px-[12px] pr-10 text-[14px] font-medium text-[#171717] outline-none transition-colors focus:border-zinc-400 font-[inherit]"
             >
               <option value="all">All status</option>
               <option value="active">Active only</option>
@@ -878,7 +879,7 @@ export default function TablesAdminPage() {
             <select
               value={tableSort}
               onChange={(e) => setTableSort(e.target.value as typeof tableSort)}
-              className="h-10 appearance-none rounded-[6px] border border-[#ebebeb] bg-white px-[10px] pr-9 text-[14px] font-medium text-[#171717] outline-none transition-colors focus:border-zinc-400 font-[inherit]"
+              className="h-10 appearance-none rounded-full border border-[#ebebeb] bg-white px-[12px] pr-10 text-[14px] font-medium text-[#171717] outline-none transition-colors focus:border-zinc-400 font-[inherit]"
             >
               <option value="name-asc">Name A-Z</option>
               <option value="name-desc">Name Z-A</option>
@@ -898,8 +899,8 @@ export default function TablesAdminPage() {
               <path d="m6 9 6 6 6-6" />
             </svg>
           </div>
-        </div>
-        {loading ? (
+          </div>
+          {loading ? (
           <div
             className={`grid gap-4 ${
               tableView === 'list' ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
@@ -921,7 +922,7 @@ export default function TablesAdminPage() {
               ))
             )}
           </div>
-        ) : tableView === 'list' ? (
+          ) : tableView === 'list' ? (
           <div className="overflow-hidden rounded-[6px] border border-[#ebebeb] bg-[#f2f2f2]">
             <div className="grid h-[45px] grid-cols-[minmax(280px,1.4fr)_minmax(140px,0.85fr)_110px_120px] items-center gap-3 border-b border-[#ebebeb] px-4 text-sm font-medium text-[#4d4d4d]">
               <span>Table</span>
@@ -971,7 +972,7 @@ export default function TablesAdminPage() {
                       <button
                         type="button"
                         onClick={(e) => openEditEditor(row, e.currentTarget)}
-                        className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+                        className="h-9 rounded-full border border-[#ebebeb] bg-white px-3 text-[14px] font-medium text-[#171717] transition-colors hover:bg-zinc-50"
                       >
                         Open
                       </button>
@@ -981,7 +982,7 @@ export default function TablesAdminPage() {
               })
             )}
           </div>
-        ) : (
+          ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <button
               type="button"
@@ -1094,12 +1095,12 @@ export default function TablesAdminPage() {
               )
             })}
           </div>
-        )}
-      </section>
+          )}
+        </section>
 
-      <section className="mt-8">
-        <h2 className="admin-card-title text-zinc-900">Archived tables</h2>
-        <div className="admin-gap-card-title-body overflow-hidden rounded-[6px] border border-[#ebebeb] bg-[#f2f2f2]">
+        <section className="mt-8">
+          <h2 className="admin-card-title text-zinc-900">Archived tables</h2>
+          <div className="admin-gap-card-title-body overflow-hidden rounded-[6px] border border-[#ebebeb] bg-[#f2f2f2]">
           {archivedRows.length === 0 ? (
             <p className="px-4 py-5 text-sm text-zinc-500">No archived tables.</p>
           ) : (
@@ -1116,14 +1117,14 @@ export default function TablesAdminPage() {
                   <button
                     type="button"
                     onClick={() => void onRestore(row.id)}
-                    className="h-10 rounded-[6px] border border-[#ebebeb] bg-white px-[10px] text-[14px] font-medium text-[#171717]"
+                    className="h-10 rounded-full border border-[#ebebeb] bg-white px-[14px] text-[14px] font-medium text-[#171717]"
                   >
                     Restore
                   </button>
                   <button
                     type="button"
                     onClick={() => setDeleteConfirm({ id: row.id, name: row.name })}
-                    className="h-10 rounded-[6px] border border-rose-200 bg-rose-50 px-[10px] text-[14px] font-medium text-rose-700"
+                    className="h-10 rounded-full border border-rose-200 bg-rose-50 px-[14px] text-[14px] font-medium text-rose-700"
                   >
                     Delete forever
                   </button>
@@ -1131,8 +1132,9 @@ export default function TablesAdminPage() {
               </div>
             ))
           )}
-        </div>
-      </section>
+          </div>
+        </section>
+      </div>
 
       {deleteConfirm ? (
         <div
@@ -1152,7 +1154,7 @@ export default function TablesAdminPage() {
               <button
                 type="button"
                 onClick={() => setDeleteConfirm(null)}
-                className="h-10 rounded-[6px] border border-[#ebebeb] bg-white px-[10px] text-[14px] font-medium text-[#171717]"
+                className="h-10 rounded-full border border-[#ebebeb] bg-white px-[14px] text-[14px] font-medium text-[#171717]"
               >
                 Cancel
               </button>
@@ -1162,7 +1164,7 @@ export default function TablesAdminPage() {
                   void onDeleteForever(deleteConfirm.id)
                   setDeleteConfirm(null)
                 }}
-                className="h-10 rounded-[6px] border border-rose-200 bg-rose-50 px-[10px] text-[14px] font-semibold text-rose-700"
+                className="h-10 rounded-full border border-rose-200 bg-rose-50 px-[14px] text-[14px] font-semibold text-rose-700"
               >
                 Delete forever
               </button>
