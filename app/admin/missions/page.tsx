@@ -14,6 +14,8 @@ import {
 } from '@/lib/admin-missions'
 import { listActiveMissionAssignmentsForAdmin } from '@/lib/admin-mission-assignments'
 import { missionTypeIcon } from '@/app/admin/missions/_components/mission-admin-shared'
+import { listTablesForAdmin, type AdminTableRow } from '@/lib/admin-tables'
+import { MISSION_CARD_BACKGROUNDS } from '@/lib/guest-missions-gradients'
 
 type MissionView = 'cards' | 'list'
 type MissionStatusFilter = 'all' | 'active' | 'inactive' | 'archived'
@@ -74,8 +76,10 @@ export default function MissionsLibraryPage() {
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
   const [missions, setMissions] = useState<MissionRecord[]>([])
   const [assignmentsByMission, setAssignmentsByMission] = useState<Record<string, string[]>>({})
+  const [tables, setTables] = useState<AdminTableRow[]>([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<MissionStatusFilter>('all')
+  const [tableFilterId, setTableFilterId] = useState<string>('all')
   const [view, setView] = useState<MissionView>('cards')
 
   const [editorOpen, setEditorOpen] = useState(false)
@@ -99,9 +103,14 @@ export default function MissionsLibraryPage() {
     setLoading(true)
     setError(null)
     try {
-      const [mList, aMap] = await Promise.all([listMissions(), listActiveMissionAssignmentsForAdmin()])
+      const [mList, aMap, tList] = await Promise.all([
+        listMissions(),
+        listActiveMissionAssignmentsForAdmin(),
+        listTablesForAdmin(),
+      ])
       setMissions(mList)
       setAssignmentsByMission(aMap)
+      setTables(tList.filter((t) => !t.is_archived))
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to load missions.'
       setError(msg)
@@ -132,13 +141,17 @@ export default function MissionsLibraryPage() {
       if (statusFilter === 'active' && !m.is_active) return false
       if (statusFilter === 'inactive' && m.is_active) return false
       if (statusFilter === 'archived') return false
+      if (tableFilterId !== 'all') {
+        const assigned = assignmentsByMission[m.id] ?? []
+        if (!assigned.includes(tableFilterId)) return false
+      }
       if (q) {
         const hay = `${m.title} ${m.description ?? ''}`.toLowerCase()
         if (!hay.includes(q)) return false
       }
       return true
     })
-  }, [missions, search, statusFilter])
+  }, [missions, search, statusFilter, tableFilterId, assignmentsByMission])
 
   function openCreate() {
     setEditorMode('create')
@@ -237,6 +250,21 @@ export default function MissionsLibraryPage() {
                       view === 'cards' ? 'bg-black text-white' : 'text-[#4d4d4d] hover:text-[#171717]'
                     }`}
                   >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="mr-1.5 h-3.5 w-3.5"
+                      aria-hidden
+                    >
+                      <rect x="3" y="3" width="7" height="7" rx="1.2" />
+                      <rect x="14" y="3" width="7" height="7" rx="1.2" />
+                      <rect x="3" y="14" width="7" height="7" rx="1.2" />
+                      <rect x="14" y="14" width="7" height="7" rx="1.2" />
+                    </svg>
                     Cards
                   </button>
                   <button
@@ -246,32 +274,72 @@ export default function MissionsLibraryPage() {
                       view === 'list' ? 'bg-black text-white' : 'text-[#4d4d4d] hover:text-[#171717]'
                     }`}
                   >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="mr-1.5 h-3.5 w-3.5"
+                      aria-hidden
+                    >
+                      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+                    </svg>
                     List
                   </button>
                 </div>
 
-                <div className="inline-flex h-10 items-stretch overflow-hidden rounded-full border border-[#ebebeb] bg-white">
-                  {(
-                    [
-                      ['all', 'All'],
-                      ['active', 'Active'],
-                      ['inactive', 'Inactive'],
-                      ['archived', 'Archived'],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setStatusFilter(value)}
-                      className={`inline-flex h-full items-center rounded-full px-[12px] text-[14px] font-medium transition-colors duration-150 ease-out ${
-                        statusFilter === value
-                          ? 'bg-black text-white'
-                          : 'text-[#4d4d4d] hover:text-[#171717]'
-                      }`}
-                    >
-                      {label} ({statusCounts[value]})
-                    </button>
-                  ))}
+                <div className="relative">
+                  <select
+                    value={tableFilterId}
+                    onChange={(e) => setTableFilterId(e.target.value)}
+                    className="h-10 min-w-[170px] appearance-none rounded-full border border-[#ebebeb] bg-white px-[12px] pr-9 text-[14px] font-medium text-[#171717] outline-none transition-colors duration-150 ease-out focus:border-zinc-400"
+                  >
+                    <option value="all">All tables</option>
+                    {tables.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+                    aria-hidden
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </div>
+
+                <div className="relative">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as MissionStatusFilter)}
+                    className="h-10 min-w-[170px] appearance-none rounded-full border border-[#ebebeb] bg-white px-[12px] pr-9 text-[14px] font-medium text-[#171717] outline-none transition-colors duration-150 ease-out focus:border-zinc-400"
+                  >
+                    <option value="all">All missions ({statusCounts.all})</option>
+                    <option value="active">Active ({statusCounts.active})</option>
+                    <option value="inactive">Inactive ({statusCounts.inactive})</option>
+                    <option value="archived">Archived ({statusCounts.archived})</option>
+                  </select>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+                    aria-hidden
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
                 </div>
               </div>
 
@@ -419,39 +487,52 @@ export default function MissionsLibraryPage() {
                 {filtered.map((m) => {
                   const status = missionStatusBadge(m.is_active)
                   const assignedCount = (assignmentsByMission[m.id] ?? []).length
+                  const coverImage = m.card_cover_image_url?.trim() || m.header_image_url?.trim() || ''
+                  const themeBg =
+                    m.card_theme_index != null && MISSION_CARD_BACKGROUNDS[m.card_theme_index]
+                      ? MISSION_CARD_BACKGROUNDS[m.card_theme_index]
+                      : 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #0ea5e9 100%)'
                   return (
                     <button
                       key={m.id}
                       type="button"
                       onClick={() => openEdit(m)}
-                      className="group relative h-[250px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 bg-white p-3 text-left transition-all duration-150 ease-out hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm"
+                      className="group relative h-[320px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 text-left transition-all duration-150 ease-out hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm"
+                      style={{ background: themeBg }}
                     >
-                      <div className="h-28 w-full overflow-hidden rounded-xl bg-zinc-100">
-                        {m.card_cover_image_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={m.card_cover_image_url} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-2xl" aria-hidden>
-                            {missionTypeIcon(m.validation_type)}
+                      {coverImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={coverImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                      ) : null}
+                      <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/20 to-black/70" />
+                      <div className="relative flex h-full flex-col justify-between p-3 text-white">
+                        <div>
+                          <div className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/25 backdrop-blur-sm">
+                            <span className="text-base" aria-hidden>
+                              {missionTypeIcon(m.validation_type)}
+                            </span>
                           </div>
-                        )}
+                          <p className="mt-3 line-clamp-2 text-[16px] font-semibold leading-snug">{m.title}</p>
+                          <p className="mt-2 inline-flex items-center gap-1 text-[13px] font-medium text-white/95">
+                            <span aria-hidden>🪙</span>
+                            <span>{m.points} BeatCoin</span>
+                          </p>
+                        </div>
+                        <div className="rounded-xl bg-black/35 px-3 py-2 backdrop-blur-sm">
+                          <div className="flex items-center justify-between gap-2 text-[12px]">
+                            <span className="inline-flex rounded-full bg-white/20 px-2 py-0.5 font-medium text-white">
+                              {status.label}
+                            </span>
+                            <span className="text-white/90">
+                              {m.approval_mode === 'manual' ? 'Manual review' : 'Auto approve'}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-white/80">
+                            {assignedCount} tables assigned ·{' '}
+                            {adminValidationTypeLabel(m.validation_type as ValidationType)}
+                          </p>
+                        </div>
                       </div>
-                      <div className="mt-3">
-                        <p className="truncate text-[14px] font-semibold text-zinc-900">{m.title}</p>
-                        <p className="mt-1 text-[13px] text-zinc-600">
-                          {adminValidationTypeLabel(m.validation_type as ValidationType)}
-                        </p>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between gap-2">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[12px] font-medium ${status.className}`}>
-                          {status.label}
-                        </span>
-                        <span className="text-[13px] font-medium text-zinc-700">{m.points} pts</span>
-                      </div>
-                      <p className="mt-2 text-[12px] text-zinc-500">
-                        {m.approval_mode === 'manual' ? 'Manual review' : 'Auto approve'} · {assignedCount}{' '}
-                        tables
-                      </p>
                     </button>
                   )
                 })}
