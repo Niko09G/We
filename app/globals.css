@@ -21,11 +21,14 @@
 
 /* Lock document width — prevents horizontal rubber-banding from off-screen decor / carousels */
 html {
+  height: 100%;
   overflow-x: clip;
   max-width: 100%;
 }
 
 body {
+  height: 100%;
+  margin: 0;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;

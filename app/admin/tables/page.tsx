@@ -767,7 +767,7 @@ export default function TablesAdminPage() {
   }
 
   return (
-    <div className="admin-page-shell flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden pb-0">
+    <div className="admin-page-shell flex h-full min-h-0 flex-1 flex-col overflow-hidden pb-0">
       <p className="sr-only" aria-live="polite">
         {error ?? ''}
       </p>
@@ -879,7 +879,7 @@ export default function TablesAdminPage() {
           </div>
           {loading ? (
           <div
-            className={`flex-1 overflow-y-auto px-4 pb-4 ${
+            className={`h-full overflow-y-auto px-4 pb-4 ${
               tableView === 'list' ? 'pt-3' : 'pt-4'
             }`}
             aria-hidden
@@ -902,7 +902,7 @@ export default function TablesAdminPage() {
             )}
           </div>
           ) : tableView === 'list' ? (
-          <div className="flex-1 overflow-y-auto px-4 pb-4">
+          <div className="h-full overflow-y-auto px-4 pb-4">
             <div className="sticky top-0 z-10 grid grid-cols-12 gap-x-2 border-b border-[#ebebeb] bg-white px-3 pb-2 pt-[10px] text-[14px] font-medium text-[#18181b]">
               <div className="col-span-5">Table</div>
               <div className="col-span-2">Status</div>
@@ -975,7 +975,7 @@ export default function TablesAdminPage() {
             )}
           </div>
           ) : (
-          <div className="flex-1 overflow-y-auto px-4 pb-4 pt-4">
+          <div className="h-full overflow-y-auto px-4 pb-4 pt-4">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <button
               type="button"
