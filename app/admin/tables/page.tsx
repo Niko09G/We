@@ -362,8 +362,7 @@ export default function TablesAdminPage() {
   const [step1Hint, setStep1Hint] = useState<string | null>(null)
   const [overlayError, setOverlayError] = useState<string | null>(null)
   const [tableSearch, setTableSearch] = useState('')
-  const [tableSort, setTableSort] = useState<'name-asc' | 'name-desc' | 'seats-desc' | 'recent'>('name-asc')
-  const [tableStatusFilter, setTableStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [tableStatusFilter, setTableStatusFilter] = useState<'all' | 'active' | 'inactive' | 'archived'>('all')
   const [tableView, setTableView] = useState<'cards' | 'list'>('cards')
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null)
   const [colorPopoverPos, setColorPopoverPos] = useState<{ left: number; top: number } | null>(null)
@@ -475,32 +474,21 @@ export default function TablesAdminPage() {
     }
   }, [editorOpen])
 
-  const activeRows = useMemo(() => rows.filter((r) => !r.is_archived), [rows])
-  const archivedRows = useMemo(() => rows.filter((r) => r.is_archived), [rows])
-  const visibleActiveRows = useMemo(() => {
+  const visibleRows = useMemo(() => {
     const search = tableSearch.trim().toLowerCase()
-    const filtered = activeRows.filter((row) => {
+    const filtered = rows.filter((row) => {
       if (search && !row.name.toLowerCase().includes(search)) return false
+      if (tableStatusFilter === 'archived') return row.is_archived
+      if (row.is_archived) return tableStatusFilter === 'all'
       if (tableStatusFilter === 'active' && !row.is_active) return false
       if (tableStatusFilter === 'inactive' && row.is_active) return false
       return true
     })
-    const sorted = [...filtered]
-    if (tableSort === 'name-asc') {
-      sorted.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-    } else if (tableSort === 'name-desc') {
-      sorted.sort((a, b) => b.name.localeCompare(a.name, undefined, { sensitivity: 'base' }))
-    } else if (tableSort === 'seats-desc') {
-      sorted.sort((a, b) => (b.capacity || 0) - (a.capacity || 0))
-    } else {
-      sorted.sort((a, b) => {
-        const ad = new Date(a.created_at).getTime()
-        const bd = new Date(b.created_at).getTime()
-        return bd - ad
-      })
-    }
+    const sorted = [...filtered].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    )
     return sorted
-  }, [activeRows, tableSearch, tableStatusFilter, tableSort])
+  }, [rows, tableSearch, tableStatusFilter])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -840,6 +828,21 @@ export default function TablesAdminPage() {
                 tableView === 'cards' ? 'bg-[#f2f2f2] text-[#171717]' : 'text-[#4d4d4d] hover:text-[#171717]'
               }`}
             >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="mr-1.5 h-3.5 w-3.5"
+                aria-hidden
+              >
+                <rect x="3" y="3" width="7" height="7" rx="1.2" />
+                <rect x="14" y="3" width="7" height="7" rx="1.2" />
+                <rect x="3" y="14" width="7" height="7" rx="1.2" />
+                <rect x="14" y="14" width="7" height="7" rx="1.2" />
+              </svg>
               Cards
             </button>
             <button
@@ -849,55 +852,41 @@ export default function TablesAdminPage() {
                 tableView === 'list' ? 'bg-[#f2f2f2] text-[#171717]' : 'text-[#4d4d4d] hover:text-[#171717]'
               }`}
             >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="mr-1.5 h-3.5 w-3.5"
+                aria-hidden
+              >
+                <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+              </svg>
               List
             </button>
           </div>
-          <div className="relative">
-            <select
-              value={tableStatusFilter}
-              onChange={(e) => setTableStatusFilter(e.target.value as typeof tableStatusFilter)}
-              className="h-10 appearance-none rounded-full border border-[#ebebeb] bg-white px-[12px] pr-10 text-[14px] font-medium text-[#171717] outline-none transition-colors focus:border-zinc-400 font-[inherit]"
-            >
-              <option value="all">All status</option>
-              <option value="active">Active only</option>
-              <option value="inactive">Inactive only</option>
-            </select>
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
-              aria-hidden
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </div>
-          <div className="relative md:ml-auto">
-            <select
-              value={tableSort}
-              onChange={(e) => setTableSort(e.target.value as typeof tableSort)}
-              className="h-10 appearance-none rounded-full border border-[#ebebeb] bg-white px-[12px] pr-10 text-[14px] font-medium text-[#171717] outline-none transition-colors focus:border-zinc-400 font-[inherit]"
-            >
-              <option value="name-asc">Name A-Z</option>
-              <option value="name-desc">Name Z-A</option>
-              <option value="seats-desc">Most seats</option>
-              <option value="recent">Recently created</option>
-            </select>
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
-              aria-hidden
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
+          <div className="inline-flex h-10 items-center rounded-full border border-[#ebebeb] bg-white p-1">
+            {([
+              ['all', 'All'],
+              ['active', 'Active'],
+              ['inactive', 'Inactive'],
+              ['archived', 'Archived'],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTableStatusFilter(value)}
+                className={`inline-flex h-8 items-center rounded-full px-[12px] text-[14px] font-medium transition-all ${
+                  tableStatusFilter === value
+                    ? 'bg-[#f2f2f2] text-[#171717]'
+                    : 'text-[#4d4d4d] hover:text-[#171717]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
           </div>
           {loading ? (
@@ -924,25 +913,28 @@ export default function TablesAdminPage() {
           </div>
           ) : tableView === 'list' ? (
           <div className="overflow-hidden rounded-[6px] border border-[#ebebeb] bg-[#f2f2f2]">
-            <div className="grid h-[45px] grid-cols-[minmax(280px,1.4fr)_minmax(140px,0.85fr)_110px_120px] items-center gap-3 border-b border-[#ebebeb] px-4 text-sm font-medium text-[#4d4d4d]">
+            <div className="grid h-[45px] grid-cols-[minmax(260px,1.25fr)_minmax(120px,0.8fr)_110px_220px] items-center gap-3 border-b border-[#ebebeb] px-4 text-sm font-medium text-[#4d4d4d]">
               <span>Table</span>
               <span>Status</span>
               <span>Seats</span>
               <span className="text-right">Actions</span>
             </div>
-            {visibleActiveRows.length === 0 ? (
+            {visibleRows.length === 0 ? (
               <div className="px-4 py-6 text-sm text-zinc-500">No tables match your filters.</div>
             ) : (
-              visibleActiveRows.map((row) => {
+              visibleRows.map((row) => {
                 const resolved = teamPageAdminFormDefaults(row.page_config, {
                   tableColor: row.color,
                   tableName: row.name,
                 })
                 const avatarUrl = resolved.avatarImageUrl.trim()
+                const statusLabel = row.is_archived ? 'Archived' : row.is_active ? 'Active' : 'Inactive'
                 return (
                   <div
                     key={row.id}
-                    className="grid h-[64px] grid-cols-[minmax(280px,1.4fr)_minmax(140px,0.85fr)_110px_120px] items-center gap-3 border-b border-[#ebebeb] bg-white px-4 last:border-b-0"
+                    className={`grid h-[64px] grid-cols-[minmax(260px,1.25fr)_minmax(120px,0.8fr)_110px_220px] items-center gap-3 border-b border-[#ebebeb] px-4 last:border-b-0 ${
+                      row.is_archived ? 'bg-zinc-50/80 text-zinc-600' : 'bg-white'
+                    }`}
                   >
                     <div className="inline-flex items-center gap-3">
                       <span className="h-8 w-8 overflow-hidden rounded-full border border-zinc-200">
@@ -958,24 +950,53 @@ export default function TablesAdminPage() {
                           </span>
                         )}
                       </span>
-                      <span className="text-sm font-medium text-zinc-900">{row.name}</span>
+                      <span className={`text-sm font-medium ${row.is_archived ? 'text-zinc-700' : 'text-zinc-900'}`}>
+                        {row.name}
+                      </span>
                     </div>
-                    <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                        row.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-600'
-                      }`}
-                    >
-                      {row.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                    <span className="text-sm text-zinc-700">{row.capacity}</span>
-                    <div className="text-right">
-                      <button
-                        type="button"
-                        onClick={(e) => openEditEditor(row, e.currentTarget)}
-                        className="h-9 rounded-full border border-[#ebebeb] bg-white px-3 text-[14px] font-medium text-[#171717] transition-colors hover:bg-zinc-50"
+                    <div>
+                      <span
+                        className={`inline-flex w-auto rounded-full px-2 py-0.5 text-xs font-medium ${
+                          row.is_archived
+                            ? 'bg-zinc-200 text-zinc-700'
+                            : row.is_active
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-zinc-100 text-zinc-600'
+                        }`}
                       >
-                        Open
-                      </button>
+                        {statusLabel}
+                      </span>
+                    </div>
+                    <span className="text-sm text-zinc-700">
+                      {row.occupied_count}/{row.capacity}
+                    </span>
+                    <div className="text-right">
+                      {row.is_archived ? (
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void onRestore(row.id)}
+                            className="h-9 rounded-full border border-[#ebebeb] bg-white px-3 text-[14px] font-medium text-[#171717] transition-colors hover:bg-zinc-50"
+                          >
+                            Restore
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirm({ id: row.id, name: row.name })}
+                            className="h-9 rounded-full border border-rose-200 bg-rose-50 px-3 text-[14px] font-medium text-rose-700 transition-colors hover:bg-rose-100"
+                          >
+                            Delete forever
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => openEditEditor(row, e.currentTarget)}
+                          className="h-9 rounded-full border border-[#ebebeb] bg-white px-3 text-[14px] font-medium text-[#171717] transition-colors hover:bg-zinc-50"
+                        >
+                          Open
+                        </button>
+                      )}
                     </div>
                   </div>
                 )
@@ -1006,19 +1027,22 @@ export default function TablesAdminPage() {
               <p className="mt-4 text-base font-semibold text-zinc-900">Add new table</p>
               <p className="mt-1 text-sm text-zinc-500">Create a styled team/table experience</p>
             </button>
-            {visibleActiveRows.map((row) => {
+            {visibleRows.map((row) => {
               const resolved = teamPageAdminFormDefaults(row.page_config, {
                 tableColor: row.color,
                 tableName: row.name,
               })
               const avatarUrl = resolved.avatarImageUrl.trim()
               const isActiveStatus = row.is_active && !row.is_archived
+              const statusLabel = row.is_archived ? 'Archived' : isActiveStatus ? 'Active' : 'Inactive'
               return (
                 <button
                   key={row.id}
                   type="button"
                   onClick={(e) => openEditEditor(row, e.currentTarget)}
-                  className="group relative h-[290px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 text-left outline-none transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/70 focus-visible:ring-offset-2"
+                  className={`group relative h-[290px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 text-left outline-none transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/70 focus-visible:ring-offset-2 ${
+                    row.is_archived ? 'opacity-75 saturate-[0.85]' : ''
+                  }`}
                   style={{
                     background: `linear-gradient(to bottom, ${resolved.heroTop}, ${resolved.heroMiddle || resolved.heroBottom}, ${resolved.heroBottom})`,
                   }}
@@ -1070,7 +1094,7 @@ export default function TablesAdminPage() {
                       style={{ backgroundColor: resolved.primaryColor || '#6335fb' }}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span>Seats {row.capacity}</span>
+                        <span>Seats {row.occupied_count}/{row.capacity}</span>
                         <span className="inline-flex items-center gap-1">
                           {isActiveStatus ? (
                             <svg
@@ -1086,7 +1110,7 @@ export default function TablesAdminPage() {
                               <path d="m5 12 5 5L20 7" />
                             </svg>
                           ) : null}
-                          {isActiveStatus ? 'Active' : 'Inactive'}
+                          {statusLabel}
                         </span>
                       </div>
                     </div>
@@ -1096,43 +1120,6 @@ export default function TablesAdminPage() {
             })}
           </div>
           )}
-        </section>
-
-        <section className="mt-8">
-          <h2 className="admin-card-title text-zinc-900">Archived tables</h2>
-          <div className="admin-gap-card-title-body overflow-hidden rounded-[6px] border border-[#ebebeb] bg-[#f2f2f2]">
-          {archivedRows.length === 0 ? (
-            <p className="px-4 py-5 text-sm text-zinc-500">No archived tables.</p>
-          ) : (
-            archivedRows.map((row) => (
-              <div
-                key={row.id}
-                className="flex min-h-[64px] flex-wrap items-center justify-between gap-3 border-b border-[#ebebeb] bg-white px-4 py-3 last:border-b-0"
-              >
-                <div>
-                  <p className="text-sm font-medium text-[#171717]">{row.name}</p>
-                  <p className="text-xs text-zinc-500">Archived</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void onRestore(row.id)}
-                    className="h-10 rounded-full border border-[#ebebeb] bg-white px-[14px] text-[14px] font-medium text-[#171717]"
-                  >
-                    Restore
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteConfirm({ id: row.id, name: row.name })}
-                    className="h-10 rounded-full border border-rose-200 bg-rose-50 px-[14px] text-[14px] font-medium text-rose-700"
-                  >
-                    Delete forever
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-          </div>
         </section>
       </div>
 

@@ -10,14 +10,33 @@ export type AdminTableRow = {
   created_at: string
   /** Max seats for seating planner (per-table seat numbers 1..capacity). */
   capacity: number
+  /** Occupied seats based on attendees assigned to this table with a seat number. */
+  occupied_count: number
   /** Guest team page JSON (`/missions/[tableId]`). */
   page_config: unknown | null
 }
 
 export async function listTablesForAdmin(): Promise<AdminTableRow[]> {
-  const { data, error } = await supabase.from('tables').select('*').order('name')
+  const [{ data, error }, { data: assignments, error: assignmentsError }] = await Promise.all([
+    supabase.from('tables').select('*').order('name'),
+    supabase.from('attendees').select('table_id,seat_number,is_archived').not('table_id', 'is', null),
+  ])
 
   if (error) throw new Error(error.message || 'Failed to load tables.')
+  if (assignmentsError) throw new Error(assignmentsError.message || 'Failed to load table seat assignments.')
+
+  const occupiedByTableId = new Map<string, number>()
+  for (const row of assignments ?? []) {
+    const r = row as Record<string, unknown>
+    const tableId = r.table_id
+    const seat = r.seat_number
+    const isArchived = (r.is_archived as boolean | null | undefined) ?? false
+    if (typeof tableId !== 'string' || !tableId) continue
+    if (isArchived) continue
+    if (typeof seat !== 'number' || !Number.isFinite(seat)) continue
+    occupiedByTableId.set(tableId, (occupiedByTableId.get(tableId) ?? 0) + 1)
+  }
+
   const rows = (data ?? []).map((row) => {
     const r = row as Record<string, unknown>
     const cap = r.capacity
@@ -34,6 +53,7 @@ export async function listTablesForAdmin(): Promise<AdminTableRow[]> {
       archived_at: (r.archived_at as string | null) ?? null,
       created_at: (row.created_at as string) ?? new Date().toISOString(),
       capacity,
+      occupied_count: occupiedByTableId.get(row.id as string) ?? 0,
       page_config: (r.page_config as unknown) ?? null,
     }
   })
