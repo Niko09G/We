@@ -131,6 +131,15 @@ export async function restoreTable(id: string): Promise<void> {
  * mission_submissions. Greetings keep snapshot text; table_id may be set null per schema.
  */
 export async function permanentlyDeleteTable(id: string): Promise<void> {
-  const { error } = await supabase.from('tables').delete().eq('id', id)
+  const { data, error } = await supabase
+    .from('tables')
+    .delete()
+    .eq('id', id)
+    .eq('is_archived', true)
+    .select('id')
+
   if (error) throw new Error(error.message || 'Failed to delete table.')
+  if (!data || data.length === 0) {
+    throw new Error('Table was not deleted. It may already be removed or blocked by permissions.')
+  }
 }
