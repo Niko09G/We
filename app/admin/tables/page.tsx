@@ -722,7 +722,7 @@ export default function TablesAdminPage() {
           }}
         >
           <div
-            className={`relative z-10 flex h-[90vh] max-h-[900px] w-full max-w-[1080px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm transition-all duration-200 ease-out ${
+            className={`relative z-10 flex h-[90vh] max-h-[900px] min-h-0 w-full max-w-[1080px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm transition-all duration-200 ease-out ${
               editorClosing ? 'translate-y-2 scale-[0.98] opacity-0' : 'translate-y-0 scale-100 opacity-100'
             }`}
           >
@@ -777,8 +777,8 @@ export default function TablesAdminPage() {
               </div>
             ) : null}
 
-            <div className="relative flex min-h-0 flex-1 flex-col overflow-x-visible overflow-y-hidden">
-              <div className="min-h-0 flex-1 overflow-x-visible overflow-y-auto overscroll-contain px-5 py-4 pb-28 [&_input]:!text-[14px] [&_textarea]:!text-[14px] [&_select]:!text-[14px]">
+            <div className="relative flex h-full min-h-0 flex-1 flex-col items-center justify-start overflow-hidden">
+              <div className="flex h-full min-h-0 w-full max-w-full flex-1 flex-col items-center justify-start overflow-x-visible overflow-y-auto overscroll-contain px-5 py-4 pb-28 [&_input]:!text-[14px] [&_textarea]:!text-[14px] [&_select]:!text-[14px]">
               <input
                 ref={avatarInputRef}
                 type="file"
@@ -1161,7 +1161,7 @@ export default function TablesAdminPage() {
                       </div>
                     </div>
 
-                    <div className="flex w-full shrink-0 justify-center overflow-visible px-2 pb-4 pt-8">
+                    <div className="flex w-full shrink-0 justify-center overflow-visible px-2 pt-8">
                       <div className="relative w-full max-w-[340px] overflow-visible rounded-[28px] border border-zinc-200/90 shadow-sm">
                         <div className="relative overflow-visible pt-1">
                           <div className="origin-top scale-[1.06] transition-transform duration-200 ease-out">
@@ -1177,50 +1177,47 @@ export default function TablesAdminPage() {
               </div>
             </div>
 
-            <div className="pointer-events-none absolute inset-x-0 bottom-[76px] z-30 h-12 bg-gradient-to-t from-white via-white/85 to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 z-40 flex items-center justify-between gap-2 border-t border-zinc-100/90 bg-white/[0.98] px-5 pb-5 pt-3.5 supports-[backdrop-filter]:backdrop-blur-sm">
-              <div className="flex items-center gap-2">
-                {mode === 'edit' && editingId && (overlayStep === 2 || overlayStep === 3) ? (
-                  <button
-                    type="button"
-                    onClick={() => void onArchive(editingId)}
-                    className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700"
-                  >
-                    Archive table
-                  </button>
-                ) : null}
-              </div>
-              <div className="flex items-center gap-2">
+            {mode === 'edit' && editingId && (overlayStep === 2 || overlayStep === 3) ? (
+              <div className="absolute bottom-6 left-6 z-20">
                 <button
                   type="button"
-                  onClick={() => {
-                    if (overlayStep === 1) closeOverlay()
-                    else if (overlayStep === 3) setOverlayStep(2)
-                    else setOverlayStep(1)
-                  }}
-                  className={FOOTER_BTN_SECONDARY}
+                  onClick={() => void onArchive(editingId)}
+                  className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700"
                 >
-                  Back
+                  Archive table
                 </button>
-                {overlayStep === 1 ? (
-                  <button
-                    type="button"
-                    onClick={advanceFromStep1}
-                    className="rounded-full bg-black px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
-                  >
-                    Next
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={openPublishFlow}
-                    className={`rounded-full px-5 py-2 text-sm font-semibold transition-opacity duration-200 ease-out disabled:opacity-60 ${GRADIENT_CTA}`}
-                  >
-                    Finalize
-                  </button>
-                )}
               </div>
+            ) : null}
+            <div className="absolute bottom-6 right-6 z-20 flex flex-row gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (overlayStep === 1) closeOverlay()
+                  else if (overlayStep === 3) setOverlayStep(2)
+                  else setOverlayStep(1)
+                }}
+                className={FOOTER_BTN_SECONDARY}
+              >
+                Back
+              </button>
+              {overlayStep === 1 ? (
+                <button
+                  type="button"
+                  onClick={advanceFromStep1}
+                  className="rounded-full bg-black px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={openPublishFlow}
+                  className={`rounded-full px-5 py-2 text-sm font-semibold transition-opacity duration-200 ease-out disabled:opacity-60 ${GRADIENT_CTA}`}
+                >
+                  Finalize
+                </button>
+              )}
             </div>
 
           {publishOpen ? (
