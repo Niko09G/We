@@ -808,7 +808,7 @@ export default function TablesAdminPage() {
             <button
               type="button"
               onClick={() => setTableView('cards')}
-              className={`inline-flex h-full items-center rounded-full px-[12px] text-[14px] font-medium transition-colors duration-150 ${
+              className={`inline-flex h-full items-center rounded-full px-[12px] text-[14px] font-medium transition-colors duration-150 ease-out ${
                 tableView === 'cards'
                   ? 'bg-black text-white'
                   : 'text-[#4d4d4d] hover:text-[#171717]'
@@ -834,7 +834,7 @@ export default function TablesAdminPage() {
             <button
               type="button"
               onClick={() => setTableView('list')}
-              className={`inline-flex h-full items-center rounded-full px-[12px] text-[14px] font-medium transition-colors duration-150 ${
+              className={`inline-flex h-full items-center rounded-full px-[12px] text-[14px] font-medium transition-colors duration-150 ease-out ${
                 tableView === 'list'
                   ? 'bg-black text-white'
                   : 'text-[#4d4d4d] hover:text-[#171717]'
@@ -866,7 +866,7 @@ export default function TablesAdminPage() {
                 key={value}
                 type="button"
                 onClick={() => setTableStatusFilter(value)}
-                className={`inline-flex h-full items-center rounded-full px-[12px] text-[14px] font-medium transition-colors duration-150 ${
+                className={`inline-flex h-full items-center rounded-full px-[12px] text-[14px] font-medium transition-colors duration-150 ease-out ${
                   tableStatusFilter === value
                     ? 'bg-black text-white'
                     : 'text-[#4d4d4d] hover:text-[#171717]'
@@ -879,30 +879,52 @@ export default function TablesAdminPage() {
           </div>
           {loading ? (
           <div
-            className={`h-full overflow-y-auto px-4 pb-4 ${
+            className={`admin-scroll-area h-full overflow-y-auto px-4 pb-4 ${
               tableView === 'list' ? 'pt-3' : 'pt-4'
             }`}
             aria-hidden
           >
             {tableView === 'list' ? (
-              <div className="overflow-hidden rounded-lg border border-[#ebebeb] bg-white p-4">
-                <div className="mb-3 h-6 w-44 animate-pulse rounded bg-zinc-100" />
-                <div className="space-y-2">
-                  {[0, 1, 2].map((i) => (
-                    <div key={i} className="h-[64px] animate-pulse rounded-lg bg-zinc-100/80" />
-                  ))}
+              <div className="admin-content-in space-y-1">
+                <div className="grid grid-cols-12 gap-x-2 border-b border-[#ebebeb] px-3 pb-2 pt-[10px] text-[14px] font-medium text-[#18181b]">
+                  <div className="col-span-5">Table</div>
+                  <div className="col-span-2">Status</div>
+                  <div className="col-span-5">Seats</div>
                 </div>
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div key={i} className="grid min-h-[50px] grid-cols-12 items-center gap-x-2 rounded-lg px-3 py-1.5">
+                    <div className="col-span-5 inline-flex items-center gap-3">
+                      <span className="admin-skeleton h-8 w-8 shrink-0 rounded-full" />
+                      <span className="admin-skeleton h-3.5 w-28 rounded-md" />
+                    </div>
+                    <div className="col-span-2">
+                      <span className="admin-skeleton inline-flex h-6 w-16 rounded-full" />
+                    </div>
+                    <div className="col-span-5">
+                      <span className="admin-skeleton inline-flex h-3.5 w-14 rounded-md" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="admin-content-in grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {[0, 1, 2, 3].map((i) => (
-                  <div key={i} className="h-[290px] animate-pulse rounded-2xl border border-zinc-200 bg-white" />
+                  <div key={i} className="h-[290px] rounded-2xl border border-zinc-200 bg-white p-3">
+                    <div className="admin-skeleton h-40 w-full rounded-xl" />
+                    <div className="mt-4 flex items-center justify-between gap-2">
+                      <div className="admin-skeleton h-4 w-24 rounded-md" />
+                      <div className="admin-skeleton h-4 w-16 rounded-md" />
+                    </div>
+                    <div className="mt-3">
+                      <div className="admin-skeleton h-8 w-full rounded-lg" />
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
           </div>
           ) : tableView === 'list' ? (
-          <div className="h-full overflow-y-auto px-4 pb-4">
+          <div className="admin-scroll-area admin-content-in h-full overflow-y-auto px-4 pb-4">
             <div className="sticky top-0 z-10 grid grid-cols-12 gap-x-2 border-b border-[#ebebeb] bg-white px-3 pb-2 pt-[10px] text-[14px] font-medium text-[#18181b]">
               <div className="col-span-5">Table</div>
               <div className="col-span-2">Status</div>
@@ -975,7 +997,7 @@ export default function TablesAdminPage() {
             )}
           </div>
           ) : (
-          <div className="h-full overflow-y-auto px-4 pb-4 pt-4">
+          <div className="admin-scroll-area admin-content-in h-full overflow-y-auto px-4 pb-4 pt-4">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <button
               type="button"
