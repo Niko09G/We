@@ -26,7 +26,7 @@ type ThemeColorKey = 'heroTop' | 'heroMiddle' | 'heroBottom' | 'lbGradTop' | 'lb
 const NAME_SUGGESTION_CHIPS = ['Power Rangers', 'Turtle Table', 'VIP Legends', 'Chaos Crew'] as const
 
 type ThemePreset = {
-  id: 'violet' | 'ocean' | 'rose' | 'forest'
+  id: 'violet' | 'ocean' | 'rose' | 'forest' | 'amber' | 'slate'
   name: string
   character: string
   primaryColor: string
@@ -96,6 +96,34 @@ const THEME_PRESETS: ThemePreset[] = [
     heroTop: '#0f3f30',
     heroMiddle: '#1d8c62',
     heroBottom: '#f3fbf7',
+  },
+  {
+    id: 'amber',
+    name: 'Amber',
+    character: 'Playful / energetic / warm',
+    primaryColor: '#f59e0b',
+    accent: '#fcd34d',
+    tableGradTop: '#d97706',
+    tableGradBottom: '#fbbf24',
+    lbGradTop: '#f59e0b',
+    lbGradBottom: '#fcd34d',
+    heroTop: '#f59e0b',
+    heroMiddle: '#fbbf24',
+    heroBottom: '#fde68a',
+  },
+  {
+    id: 'slate',
+    name: 'Slate',
+    character: 'Premium / minimal / modern',
+    primaryColor: '#111827',
+    accent: '#6b7280',
+    tableGradTop: '#111827',
+    tableGradBottom: '#4b5563',
+    lbGradTop: '#1f2937',
+    lbGradBottom: '#6b7280',
+    heroTop: '#111827',
+    heroMiddle: '#374151',
+    heroBottom: '#9ca3af',
   },
 ]
 
@@ -1087,7 +1115,7 @@ export default function TablesAdminPage() {
                             </button>
                           </div>
                           <div className="flex flex-wrap items-center justify-center gap-3">
-                            <div className="flex items-center gap-2.5">
+                            <div className="flex flex-wrap items-center justify-center gap-2.5">
                               {THEME_PRESETS.map((preset) => {
                                 const selected = formPresetId === preset.id
                                 return (
@@ -1096,9 +1124,9 @@ export default function TablesAdminPage() {
                                     type="button"
                                     onClick={() => applyPreset(preset.id)}
                                     aria-label={`Theme preset ${preset.name}`}
-                                    className={`h-10 w-10 rounded-full cursor-pointer transition-all duration-200 hover:brightness-105 ${
+                                    className={`h-10 w-10 rounded-full cursor-pointer transition-[transform,box-shadow,filter] duration-200 ease-out hover:scale-[1.05] hover:brightness-105 hover:shadow-[0_8px_24px_rgba(24,24,27,0.16)] ${
                                       selected
-                                        ? 'ring-2 ring-zinc-900/50 ring-offset-2'
+                                        ? 'scale-[1.02] ring-2 ring-zinc-900/50 ring-offset-2 shadow-[0_6px_16px_rgba(24,24,27,0.14)]'
                                         : 'ring-1 ring-zinc-200/90'
                                     }`}
                                     style={{
@@ -1162,7 +1190,7 @@ export default function TablesAdminPage() {
                               How should we color it?
                             </h4>
                           </div>
-                          <div className="flex justify-center gap-3">
+                          <div className="flex flex-wrap justify-center gap-3">
                             {THEME_PRESETS.map((preset) => {
                               const selected = formPresetId === preset.id
                               return (
@@ -1171,9 +1199,9 @@ export default function TablesAdminPage() {
                                   type="button"
                                   onClick={() => applyPreset(preset.id)}
                                   aria-label={`Theme preset ${preset.name}`}
-                                  className={`h-11 w-11 rounded-full transition-all duration-200 hover:brightness-105 ${
+                                  className={`h-11 w-11 rounded-full transition-[transform,box-shadow,filter] duration-200 ease-out hover:scale-[1.05] hover:brightness-105 hover:shadow-[0_10px_26px_rgba(24,24,27,0.18)] ${
                                     selected
-                                      ? 'ring-2 ring-zinc-900/55 ring-offset-[3px]'
+                                      ? 'scale-[1.02] ring-2 ring-zinc-900/55 ring-offset-[3px] shadow-[0_8px_18px_rgba(24,24,27,0.16)]'
                                       : 'ring-1 ring-zinc-200/90'
                                   }`}
                                   style={{
