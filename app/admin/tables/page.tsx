@@ -819,7 +819,7 @@ export default function TablesAdminPage() {
       </header>
 
       <section className="admin-gap-intro-first-section">
-        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200/90 bg-white px-3 py-2">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           <div className="relative min-w-[210px] flex-1">
             <svg
               viewBox="0 0 24 24"
@@ -838,34 +838,15 @@ export default function TablesAdminPage() {
               value={tableSearch}
               onChange={(e) => setTableSearch(e.target.value)}
               placeholder="Search tables..."
-              className="h-9 w-full rounded-lg border border-zinc-200 bg-white pl-8 pr-2 text-sm text-zinc-800 outline-none transition-colors focus:border-zinc-400"
+              className="h-10 w-full rounded-[6px] border border-[#ebebeb] bg-white pl-8 pr-[10px] text-[14px] font-normal text-[#171717] outline-none transition-colors focus:border-zinc-400"
             />
           </div>
-          <select
-            value={tableSort}
-            onChange={(e) => setTableSort(e.target.value as typeof tableSort)}
-            className="h-9 rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-700 outline-none transition-colors focus:border-zinc-400"
-          >
-            <option value="name-asc">Name A-Z</option>
-            <option value="name-desc">Name Z-A</option>
-            <option value="seats-desc">Most seats</option>
-            <option value="recent">Recently created</option>
-          </select>
-          <select
-            value={tableStatusFilter}
-            onChange={(e) => setTableStatusFilter(e.target.value as typeof tableStatusFilter)}
-            className="h-9 rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-700 outline-none transition-colors focus:border-zinc-400"
-          >
-            <option value="all">All status</option>
-            <option value="active">Active only</option>
-            <option value="inactive">Inactive only</option>
-          </select>
-          <div className="inline-flex h-9 items-center rounded-lg border border-zinc-200 bg-zinc-50 p-1">
+          <div className="inline-flex h-10 items-center rounded-[6px] border border-[#ebebeb] bg-white p-1">
             <button
               type="button"
               onClick={() => setTableView('cards')}
-              className={`inline-flex h-7 items-center rounded-md px-2 text-xs font-medium transition-all ${
-                tableView === 'cards' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'
+              className={`inline-flex h-8 items-center rounded-[6px] px-[10px] text-[14px] font-medium transition-all ${
+                tableView === 'cards' ? 'bg-[#f2f2f2] text-[#171717]' : 'text-[#4d4d4d] hover:text-[#171717]'
               }`}
             >
               Cards
@@ -873,19 +854,66 @@ export default function TablesAdminPage() {
             <button
               type="button"
               onClick={() => setTableView('list')}
-              className={`inline-flex h-7 items-center rounded-md px-2 text-xs font-medium transition-all ${
-                tableView === 'list' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'
+              className={`inline-flex h-8 items-center rounded-[6px] px-[10px] text-[14px] font-medium transition-all ${
+                tableView === 'list' ? 'bg-[#f2f2f2] text-[#171717]' : 'text-[#4d4d4d] hover:text-[#171717]'
               }`}
             >
               List
             </button>
           </div>
+          <div className="relative">
+            <select
+              value={tableStatusFilter}
+              onChange={(e) => setTableStatusFilter(e.target.value as typeof tableStatusFilter)}
+              className="h-10 appearance-none rounded-[6px] border border-[#ebebeb] bg-white px-[10px] pr-9 text-[14px] font-normal text-[#4d4d4d] outline-none transition-colors focus:border-zinc-400"
+            >
+              <option value="all">All status</option>
+              <option value="active">Active only</option>
+              <option value="inactive">Inactive only</option>
+            </select>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+              aria-hidden
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </div>
+          <div className="relative">
+            <select
+              value={tableSort}
+              onChange={(e) => setTableSort(e.target.value as typeof tableSort)}
+              className="h-10 appearance-none rounded-[6px] border border-[#ebebeb] bg-white px-[10px] pr-9 text-[14px] font-normal text-[#4d4d4d] outline-none transition-colors focus:border-zinc-400"
+            >
+              <option value="name-asc">Name A-Z</option>
+              <option value="name-desc">Name Z-A</option>
+              <option value="seats-desc">Most seats</option>
+              <option value="recent">Recently created</option>
+            </select>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+              aria-hidden
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </div>
         </div>
         {loading ? (
           <p className="text-sm text-zinc-500">Loading tables...</p>
         ) : tableView === 'list' ? (
-          <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
-            <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 border-b border-zinc-200/80 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          <div className="overflow-hidden rounded-[6px] border border-[#ebebeb] bg-[#f2f2f2]">
+            <div className="grid h-[45px] grid-cols-[1fr_auto_auto_auto] items-center gap-2 border-b border-[#ebebeb] px-4 text-sm font-medium text-[#4d4d4d]">
               <span>Table</span>
               <span>Status</span>
               <span>Seats</span>
@@ -903,7 +931,7 @@ export default function TablesAdminPage() {
                 return (
                   <div
                     key={row.id}
-                    className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 border-b border-zinc-100 px-4 py-3 last:border-b-0"
+                    className="grid h-[64px] grid-cols-[1fr_auto_auto_auto] items-center gap-2 border-b border-[#ebebeb] bg-white px-4 last:border-b-0"
                   >
                     <div className="inline-flex items-center gap-3">
                       <span className="h-8 w-8 overflow-hidden rounded-full border border-zinc-200">
