@@ -197,19 +197,16 @@ select {
 @layer utilities {
   /* Admin typography tokens (used only in /app/admin routes). */
   .admin-page-title {
-    font-size: 32px;
+    font-size: 24px;
     font-weight: 700;
-    line-height: 1.15;
+    line-height: 1.2;
     letter-spacing: -0.02em;
   }
   .admin-intro {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 400;
-    line-height: 1.5;
-    color: #6b7280;
-  }
-  .dark .admin-intro {
-    color: #a1a1aa;
+    line-height: 1.45;
+    color: #171717;
   }
   .admin-section-title {
     font-size: 24px;
