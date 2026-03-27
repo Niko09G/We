@@ -9,6 +9,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+  --font-admin: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
@@ -35,6 +36,10 @@ body {
   overflow-x: clip;
   max-width: 100%;
   position: relative;
+}
+
+.admin-font {
+  font-family: var(--font-admin);
 }
 
 /* Prevent iOS Safari zoom on focus (inputs < 16px) — guest + admin inputs */

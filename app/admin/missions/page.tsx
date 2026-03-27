@@ -649,7 +649,7 @@ export default function MissionsLibraryPage() {
               }}
             >
                       <div
-                        className="relative z-10 flex h-[90vh] max-h-[900px] min-h-0 w-full max-w-[1080px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white font-sans shadow-sm"
+                        className="admin-font relative z-10 flex h-[90vh] max-h-[900px] min-h-0 w-full max-w-[1080px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm"
                         onMouseDown={(e) => e.stopPropagation()}
                       >
                 <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3">

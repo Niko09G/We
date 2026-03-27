@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono, Montserrat, Outfit } from "next/font/google";
+import { Geist_Mono, Inter, Montserrat, Outfit } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "./providers";
 import { MISSIONS_HERO_THEME_COLOR } from "@/lib/guest-missions-gradients";
@@ -12,6 +12,12 @@ const montserrat = Montserrat({
 
 const outfit = Outfit({
   variable: "--font-outfit",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
   display: "swap",
 });
@@ -40,7 +46,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={montserrat.variable}>
+    <html lang="en" className={`${montserrat.variable} ${inter.variable}`}>
       <body
         className={`${montserrat.className} ${geistMono.variable} ${outfit.variable} antialiased`}
       >
