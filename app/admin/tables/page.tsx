@@ -22,6 +22,7 @@ import { removeTeamHeroImageByPublicUrl, uploadTeamHeroImage } from '@/lib/team-
 type EditorMode = 'create' | 'edit'
 type OverlayStep = 1 | 2 | 3
 type ThemeColorKey = 'heroTop' | 'heroMiddle' | 'heroBottom' | 'lbGradTop' | 'lbGradBottom' | 'primaryColor'
+type DeleteConfirmState = { id: string; name: string } | null
 
 const NAME_SUGGESTION_CHIPS = ['Power Rangers', 'Turtle Table', 'VIP Legends', 'Chaos Crew'] as const
 
@@ -364,6 +365,7 @@ export default function TablesAdminPage() {
   const [tableSort, setTableSort] = useState<'name-asc' | 'name-desc' | 'seats-desc' | 'recent'>('name-asc')
   const [tableStatusFilter, setTableStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [tableView, setTableView] = useState<'cards' | 'list'>('cards')
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null)
   const [colorPopoverPos, setColorPopoverPos] = useState<{ left: number; top: number } | null>(null)
   const [pickerHsv, setPickerHsv] = useState<{ h: number; s: number; v: number }>({ h: 260, s: 0.74, v: 0.98 })
   const [pickerHex, setPickerHex] = useState('#6d28ff')
@@ -781,8 +783,6 @@ export default function TablesAdminPage() {
   }
 
   async function onDeleteForever(id: string) {
-    const typed = window.prompt('Type DELETE to permanently remove this table:')
-    if ((typed ?? '').trim().toUpperCase() !== 'DELETE') return
     setError(null)
     try {
       await permanentlyDeleteTable(id)
@@ -806,21 +806,11 @@ export default function TablesAdminPage() {
             Create and edit teams/tables. Names must be unique.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openCreateEditor}
-          className={`rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm ${GRADIENT_CTA}`}
-        >
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden>+</span>
-            <span>Create new table</span>
-          </span>
-        </button>
       </header>
 
       <section className="admin-gap-intro-first-section">
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[210px] flex-1">
+          <div className="relative w-full md:w-[360px]">
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -838,7 +828,7 @@ export default function TablesAdminPage() {
               value={tableSearch}
               onChange={(e) => setTableSearch(e.target.value)}
               placeholder="Search tables..."
-              className="h-10 w-full rounded-[6px] border border-[#ebebeb] bg-white pl-8 pr-[10px] text-[14px] font-normal text-[#171717] outline-none transition-colors focus:border-zinc-400"
+              className="h-10 w-full rounded-[6px] border border-[#ebebeb] bg-white pl-8 pr-[10px] text-[14px] font-normal text-[#171717] placeholder:text-[14px] placeholder:font-normal placeholder:text-[#767676] outline-none transition-colors focus:border-zinc-400 font-[inherit]"
             />
           </div>
           <div className="inline-flex h-10 items-center rounded-[6px] border border-[#ebebeb] bg-white p-1">
@@ -865,7 +855,7 @@ export default function TablesAdminPage() {
             <select
               value={tableStatusFilter}
               onChange={(e) => setTableStatusFilter(e.target.value as typeof tableStatusFilter)}
-              className="h-10 appearance-none rounded-[6px] border border-[#ebebeb] bg-white px-[10px] pr-9 text-[14px] font-normal text-[#4d4d4d] outline-none transition-colors focus:border-zinc-400"
+              className="h-10 appearance-none rounded-[6px] border border-[#ebebeb] bg-white px-[10px] pr-9 text-[14px] font-medium text-[#171717] outline-none transition-colors focus:border-zinc-400 font-[inherit]"
             >
               <option value="all">All status</option>
               <option value="active">Active only</option>
@@ -884,11 +874,11 @@ export default function TablesAdminPage() {
               <path d="m6 9 6 6 6-6" />
             </svg>
           </div>
-          <div className="relative">
+          <div className="relative md:ml-auto">
             <select
               value={tableSort}
               onChange={(e) => setTableSort(e.target.value as typeof tableSort)}
-              className="h-10 appearance-none rounded-[6px] border border-[#ebebeb] bg-white px-[10px] pr-9 text-[14px] font-normal text-[#4d4d4d] outline-none transition-colors focus:border-zinc-400"
+              className="h-10 appearance-none rounded-[6px] border border-[#ebebeb] bg-white px-[10px] pr-9 text-[14px] font-medium text-[#171717] outline-none transition-colors focus:border-zinc-400 font-[inherit]"
             >
               <option value="name-asc">Name A-Z</option>
               <option value="name-desc">Name Z-A</option>
@@ -910,10 +900,30 @@ export default function TablesAdminPage() {
           </div>
         </div>
         {loading ? (
-          <p className="text-sm text-zinc-500">Loading tables...</p>
+          <div
+            className={`grid gap-4 ${
+              tableView === 'list' ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+            }`}
+            aria-hidden
+          >
+            {tableView === 'list' ? (
+              <div className="overflow-hidden rounded-[6px] border border-[#ebebeb] bg-[#f2f2f2] p-4">
+                <div className="mb-3 h-6 w-44 animate-pulse rounded bg-white/90" />
+                <div className="space-y-2">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="h-[64px] animate-pulse rounded-[6px] bg-white" />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              [0, 1, 2, 3].map((i) => (
+                <div key={i} className="h-[290px] animate-pulse rounded-2xl border border-zinc-200 bg-white" />
+              ))
+            )}
+          </div>
         ) : tableView === 'list' ? (
           <div className="overflow-hidden rounded-[6px] border border-[#ebebeb] bg-[#f2f2f2]">
-            <div className="grid h-[45px] grid-cols-[1fr_auto_auto_auto] items-center gap-2 border-b border-[#ebebeb] px-4 text-sm font-medium text-[#4d4d4d]">
+            <div className="grid h-[45px] grid-cols-[minmax(280px,1.4fr)_minmax(140px,0.85fr)_110px_120px] items-center gap-3 border-b border-[#ebebeb] px-4 text-sm font-medium text-[#4d4d4d]">
               <span>Table</span>
               <span>Status</span>
               <span>Seats</span>
@@ -931,7 +941,7 @@ export default function TablesAdminPage() {
                 return (
                   <div
                     key={row.id}
-                    className="grid h-[64px] grid-cols-[1fr_auto_auto_auto] items-center gap-2 border-b border-[#ebebeb] bg-white px-4 last:border-b-0"
+                    className="grid h-[64px] grid-cols-[minmax(280px,1.4fr)_minmax(140px,0.85fr)_110px_120px] items-center gap-3 border-b border-[#ebebeb] bg-white px-4 last:border-b-0"
                   >
                     <div className="inline-flex items-center gap-3">
                       <span className="h-8 w-8 overflow-hidden rounded-full border border-zinc-200">
@@ -1089,31 +1099,31 @@ export default function TablesAdminPage() {
 
       <section className="mt-8">
         <h2 className="admin-card-title text-zinc-900">Archived tables</h2>
-        <div className="admin-gap-card-title-body space-y-2">
+        <div className="admin-gap-card-title-body overflow-hidden rounded-[6px] border border-[#ebebeb] bg-[#f2f2f2]">
           {archivedRows.length === 0 ? (
-            <p className="text-sm text-zinc-500">No archived tables.</p>
+            <p className="px-4 py-5 text-sm text-zinc-500">No archived tables.</p>
           ) : (
             archivedRows.map((row) => (
               <div
                 key={row.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3"
+                className="flex min-h-[64px] flex-wrap items-center justify-between gap-3 border-b border-[#ebebeb] bg-white px-4 py-3 last:border-b-0"
               >
                 <div>
-                  <p className="text-sm font-medium text-zinc-900">{row.name}</p>
+                  <p className="text-sm font-medium text-[#171717]">{row.name}</p>
                   <p className="text-xs text-zinc-500">Archived</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => void onRestore(row.id)}
-                    className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700"
+                    className="h-10 rounded-[6px] border border-[#ebebeb] bg-white px-[10px] text-[14px] font-medium text-[#171717]"
                   >
                     Restore
                   </button>
                   <button
                     type="button"
-                    onClick={() => void onDeleteForever(row.id)}
-                    className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700"
+                    onClick={() => setDeleteConfirm({ id: row.id, name: row.name })}
+                    className="h-10 rounded-[6px] border border-rose-200 bg-rose-50 px-[10px] text-[14px] font-medium text-rose-700"
                   >
                     Delete forever
                   </button>
@@ -1123,6 +1133,43 @@ export default function TablesAdminPage() {
           )}
         </div>
       </section>
+
+      {deleteConfirm ? (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
+          onMouseDown={(e) => {
+            if (e.target !== e.currentTarget) return
+            setDeleteConfirm(null)
+          }}
+        >
+          <div className="w-full max-w-md rounded-2xl border border-[#ebebeb] bg-white p-5 shadow-[0_20px_40px_rgba(23,23,23,0.16)]">
+            <h3 className="text-lg font-semibold text-[#171717]">Delete archived table?</h3>
+            <p className="mt-2 text-sm text-zinc-600">
+              This permanently deletes <span className="font-medium text-[#171717]">{deleteConfirm.name}</span>.
+              This action cannot be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(null)}
+                className="h-10 rounded-[6px] border border-[#ebebeb] bg-white px-[10px] text-[14px] font-medium text-[#171717]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void onDeleteForever(deleteConfirm.id)
+                  setDeleteConfirm(null)
+                }}
+                className="h-10 rounded-[6px] border border-rose-200 bg-rose-50 px-[10px] text-[14px] font-semibold text-rose-700"
+              >
+                Delete forever
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {editorOpen || editorClosing ? (
         <div

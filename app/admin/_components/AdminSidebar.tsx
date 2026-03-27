@@ -41,7 +41,7 @@ function NavIcon({
       strokeWidth={1.8}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`h-4 w-4 shrink-0 ${active ? 'opacity-100' : 'opacity-80'}`}
+      className={`h-4 w-4 shrink-0 ${active ? 'opacity-100' : 'opacity-100'}`}
       aria-hidden
     >
       {d}
@@ -191,7 +191,7 @@ export default function AdminSidebar() {
   return (
     <>
       {/* Desktop: fixed sidebar */}
-      <aside className="hidden md:block fixed left-0 top-0 h-screen w-[14.5rem] border-r border-zinc-200 bg-[#fafafa]">
+      <aside className="fixed left-0 top-0 hidden h-screen w-[14.5rem] bg-[#fafafa] md:block">
         <div className="flex h-full flex-col">
           <div className="border-b border-zinc-200/80 px-4 py-4">
             <div className="text-[18px] font-semibold tracking-[-0.01em] text-[#000]">
@@ -199,12 +199,9 @@ export default function AdminSidebar() {
             </div>
           </div>
 
-          <nav className="flex-1 overflow-y-auto px-2 pb-4">
+          <nav className="flex-1 overflow-y-auto px-2 pb-4 pt-2">
             {(['event', 'scoring', 'system'] as const).map((sectionKey, idx) => (
-              <div key={sectionKey} className={idx === 0 ? '' : 'mt-4 pt-4 border-t border-zinc-200/70 dark:border-zinc-800/70'}>
-                <div className="px-3 mb-1 admin-helper-text uppercase tracking-wide">
-                  {sectionKey}
-                </div>
+              <div key={sectionKey} className={idx === 0 ? '' : 'mt-3'}>
                 <ul className="space-y-1">
                   {grouped[sectionKey].map((item) => {
                     const isActive = activeKey === item.key
@@ -212,10 +209,8 @@ export default function AdminSidebar() {
                       <li key={item.href}>
                         <Link
                           href={item.href}
-                          className={`group flex items-center justify-between rounded-xl px-3 py-2.5 admin-btn-text-small transition-colors ${
-                            isActive
-                              ? 'bg-[#ebebeb] text-zinc-900'
-                              : 'text-zinc-500 hover:bg-[#f3f3f3] hover:text-zinc-800'
+                          className={`group flex items-center justify-between rounded-xl px-3 py-2.5 text-[14px] font-medium transition-colors ${
+                            isActive ? 'bg-[#ebebeb] text-[#171717]' : 'text-[#171717] hover:bg-[#f3f3f3]'
                           }`}
                         >
                           <span className="inline-flex items-center gap-2.5">
@@ -258,12 +253,9 @@ export default function AdminSidebar() {
 
         {mobileOpen && (
           <nav className="border-b border-zinc-200 bg-[#fafafa]">
-            <div className="space-y-3 p-2">
+            <div className="space-y-2 p-2">
               {(['event', 'scoring', 'system'] as const).map((sectionKey) => (
                 <div key={sectionKey}>
-                  <div className="px-3 mb-1 admin-helper-text uppercase tracking-wide">
-                    {sectionKey}
-                  </div>
                   <ul className="space-y-1">
                     {grouped[sectionKey].map((item) => {
                       const isActive = activeKey === item.key
@@ -272,10 +264,8 @@ export default function AdminSidebar() {
                           <Link
                             href={item.href}
                             onClick={() => setMobileOpen(false)}
-                            className={`group flex items-center justify-between rounded-xl px-3 py-2.5 admin-btn-text-small ${
-                              isActive
-                                ? 'bg-[#ebebeb] text-zinc-900'
-                                : 'text-zinc-600 hover:bg-[#f3f3f3]'
+                            className={`group flex items-center justify-between rounded-xl px-3 py-2.5 text-[14px] font-medium ${
+                              isActive ? 'bg-[#ebebeb] text-[#171717]' : 'text-[#171717] hover:bg-[#f3f3f3]'
                             }`}
                           >
                             <span className="inline-flex items-center gap-2.5">
