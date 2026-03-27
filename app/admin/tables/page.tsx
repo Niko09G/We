@@ -1251,20 +1251,22 @@ export default function TablesAdminPage() {
                               ? createPortal(
                                   <div
                                     ref={colorPickerRef}
-                                    className="fixed z-[80] w-44 -translate-x-1/2 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg"
+                                    className="fixed z-[80] w-52 -translate-x-1/2 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-md"
                                     style={{ left: colorPopoverPos.left, top: colorPopoverPos.top }}
                                   >
                                     <input
                                       type="color"
                                       value={formTheme[openColorField]}
                                       onChange={(e) => setColorField(openColorField, e.target.value)}
-                                      className="h-24 w-full cursor-pointer rounded border-0"
+                                      className="block h-36 w-full cursor-pointer border-0 p-0 [appearance:none]"
                                     />
-                                    <input
-                                      value={formTheme[openColorField]}
-                                      onChange={(e) => setColorField(openColorField, e.target.value)}
-                                      className="mt-2 w-full rounded border border-zinc-200 px-2 py-1.5 text-xs font-medium text-zinc-700"
-                                    />
+                                    <div className="border-t border-zinc-100 p-3">
+                                      <input
+                                        value={formTheme[openColorField]}
+                                        onChange={(e) => setColorField(openColorField, e.target.value)}
+                                        className="w-full rounded-lg border border-zinc-200 px-2.5 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-700"
+                                      />
+                                    </div>
                                   </div>,
                                   document.body
                                 )
