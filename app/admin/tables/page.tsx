@@ -782,7 +782,9 @@ export default function TablesAdminPage() {
         </header>
 
         <section className="admin-gap-intro-first-section flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-2xl border-x border-t border-[#ebebeb] bg-white">
-          <div className="z-20 flex flex-wrap items-center gap-2 border-b border-[#ebebeb] bg-white p-4 pb-3">
+          <div className="z-20 border-b border-[#ebebeb] bg-white p-4 pb-3">
+          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
           <div className="relative w-full md:w-[360px]">
             <svg
               viewBox="0 0 24 24"
@@ -875,6 +877,27 @@ export default function TablesAdminPage() {
                 {label} ({tableStatusCounts[value]})
               </button>
             ))}
+          </div>
+          </div>
+          <button
+            type="button"
+            onClick={openCreateEditor}
+            className={`ml-auto inline-flex h-[40px] items-center gap-2 rounded-full px-4 text-[14px] font-medium text-white transition-opacity hover:opacity-90 ${GRADIENT_CTA}`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            <span>New table</span>
+          </button>
           </div>
           </div>
           {loading ? (
