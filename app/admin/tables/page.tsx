@@ -770,16 +770,8 @@ export default function TablesAdminPage() {
           </div>
         </header>
 
-        <section
-          className={`admin-gap-intro-first-section ${
-            tableView === 'list' ? 'overflow-hidden rounded-2xl border border-[#ebebeb] bg-white' : ''
-          }`}
-        >
-          <div
-            className={`flex flex-wrap items-center gap-2 ${
-              tableView === 'list' ? 'p-4 pb-3' : 'mb-4'
-            }`}
-          >
+        <section className="admin-gap-intro-first-section overflow-hidden rounded-2xl border border-[#ebebeb] bg-white">
+          <div className="flex flex-wrap items-center gap-2 p-4 pb-3">
           <div className="relative w-full md:w-[360px]">
             <svg
               viewBox="0 0 24 24"
@@ -872,8 +864,8 @@ export default function TablesAdminPage() {
           </div>
           {loading ? (
           <div
-            className={`grid ${
-              tableView === 'list' ? 'grid-cols-1 px-4 pb-4' : 'gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+            className={`grid gap-4 px-4 pb-4 ${
+              tableView === 'list' ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
             }`}
             aria-hidden
           >
@@ -974,7 +966,7 @@ export default function TablesAdminPage() {
             )}
           </div>
           ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-4 px-4 pb-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <button
               type="button"
               onClick={openCreateEditor}
