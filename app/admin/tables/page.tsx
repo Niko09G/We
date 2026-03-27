@@ -102,7 +102,7 @@ const GRADIENT_CTA =
   'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white border-transparent'
 
 const FOOTER_BTN_SECONDARY =
-  'rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50'
+  'rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-all duration-200 ease-out hover:bg-zinc-50'
 
 function initialsFromName(name: string): string {
   const t = name.trim()
@@ -252,22 +252,19 @@ export default function TablesAdminPage() {
   const [heroUploading, setHeroUploading] = useState(false)
   const [openColorField, setOpenColorField] = useState<ThemeColorKey | null>(null)
   const [publishOpen, setPublishOpen] = useState(false)
-  const [finalizePriming, setFinalizePriming] = useState(false)
+  const [step1Hint, setStep1Hint] = useState<string | null>(null)
+  const [overlayError, setOverlayError] = useState<string | null>(null)
   const avatarInputRef = useRef<HTMLInputElement | null>(null)
   const heroInputRef = useRef<HTMLInputElement | null>(null)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
   const overlayCloseTimerRef = useRef<number | null>(null)
-  const finalizeTimerRef = useRef<number | null>(null)
   const overlayTriggerRef = useRef<HTMLButtonElement | null>(null)
 
   const closeOverlay = useCallback(() => {
     if (!editorOpen || editorClosing) return
     setPublishOpen(false)
-    setFinalizePriming(false)
-    if (finalizeTimerRef.current !== null) {
-      window.clearTimeout(finalizeTimerRef.current)
-      finalizeTimerRef.current = null
-    }
+    setStep1Hint(null)
+    setOverlayError(null)
     setEditorClosing(true)
     if (overlayCloseTimerRef.current !== null) {
       window.clearTimeout(overlayCloseTimerRef.current)
@@ -379,6 +376,8 @@ export default function TablesAdminPage() {
     setEditorClosing(false)
     setEditorOpen(true)
     setError(null)
+    setStep1Hint(null)
+    setOverlayError(null)
   }
 
   function openEditEditor(
@@ -400,6 +399,8 @@ export default function TablesAdminPage() {
     setEditorClosing(false)
     setEditorOpen(true)
     setError(null)
+    setStep1Hint(null)
+    setOverlayError(null)
   }
 
   function setColorField(key: ThemeColorKey, next: string) {
@@ -409,28 +410,28 @@ export default function TablesAdminPage() {
   const advanceFromStep1 = useCallback(() => {
     const n = formName.trim()
     if (!n) {
-      setError('Table name is required.')
+      setStep1Hint("Let's choose a name first")
       return
     }
-    setError(null)
+    setStep1Hint(null)
     setOverlayStep(2)
   }, [formName])
 
   const openPublishFlow = useCallback(() => {
-    setFinalizePriming(true)
-    window.setTimeout(() => {
-      setPublishOpen(true)
-      setFinalizePriming(false)
-    }, 180)
+    setOverlayError(null)
+    setPublishOpen(true)
   }, [])
 
-  const closePublish = useCallback(() => setPublishOpen(false), [])
+  const closePublish = useCallback(() => {
+    setPublishOpen(false)
+  }, [])
 
   async function uploadAvatar(file: File) {
     if (!isAcceptedImageFile(file)) {
-      setError('Use JPG, PNG, or WEBP.')
+      setOverlayError('Use JPG, PNG, or WEBP.')
       return
     }
+    setOverlayError(null)
     setAvatarUploading(true)
     try {
       const previous = formTheme.avatarImageUrl.trim() || null
@@ -440,7 +441,7 @@ export default function TablesAdminPage() {
       setFormTheme((prev) => ({ ...prev, avatarImageUrl: url }))
       await removeTeamHeroImageByPublicUrl(previous)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Avatar upload failed.')
+      setOverlayError(e instanceof Error ? e.message : 'Avatar upload failed.')
     } finally {
       setAvatarUploading(false)
     }
@@ -448,9 +449,10 @@ export default function TablesAdminPage() {
 
   async function uploadHero(file: File) {
     if (!isAcceptedImageFile(file)) {
-      setError('Use JPG, PNG, or WEBP.')
+      setOverlayError('Use JPG, PNG, or WEBP.')
       return
     }
+    setOverlayError(null)
     setHeroUploading(true)
     try {
       const previous = formTheme.heroImageUrl.trim() || null
@@ -461,7 +463,7 @@ export default function TablesAdminPage() {
       setFormTheme((prev) => ({ ...prev, heroImageUrl: url }))
       await removeTeamHeroImageByPublicUrl(previous)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Hero image upload failed.')
+      setOverlayError(e instanceof Error ? e.message : 'Hero image upload failed.')
     } finally {
       setHeroUploading(false)
     }
@@ -470,11 +472,11 @@ export default function TablesAdminPage() {
   async function saveEditor() {
     const name = formName.trim()
     if (!name) {
-      setError('Table name is required.')
+      setOverlayError("Let's choose a name first")
       return
     }
     setSaving(true)
-    setError(null)
+    setOverlayError(null)
     setSuccessToast(null)
     try {
       const pageConfig = pageConfigJsonFromAdminForm({
@@ -569,7 +571,7 @@ export default function TablesAdminPage() {
         </button>
       </header>
 
-      {error ? (
+      {error && !editorOpen && !editorClosing ? (
         <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
           {error}
         </p>
@@ -711,7 +713,7 @@ export default function TablesAdminPage() {
       {editorOpen || editorClosing ? (
         <div
           className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-200 ease-out ${
-            editorClosing ? 'bg-zinc-900/0 opacity-0' : publishOpen ? 'bg-zinc-900/45 opacity-100' : 'bg-zinc-900/30 opacity-100'
+            editorClosing ? 'bg-zinc-900/0 opacity-0' : 'bg-zinc-900/30 opacity-100'
           }`}
           onMouseDown={(e) => {
             if (e.target !== e.currentTarget) return
@@ -720,14 +722,16 @@ export default function TablesAdminPage() {
           }}
         >
           <div
-            className={`relative z-10 flex h-[88vh] w-full max-w-[1080px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm transition-all duration-200 ease-out ${
-              editorClosing
-                ? 'opacity-0 scale-[0.98] translate-y-2'
-                : finalizePriming || publishOpen
-                  ? 'scale-[0.985] opacity-[0.93]'
-                  : 'translate-y-0 scale-100 opacity-100'
+            className={`relative z-10 flex h-[90vh] max-h-[900px] w-full max-w-[1080px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm transition-all duration-200 ease-out ${
+              editorClosing ? 'translate-y-2 scale-[0.98] opacity-0' : 'translate-y-0 scale-100 opacity-100'
             }`}
           >
+            {publishOpen ? (
+              <div
+                className="pointer-events-none absolute inset-0 z-[55] rounded-3xl bg-black/25 transition-opacity duration-200 ease-out"
+                aria-hidden
+              />
+            ) : null}
             <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3">
               <div>
                 <h3 className="text-lg font-semibold text-zinc-900">
@@ -767,7 +771,14 @@ export default function TablesAdminPage() {
               </button>
             </div>
 
-            <div className="relative flex-1 overflow-hidden px-5 py-4 [&_input]:!text-[14px] [&_textarea]:!text-[14px] [&_select]:!text-[14px]">
+            {overlayError ? (
+              <div className="border-b border-zinc-200/80 bg-zinc-50/90 px-5 py-2.5 text-sm text-zinc-700">
+                {overlayError}
+              </div>
+            ) : null}
+
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-x-visible overflow-y-hidden">
+              <div className="min-h-0 flex-1 overflow-x-visible overflow-y-auto overscroll-contain px-5 py-4 pb-28 [&_input]:!text-[14px] [&_textarea]:!text-[14px] [&_select]:!text-[14px]">
               <input
                 ref={avatarInputRef}
                 type="file"
@@ -790,24 +801,32 @@ export default function TablesAdminPage() {
                   if (file) void uploadHero(file)
                 }}
               />
+              <div className="relative min-h-full w-full overflow-x-visible">
               <div
-                className={`absolute inset-0 px-5 py-4 transition-all duration-200 ease-out ${
+                className={`absolute inset-0 transition-all duration-200 ease-out ${
                   overlayStep === 1
                     ? 'translate-x-0 opacity-100'
                     : '-translate-x-3 pointer-events-none opacity-0'
                 }`}
               >
-                <div className="flex h-full items-center justify-center">
-                  <div className="w-full max-w-[700px] space-y-6">
+                <div className="flex min-h-full items-center justify-center py-2">
+                  <div className="w-full max-w-[736px] space-y-5 overflow-x-visible px-0.5">
                     <h4 className="text-center text-3xl font-semibold tracking-tight text-zinc-900">
                       What are we calling this table?
                     </h4>
                     <div className="rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
-                      <div className="flex h-14 items-center gap-2 rounded-2xl bg-white pl-4 pr-2">
+                      <div
+                        className={`flex h-14 items-center gap-2 rounded-2xl bg-white pl-4 pr-2 transition-[box-shadow] duration-200 ease-out ${
+                          step1Hint ? 'shadow-[inset_0_0_0_1px_rgba(248,113,113,0.55)]' : ''
+                        }`}
+                      >
                         <input
                           ref={nameInputRef}
                           value={formName}
-                          onChange={(e) => setFormName(e.target.value)}
+                          onChange={(e) => {
+                            setFormName(e.target.value)
+                            setStep1Hint(null)
+                          }}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               e.preventDefault()
@@ -838,6 +857,9 @@ export default function TablesAdminPage() {
                         </button>
                       </div>
                     </div>
+                    {step1Hint ? (
+                      <p className="px-1 text-center text-sm font-medium leading-snug text-zinc-600">{step1Hint}</p>
+                    ) : null}
                     <div className="flex flex-wrap justify-center gap-2">
                       {NAME_SUGGESTION_CHIPS.map((chip) => (
                         <button
@@ -845,9 +867,11 @@ export default function TablesAdminPage() {
                           type="button"
                           onClick={() => {
                             setFormName(chip)
-                            setError(null)
+                            setStep1Hint(null)
+                            setOverlayError(null)
+                            setOverlayStep(2)
                           }}
-                          className="rounded-full border border-zinc-200/90 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm transition-all hover:border-zinc-300 hover:bg-zinc-50 hover:shadow"
+                          className="rounded-full border border-zinc-200/90 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm transition-all duration-200 ease-out hover:border-zinc-300 hover:bg-zinc-50 hover:shadow"
                         >
                           {chip}
                         </button>
@@ -858,17 +882,17 @@ export default function TablesAdminPage() {
               </div>
 
               <div
-                className={`absolute inset-0 flex flex-col overflow-hidden transition-all duration-200 ease-out ${
+                className={`absolute inset-0 flex flex-col overflow-x-visible overflow-y-visible transition-all duration-200 ease-out ${
                   overlayStep >= 2
                     ? 'translate-x-0 opacity-100'
                     : 'pointer-events-none translate-x-3 opacity-0'
                 }`}
               >
-                <div className="flex min-h-0 flex-1 flex-col px-5 py-3">
-                  <div className="mx-auto flex h-full min-h-0 w-full max-w-[700px] flex-1 flex-col">
+                <div className="flex min-h-0 flex-1 flex-col py-3">
+                  <div className="mx-auto flex h-full min-h-0 w-full max-w-[736px] flex-1 flex-col overflow-x-visible">
                     <div className="relative h-[min(260px,30vh)] min-h-[220px] w-full shrink-0 sm:h-[min(280px,32vh)] sm:min-h-[240px]">
                       <div
-                        className={`absolute inset-0 overflow-y-auto overflow-x-hidden transition-all duration-200 ease-out ${
+                        className={`absolute inset-0 overflow-y-auto overflow-x-visible transition-all duration-200 ease-out ${
                           overlayStep === 2
                             ? 'z-10 translate-x-0 opacity-100'
                             : 'pointer-events-none z-0 -translate-x-2 opacity-0'
@@ -893,9 +917,8 @@ export default function TablesAdminPage() {
                               type="button"
                               onClick={() => avatarInputRef.current?.click()}
                               disabled={avatarUploading}
-                              className="group relative flex h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50/90 text-sm font-medium text-zinc-800 transition-all hover:border-zinc-300/80 hover:shadow-sm disabled:opacity-60"
+                              className="group relative flex h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50/90 text-sm font-medium text-zinc-800 transition-all duration-200 ease-out hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white disabled:opacity-60"
                             >
-                              <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,_#1ca0d822,_#5b38f222)] opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
                               <svg
                                 viewBox="0 0 24 24"
                                 fill="none"
@@ -903,21 +926,22 @@ export default function TablesAdminPage() {
                                 strokeWidth={1.7}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                className="relative z-10 h-4 w-4 text-zinc-500"
+                                className="relative z-10 h-4 w-4 text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white"
                                 aria-hidden
                               >
                                 <circle cx="12" cy="8" r="3.5" />
                                 <path d="M5 20a7 7 0 0 1 14 0" />
                               </svg>
-                              <span className="relative z-10">Avatar</span>
+                              <span className="relative z-10 transition-colors duration-200 ease-out group-hover:text-white">
+                                Avatar
+                              </span>
                             </button>
                             <button
                               type="button"
                               onClick={() => heroInputRef.current?.click()}
                               disabled={heroUploading}
-                              className="group relative flex h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50/90 text-sm font-medium text-zinc-800 transition-all hover:border-zinc-300/80 hover:shadow-sm disabled:opacity-60"
+                              className="group relative flex h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50/90 text-sm font-medium text-zinc-800 transition-all duration-200 ease-out hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white disabled:opacity-60"
                             >
-                              <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,_#1ca0d822,_#5b38f222)] opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
                               <svg
                                 viewBox="0 0 24 24"
                                 fill="none"
@@ -925,14 +949,16 @@ export default function TablesAdminPage() {
                                 strokeWidth={1.7}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                className="relative z-10 h-4 w-4 text-zinc-500"
+                                className="relative z-10 h-4 w-4 text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white"
                                 aria-hidden
                               >
                                 <rect x="3" y="5" width="18" height="14" rx="2" />
                                 <circle cx="8.5" cy="10" r="1.2" />
                                 <path d="m21 15-6-5-4 4-3-3-5 5" />
                               </svg>
-                              <span className="relative z-10">Hero</span>
+                              <span className="relative z-10 transition-colors duration-200 ease-out group-hover:text-white">
+                                Hero
+                              </span>
                             </button>
                           </div>
                           <div className="flex flex-wrap items-center justify-center gap-3">
@@ -980,16 +1006,37 @@ export default function TablesAdminPage() {
                         </div>
                       </div>
                       <div
-                        className={`absolute inset-0 overflow-y-auto overflow-x-hidden transition-all duration-200 ease-out ${
+                        className={`absolute inset-0 overflow-y-auto overflow-x-visible transition-all duration-200 ease-out ${
                           overlayStep === 3
                             ? 'z-10 translate-x-0 opacity-100'
                             : 'pointer-events-none z-0 translate-x-2 opacity-0'
                         }`}
                       >
                         <div className="flex flex-col items-center space-y-4 pb-2 pt-1">
-                          <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
-                            How should we color it?
-                          </h4>
+                          <div className="relative w-full max-w-md">
+                            <button
+                              type="button"
+                              onClick={() => setOverlayStep(2)}
+                              className="absolute left-0 top-0.5 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-zinc-900 shadow-sm transition-transform duration-200 ease-out hover:scale-105 active:scale-95"
+                              aria-label="Back to team identity"
+                            >
+                              <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="h-4 w-4"
+                                aria-hidden
+                              >
+                                <path d="M19 12H5M12 19l-7-7 7-7" />
+                              </svg>
+                            </button>
+                            <h4 className="px-11 text-center text-2xl font-semibold tracking-tight text-zinc-900">
+                              How should we color it?
+                            </h4>
+                          </div>
                           <div className="flex justify-center gap-3">
                             {THEME_PRESETS.map((preset) => {
                               const selected = formPresetId === preset.id
@@ -1114,22 +1161,24 @@ export default function TablesAdminPage() {
                       </div>
                     </div>
 
-                    <div className="mt-auto flex w-full shrink-0 justify-center px-2 pb-1 pt-8">
-                      <div className="relative w-full max-w-[340px] overflow-hidden rounded-[28px] border border-zinc-200/90 shadow-sm">
-                        <div className="relative h-[480px] overflow-hidden">
+                    <div className="flex w-full shrink-0 justify-center overflow-visible px-2 pb-4 pt-8">
+                      <div className="relative w-full max-w-[340px] overflow-visible rounded-[28px] border border-zinc-200/90 shadow-sm">
+                        <div className="relative overflow-visible pt-1">
                           <div className="origin-top scale-[1.06] transition-transform duration-200 ease-out">
                             <PreviewPhone form={formTheme} name={formName || 'New table'} />
                           </div>
-                          <div className="pointer-events-none absolute inset-x-0 top-[58%] bottom-0 bg-gradient-to-b from-transparent via-white/75 to-white" />
+                          <div className="pointer-events-none absolute inset-x-0 bottom-0 top-[48%] bg-gradient-to-b from-transparent via-white/78 to-white" />
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
+              </div>
             </div>
 
-            <div className="flex items-center justify-between gap-2 px-5 pb-5 pt-4">
+            <div className="pointer-events-none absolute inset-x-0 bottom-[76px] z-30 h-12 bg-gradient-to-t from-white via-white/85 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 z-40 flex items-center justify-between gap-2 border-t border-zinc-100/90 bg-white/[0.98] px-5 pb-5 pt-3.5 supports-[backdrop-filter]:backdrop-blur-sm">
               <div className="flex items-center gap-2">
                 {mode === 'edit' && editingId && (overlayStep === 2 || overlayStep === 3) ? (
                   <button
@@ -1164,20 +1213,19 @@ export default function TablesAdminPage() {
                 ) : (
                   <button
                     type="button"
-                    disabled={saving || finalizePriming}
+                    disabled={saving}
                     onClick={openPublishFlow}
-                    className={`rounded-full px-5 py-2 text-sm font-semibold disabled:opacity-60 ${GRADIENT_CTA}`}
+                    className={`rounded-full px-5 py-2 text-sm font-semibold transition-opacity duration-200 ease-out disabled:opacity-60 ${GRADIENT_CTA}`}
                   >
                     Finalize
                   </button>
                 )}
               </div>
             </div>
-          </div>
 
           {publishOpen ? (
             <div
-              className="absolute inset-0 z-[60] flex items-center justify-center px-4 transition-opacity duration-200 ease-out"
+              className="absolute inset-0 z-[60] flex items-center justify-center px-4"
               onMouseDown={(e) => {
                 if (e.target === e.currentTarget) closePublish()
               }}
@@ -1186,33 +1234,32 @@ export default function TablesAdminPage() {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="publish-table-title"
-                className="w-full max-w-[380px] rounded-2xl bg-white p-7 shadow-xl transition-all duration-200 ease-out animate-[fadeIn_180ms_ease-out]"
+                className="w-full max-w-[380px] rounded-2xl bg-white p-7 shadow-xl animate-[adminPublishPop_0.2s_ease-out_both]"
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <h2 id="publish-table-title" className="text-center text-lg font-semibold tracking-tight text-zinc-900">
                   Ready to publish?
                 </h2>
-                <div className="mt-6 flex flex-wrap items-center justify-center gap-6">
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-sm text-zinc-500">{`\u00b7`}</span>
+                <div className="mt-6 flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-3 sm:flex-nowrap">
+                  <div className="flex flex-1 items-center gap-2">
                     <input
                       type="number"
                       min={1}
                       value={formCapacity}
                       onChange={(e) => setFormCapacity(Math.max(1, Number(e.target.value) || 1))}
-                      className="w-14 rounded-lg border-0 border-b border-zinc-200 bg-transparent py-1 text-center text-sm font-medium text-zinc-900 outline-none transition-colors focus:border-zinc-400"
+                      className="w-14 shrink-0 rounded-lg border-0 border-b border-zinc-200 bg-transparent py-1 text-center text-sm font-medium text-zinc-900 outline-none transition-colors duration-200 ease-out focus:border-zinc-400"
                       aria-label="Seat capacity"
                     />
-                    <span className="text-sm text-zinc-500">seats</span>
+                    <span className="text-sm font-medium text-zinc-700">seats</span>
                   </div>
                   <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-zinc-700">
                     <span
-                      className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
+                      className={`relative inline-flex h-5 w-9 rounded-full transition-colors duration-200 ease-out ${
                         formActive ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]' : 'bg-zinc-300'
                       }`}
                     >
                       <span
-                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform duration-200 ease-out ${
                           formActive ? 'translate-x-4.5' : 'translate-x-0.5'
                         }`}
                       />
@@ -1242,6 +1289,8 @@ export default function TablesAdminPage() {
               </div>
             </div>
           ) : null}
+            </div>
+          </div>
         </div>
       ) : null}
 
