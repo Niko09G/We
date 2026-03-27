@@ -770,8 +770,16 @@ export default function TablesAdminPage() {
           </div>
         </header>
 
-        <section className="admin-gap-intro-first-section">
-          <div className="mb-4 flex flex-wrap items-center gap-2">
+        <section
+          className={`admin-gap-intro-first-section ${
+            tableView === 'list' ? 'overflow-hidden rounded-2xl border border-[#ebebeb] bg-white' : ''
+          }`}
+        >
+          <div
+            className={`flex flex-wrap items-center gap-2 ${
+              tableView === 'list' ? 'p-4 pb-3' : 'mb-4'
+            }`}
+          >
           <div className="relative w-full md:w-[360px]">
             <svg
               viewBox="0 0 24 24"
@@ -864,17 +872,17 @@ export default function TablesAdminPage() {
           </div>
           {loading ? (
           <div
-            className={`grid gap-4 ${
-              tableView === 'list' ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+            className={`grid ${
+              tableView === 'list' ? 'grid-cols-1 px-4 pb-4' : 'gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
             }`}
             aria-hidden
           >
             {tableView === 'list' ? (
-              <div className="overflow-hidden rounded-[6px] border border-[#ebebeb] bg-[#f2f2f2] p-4">
-                <div className="mb-3 h-6 w-44 animate-pulse rounded bg-white/90" />
+              <div className="overflow-hidden rounded-lg border border-[#ebebeb] bg-white p-4">
+                <div className="mb-3 h-6 w-44 animate-pulse rounded bg-zinc-100" />
                 <div className="space-y-2">
                   {[0, 1, 2].map((i) => (
-                    <div key={i} className="h-[64px] animate-pulse rounded-[6px] bg-white" />
+                    <div key={i} className="h-[64px] animate-pulse rounded-lg bg-zinc-100/80" />
                   ))}
                 </div>
               </div>
@@ -885,7 +893,7 @@ export default function TablesAdminPage() {
             )}
           </div>
           ) : tableView === 'list' ? (
-          <div className="rounded-[6px] border border-[#ebebeb] bg-[#f2f2f2] p-2">
+          <div className="px-4 pb-4">
             <div className="grid grid-cols-12 gap-x-2 px-3 pb-1.5 text-[14px] font-medium text-zinc-600">
               <div className="col-span-5">Table</div>
               <div className="col-span-2">Status</div>
