@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   archiveTable,
   createTable,
@@ -254,6 +255,7 @@ export default function TablesAdminPage() {
   const [publishOpen, setPublishOpen] = useState(false)
   const [step1Hint, setStep1Hint] = useState<string | null>(null)
   const [overlayError, setOverlayError] = useState<string | null>(null)
+  const [colorPopoverPos, setColorPopoverPos] = useState<{ left: number; top: number } | null>(null)
   const avatarInputRef = useRef<HTMLInputElement | null>(null)
   const heroInputRef = useRef<HTMLInputElement | null>(null)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
@@ -294,6 +296,7 @@ export default function TablesAdminPage() {
       if (e.key !== 'Escape') return
       if (openColorField) {
         setOpenColorField(null)
+        setColorPopoverPos(null)
         return
       }
       if (publishOpen) {
@@ -334,6 +337,7 @@ export default function TablesAdminPage() {
 
   useEffect(() => {
     setOpenColorField(null)
+    setColorPopoverPos(null)
   }, [overlayStep])
 
   useEffect(() => {
@@ -344,6 +348,7 @@ export default function TablesAdminPage() {
       if (target.closest('[data-color-dot="true"]')) return
       if (colorPickerRef.current?.contains(target)) return
       setOpenColorField(null)
+      setColorPopoverPos(null)
     }
     window.addEventListener('mousedown', handleOutsidePointer)
     return () => {
@@ -435,6 +440,19 @@ export default function TablesAdminPage() {
   function setColorField(key: ThemeColorKey, next: string) {
     setFormTheme((prev) => ({ ...prev, [key]: next }))
   }
+
+  const openColorPicker = useCallback((key: ThemeColorKey, el: HTMLButtonElement) => {
+    const rect = el.getBoundingClientRect()
+    const popoverWidth = 176
+    const edgePadding = 12
+    const left = Math.min(
+      Math.max(rect.left + rect.width / 2, edgePadding + popoverWidth / 2),
+      window.innerWidth - edgePadding - popoverWidth / 2
+    )
+    const top = Math.min(Math.max(rect.bottom + 10, edgePadding), window.innerHeight - 210)
+    setOpenColorField(key)
+    setColorPopoverPos({ left, top })
+  }, [])
 
   const advanceFromStep1 = useCallback(() => {
     const n = formName.trim()
@@ -1172,7 +1190,7 @@ export default function TablesAdminPage() {
                                 <button
                                   type="button"
                                   data-color-dot="true"
-                                  onClick={() => setOpenColorField('primaryColor')}
+                                  onClick={(e) => openColorPicker('primaryColor', e.currentTarget)}
                                   className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
                                   style={{ backgroundColor: formTheme.primaryColor }}
                                   aria-label="Main color"
@@ -1184,7 +1202,7 @@ export default function TablesAdminPage() {
                                   <button
                                     type="button"
                                     data-color-dot="true"
-                                    onClick={() => setOpenColorField('lbGradTop')}
+                                    onClick={(e) => openColorPicker('lbGradTop', e.currentTarget)}
                                     className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
                                     style={{ backgroundColor: formTheme.lbGradTop }}
                                     aria-label="Leaderboard gradient top"
@@ -1192,7 +1210,7 @@ export default function TablesAdminPage() {
                                   <button
                                     type="button"
                                     data-color-dot="true"
-                                    onClick={() => setOpenColorField('lbGradBottom')}
+                                    onClick={(e) => openColorPicker('lbGradBottom', e.currentTarget)}
                                     className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
                                     style={{ backgroundColor: formTheme.lbGradBottom }}
                                     aria-label="Leaderboard gradient bottom"
@@ -1206,7 +1224,7 @@ export default function TablesAdminPage() {
                                 <button
                                   type="button"
                                   data-color-dot="true"
-                                  onClick={() => setOpenColorField('heroTop')}
+                                  onClick={(e) => openColorPicker('heroTop', e.currentTarget)}
                                   className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
                                   style={{ backgroundColor: formTheme.heroTop }}
                                   aria-label="Hero section top"
@@ -1214,7 +1232,7 @@ export default function TablesAdminPage() {
                                 <button
                                   type="button"
                                   data-color-dot="true"
-                                  onClick={() => setOpenColorField('heroMiddle')}
+                                  onClick={(e) => openColorPicker('heroMiddle', e.currentTarget)}
                                   className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
                                   style={{ backgroundColor: formTheme.heroMiddle }}
                                   aria-label="Hero section middle"
@@ -1222,31 +1240,35 @@ export default function TablesAdminPage() {
                                 <button
                                   type="button"
                                   data-color-dot="true"
-                                  onClick={() => setOpenColorField('heroBottom')}
+                                  onClick={(e) => openColorPicker('heroBottom', e.currentTarget)}
                                   className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
                                   style={{ backgroundColor: formTheme.heroBottom }}
                                   aria-label="Hero section bottom"
                                 />
                               </div>
                             </div>
-                            {openColorField ? (
-                              <div
-                                ref={colorPickerRef}
-                                className="absolute left-1/2 top-full z-30 mt-2 w-44 -translate-x-1/2 rounded-xl border border-zinc-200 bg-white p-3 shadow-md"
-                              >
-                                <input
-                                  type="color"
-                                  value={formTheme[openColorField]}
-                                  onChange={(e) => setColorField(openColorField, e.target.value)}
-                                  className="h-24 w-full cursor-pointer rounded border-0"
-                                />
-                                <input
-                                  value={formTheme[openColorField]}
-                                  onChange={(e) => setColorField(openColorField, e.target.value)}
-                                  className="mt-2 w-full rounded border border-zinc-200 px-2 py-1.5 text-xs font-medium text-zinc-700"
-                                />
-                              </div>
-                            ) : null}
+                            {openColorField && colorPopoverPos && typeof window !== 'undefined'
+                              ? createPortal(
+                                  <div
+                                    ref={colorPickerRef}
+                                    className="fixed z-[80] w-44 -translate-x-1/2 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg"
+                                    style={{ left: colorPopoverPos.left, top: colorPopoverPos.top }}
+                                  >
+                                    <input
+                                      type="color"
+                                      value={formTheme[openColorField]}
+                                      onChange={(e) => setColorField(openColorField, e.target.value)}
+                                      className="h-24 w-full cursor-pointer rounded border-0"
+                                    />
+                                    <input
+                                      value={formTheme[openColorField]}
+                                      onChange={(e) => setColorField(openColorField, e.target.value)}
+                                      className="mt-2 w-full rounded border border-zinc-200 px-2 py-1.5 text-xs font-medium text-zinc-700"
+                                    />
+                                  </div>,
+                                  document.body
+                                )
+                              : null}
                           </div>
                         </div>
                       </div>
