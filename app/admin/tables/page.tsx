@@ -767,11 +767,11 @@ export default function TablesAdminPage() {
   }
 
   return (
-    <div className="admin-page-shell">
+    <div className="admin-page-shell flex min-h-[calc(100vh-18px)] flex-col">
       <p className="sr-only" aria-live="polite">
         {error ?? ''}
       </p>
-      <div className="admin-page-controls">
+      <div className="admin-page-controls flex flex-1 flex-col">
         <header className="flex items-end justify-between gap-3">
           <div>
             <h1 className="admin-page-title text-zinc-900">Tables</h1>
@@ -781,7 +781,7 @@ export default function TablesAdminPage() {
           </div>
         </header>
 
-        <section className="admin-gap-intro-first-section flex h-[calc(100vh-220px)] min-h-[420px] flex-col overflow-hidden rounded-t-2xl border-x border-t border-[#ebebeb] bg-white">
+        <section className="admin-gap-intro-first-section flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-2xl border-x border-t border-[#ebebeb] bg-white">
           <div className="z-20 flex flex-wrap items-center gap-2 border-b border-[#ebebeb] bg-white p-4 pb-3">
           <div className="relative w-full md:w-[360px]">
             <svg
@@ -808,9 +808,9 @@ export default function TablesAdminPage() {
             <button
               type="button"
               onClick={() => setTableView('cards')}
-              className={`inline-flex h-full items-center px-[12px] text-[14px] font-medium transition-all first:rounded-l-full last:rounded-r-full ${
+              className={`inline-flex h-full items-center rounded-full px-[12px] text-[14px] font-medium transition-colors duration-150 ${
                 tableView === 'cards'
-                  ? 'rounded-full bg-black text-white'
+                  ? 'bg-black text-white'
                   : 'text-[#4d4d4d] hover:text-[#171717]'
               }`}
             >
@@ -834,9 +834,9 @@ export default function TablesAdminPage() {
             <button
               type="button"
               onClick={() => setTableView('list')}
-              className={`inline-flex h-full items-center px-[12px] text-[14px] font-medium transition-all first:rounded-l-full last:rounded-r-full ${
+              className={`inline-flex h-full items-center rounded-full px-[12px] text-[14px] font-medium transition-colors duration-150 ${
                 tableView === 'list'
-                  ? 'rounded-full bg-black text-white'
+                  ? 'bg-black text-white'
                   : 'text-[#4d4d4d] hover:text-[#171717]'
               }`}
             >
@@ -866,9 +866,9 @@ export default function TablesAdminPage() {
                 key={value}
                 type="button"
                 onClick={() => setTableStatusFilter(value)}
-                className={`inline-flex h-full items-center px-[12px] text-[14px] font-medium transition-all first:rounded-l-full last:rounded-r-full ${
+                className={`inline-flex h-full items-center rounded-full px-[12px] text-[14px] font-medium transition-colors duration-150 ${
                   tableStatusFilter === value
-                    ? 'rounded-full bg-black text-white'
+                    ? 'bg-black text-white'
                     : 'text-[#4d4d4d] hover:text-[#171717]'
                 }`}
               >
