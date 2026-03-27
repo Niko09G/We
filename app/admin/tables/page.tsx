@@ -6,8 +6,6 @@ import {
   archiveTable,
   createTable,
   listTablesForAdmin,
-  permanentlyDeleteTable,
-  restoreTable,
   updateTable,
   type AdminTableRow,
 } from '@/lib/admin-tables'
@@ -22,7 +20,6 @@ import { removeTeamHeroImageByPublicUrl, uploadTeamHeroImage } from '@/lib/team-
 type EditorMode = 'create' | 'edit'
 type OverlayStep = 1 | 2 | 3
 type ThemeColorKey = 'heroTop' | 'heroMiddle' | 'heroBottom' | 'lbGradTop' | 'lbGradBottom' | 'primaryColor'
-type DeleteConfirmState = { id: string; name: string } | null
 
 const NAME_SUGGESTION_CHIPS = ['Power Rangers', 'Turtle Table', 'VIP Legends', 'Chaos Crew'] as const
 
@@ -364,7 +361,6 @@ export default function TablesAdminPage() {
   const [tableSearch, setTableSearch] = useState('')
   const [tableStatusFilter, setTableStatusFilter] = useState<'all' | 'active' | 'inactive' | 'archived'>('all')
   const [tableView, setTableView] = useState<'cards' | 'list'>('cards')
-  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null)
   const [colorPopoverPos, setColorPopoverPos] = useState<{ left: number; top: number } | null>(null)
   const [pickerHsv, setPickerHsv] = useState<{ h: number; s: number; v: number }>({ h: 260, s: 0.74, v: 0.98 })
   const [pickerHex, setPickerHex] = useState('#6d28ff')
@@ -759,29 +755,6 @@ export default function TablesAdminPage() {
     }
   }
 
-  async function onRestore(id: string) {
-    setError(null)
-    try {
-      await restoreTable(id)
-      await load()
-      showToast('Table restored.', 'success')
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Restore failed.', 'error')
-    }
-  }
-
-  async function onDeleteForever(id: string) {
-    setError(null)
-    try {
-      await permanentlyDeleteTable(id)
-      setRows((prev) => prev.filter((row) => row.id !== id))
-      showToast('Table permanently deleted.', 'success')
-      await load()
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Delete failed.', 'error')
-    }
-  }
-
   return (
     <div className="admin-page-shell">
       <p className="sr-only" aria-live="polite">
@@ -912,95 +885,84 @@ export default function TablesAdminPage() {
             )}
           </div>
           ) : tableView === 'list' ? (
-          <div className="overflow-hidden rounded-[6px] border border-[#ebebeb] bg-[#f2f2f2]">
-            <div className="grid h-[45px] grid-cols-[minmax(260px,1.25fr)_minmax(120px,0.8fr)_110px_220px] items-center gap-3 border-b border-[#ebebeb] px-4 text-sm font-medium text-[#4d4d4d]">
-              <span>Table</span>
-              <span>Status</span>
-              <span>Seats</span>
-              <span className="text-right">Actions</span>
+          <div className="rounded-[6px] border border-[#ebebeb] bg-[#f2f2f2] p-2">
+            <div className="grid grid-cols-12 gap-x-2 px-3 pb-1.5 text-[14px] font-medium text-zinc-600">
+              <div className="col-span-5">Table</div>
+              <div className="col-span-2">Status</div>
+              <div className="col-span-2">Seats</div>
+              <div className="col-span-3 text-right">Actions</div>
             </div>
             {visibleRows.length === 0 ? (
-              <div className="px-4 py-6 text-sm text-zinc-500">No tables match your filters.</div>
+              <div className="rounded-lg bg-white px-4 py-6 text-[14px] text-zinc-500">
+                No tables match your filters.
+              </div>
             ) : (
-              visibleRows.map((row) => {
-                const resolved = teamPageAdminFormDefaults(row.page_config, {
-                  tableColor: row.color,
-                  tableName: row.name,
-                })
-                const avatarUrl = resolved.avatarImageUrl.trim()
-                const statusLabel = row.is_archived ? 'Archived' : row.is_active ? 'Active' : 'Inactive'
-                return (
-                  <div
-                    key={row.id}
-                    className={`grid h-[64px] grid-cols-[minmax(260px,1.25fr)_minmax(120px,0.8fr)_110px_220px] items-center gap-3 border-b border-[#ebebeb] px-4 last:border-b-0 ${
-                      row.is_archived ? 'bg-zinc-50/80 text-zinc-600' : 'bg-white'
-                    }`}
-                  >
-                    <div className="inline-flex items-center gap-3">
-                      <span className="h-8 w-8 overflow-hidden rounded-full border border-zinc-200">
-                        {avatarUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <span
-                            className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-white"
-                            style={{ backgroundColor: avatarFallbackColor(row.name) }}
-                          >
-                            {initialsFromName(row.name)}
-                          </span>
-                        )}
-                      </span>
-                      <span className={`text-sm font-medium ${row.is_archived ? 'text-zinc-700' : 'text-zinc-900'}`}>
-                        {row.name}
-                      </span>
-                    </div>
-                    <div>
-                      <span
-                        className={`inline-flex w-auto rounded-full px-2 py-0.5 text-xs font-medium ${
-                          row.is_archived
-                            ? 'bg-zinc-200 text-zinc-700'
-                            : row.is_active
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-zinc-100 text-zinc-600'
-                        }`}
-                      >
-                        {statusLabel}
-                      </span>
-                    </div>
-                    <span className="text-sm text-zinc-700">
-                      {row.occupied_count}/{row.capacity}
-                    </span>
-                    <div className="text-right">
-                      {row.is_archived ? (
-                        <div className="inline-flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void onRestore(row.id)}
-                            className="h-9 rounded-full border border-[#ebebeb] bg-white px-3 text-[14px] font-medium text-[#171717] transition-colors hover:bg-zinc-50"
-                          >
-                            Restore
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteConfirm({ id: row.id, name: row.name })}
-                            className="h-9 rounded-full border border-rose-200 bg-rose-50 px-3 text-[14px] font-medium text-rose-700 transition-colors hover:bg-rose-100"
-                          >
-                            Delete forever
-                          </button>
-                        </div>
-                      ) : (
+              <div className="space-y-1">
+                {visibleRows.map((row, index) => {
+                  const resolved = teamPageAdminFormDefaults(row.page_config, {
+                    tableColor: row.color,
+                    tableName: row.name,
+                  })
+                  const avatarUrl = resolved.avatarImageUrl.trim()
+                  const statusLabel = row.is_archived ? 'Archived' : row.is_active ? 'Active' : 'Inactive'
+                  const rowBgClass =
+                    index % 2 === 0
+                      ? 'bg-[#fdfdfd] hover:bg-[#fafafa]'
+                      : 'bg-[#1f1f1f08] hover:bg-[#ededed]'
+                  return (
+                    <div
+                      key={row.id}
+                      className={`grid min-h-[64px] grid-cols-12 items-center gap-x-2 rounded-lg px-3 py-2.5 transition-colors ${
+                        row.is_archived ? `${rowBgClass} opacity-80` : rowBgClass
+                      }`}
+                    >
+                      <div className="col-span-5 inline-flex items-center gap-3">
+                        <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-zinc-200 bg-zinc-100">
+                          {avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+                          ) : (
+                            <span
+                              className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-white"
+                              style={{ backgroundColor: avatarFallbackColor(row.name) }}
+                            >
+                              {initialsFromName(row.name)}
+                            </span>
+                          )}
+                        </span>
+                        <span className={`text-[14px] font-medium ${row.is_archived ? 'text-zinc-700' : 'text-zinc-900'}`}>
+                          {row.name}
+                        </span>
+                      </div>
+                      <div className="col-span-2">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-[14px] font-medium ${
+                            row.is_archived
+                              ? 'bg-zinc-200 text-zinc-700'
+                              : row.is_active
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : 'bg-zinc-100 text-zinc-600'
+                          }`}
+                        >
+                          {statusLabel}
+                        </span>
+                      </div>
+                      <div className="col-span-2 text-[14px] font-medium text-zinc-700 tabular-nums">
+                        {row.occupied_count}/{row.capacity}
+                      </div>
+                      <div className="col-span-3 text-right">
                         <button
                           type="button"
                           onClick={(e) => openEditEditor(row, e.currentTarget)}
-                          className="h-9 rounded-full border border-[#ebebeb] bg-white px-3 text-[14px] font-medium text-[#171717] transition-colors hover:bg-zinc-50"
+                          className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-[14px] font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
                         >
                           Open
                         </button>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                )
-              })
+                  )
+                })}
+              </div>
             )}
           </div>
           ) : (
@@ -1122,43 +1084,6 @@ export default function TablesAdminPage() {
           )}
         </section>
       </div>
-
-      {deleteConfirm ? (
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"
-          onMouseDown={(e) => {
-            if (e.target !== e.currentTarget) return
-            setDeleteConfirm(null)
-          }}
-        >
-          <div className="w-full max-w-md rounded-2xl border border-[#ebebeb] bg-white p-5 shadow-[0_20px_40px_rgba(23,23,23,0.16)]">
-            <h3 className="text-lg font-semibold text-[#171717]">Delete archived table?</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              This permanently deletes <span className="font-medium text-[#171717]">{deleteConfirm.name}</span>.
-              This action cannot be undone.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setDeleteConfirm(null)}
-                className="h-10 rounded-full border border-[#ebebeb] bg-white px-[14px] text-[14px] font-medium text-[#171717]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void onDeleteForever(deleteConfirm.id)
-                  setDeleteConfirm(null)
-                }}
-                className="h-10 rounded-full border border-rose-200 bg-rose-50 px-[14px] text-[14px] font-semibold text-rose-700"
-              >
-                Delete forever
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {editorOpen || editorClosing ? (
         <div
