@@ -101,6 +101,9 @@ const THEME_PRESETS: ThemePreset[] = [
 const GRADIENT_CTA =
   'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white border-transparent'
 
+const FOOTER_BTN_SECONDARY =
+  'rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50'
+
 function initialsFromName(name: string): string {
   const t = name.trim()
   if (!t) return 'T'
@@ -129,13 +132,29 @@ function PreviewPhone({ form, name }: { form: TeamPageAdminFormValues; name: str
       <div className="h-full overflow-y-auto">
         <div className="p-0 text-white" style={{ background: heroBg }}>
           <div className="px-3 pb-3 pt-3">
-            <div className="mx-auto mb-2 flex h-20 w-[82%] items-center justify-center rounded-md bg-white/12">
+            <div className="relative mx-auto mb-2 flex h-[5.25rem] w-[82%] items-center justify-center overflow-hidden rounded-lg ring-1 ring-white/25">
+              {!form.heroImageUrl.trim() ? (
+                <div
+                  className="absolute inset-0 opacity-[0.55]"
+                  style={{
+                    background: `linear-gradient(135deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.06) 45%, rgba(0,0,0,0.12) 100%)`,
+                  }}
+                />
+              ) : null}
+              {!form.heroImageUrl.trim() ? (
+                <div
+                  className="absolute inset-0 opacity-[0.35]"
+                  style={{
+                    backgroundImage: `repeating-linear-gradient(-18deg, rgba(255,255,255,0.07) 0 2px, transparent 2px 5px)`,
+                  }}
+                />
+              ) : null}
               {form.heroImageUrl.trim() ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={form.heroImageUrl.trim()}
                   alt=""
-                  className="max-h-20 w-full object-contain"
+                  className="relative z-[1] max-h-[5.25rem] w-full object-contain"
                 />
               ) : null}
             </div>
@@ -232,6 +251,8 @@ export default function TablesAdminPage() {
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [heroUploading, setHeroUploading] = useState(false)
   const [openColorField, setOpenColorField] = useState<ThemeColorKey | null>(null)
+  const [publishOpen, setPublishOpen] = useState(false)
+  const [finalizePriming, setFinalizePriming] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement | null>(null)
   const heroInputRef = useRef<HTMLInputElement | null>(null)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
@@ -240,6 +261,8 @@ export default function TablesAdminPage() {
 
   const closeOverlay = useCallback(() => {
     if (!editorOpen || editorClosing) return
+    setPublishOpen(false)
+    setFinalizePriming(false)
     setEditorClosing(true)
     if (overlayCloseTimerRef.current !== null) {
       window.clearTimeout(overlayCloseTimerRef.current)
@@ -264,15 +287,18 @@ export default function TablesAdminPage() {
   useEffect(() => {
     if (!editorOpen) return
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        closeOverlay()
+      if (e.key !== 'Escape') return
+      if (publishOpen) {
+        setPublishOpen(false)
+        return
       }
+      closeOverlay()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [editorOpen, closeOverlay])
+  }, [editorOpen, closeOverlay, publishOpen])
 
   useEffect(() => {
     return () => {
@@ -385,6 +411,16 @@ export default function TablesAdminPage() {
     setOverlayStep(2)
   }, [formName])
 
+  const openPublishFlow = useCallback(() => {
+    setFinalizePriming(true)
+    window.setTimeout(() => {
+      setPublishOpen(true)
+      setFinalizePriming(false)
+    }, 180)
+  }, [])
+
+  const closePublish = useCallback(() => setPublishOpen(false), [])
+
   async function uploadAvatar(file: File) {
     if (!isAcceptedImageFile(file)) {
       setError('Use JPG, PNG, or WEBP.')
@@ -465,6 +501,7 @@ export default function TablesAdminPage() {
         await load()
         setSuccessToast('Table updated.')
       }
+      setPublishOpen(false)
       setEditorOpen(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed.')
@@ -669,17 +706,21 @@ export default function TablesAdminPage() {
       {editorOpen || editorClosing ? (
         <div
           className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-200 ease-out ${
-            editorClosing ? 'bg-zinc-900/0 opacity-0' : 'bg-zinc-900/30 opacity-100'
+            editorClosing ? 'bg-zinc-900/0 opacity-0' : publishOpen ? 'bg-zinc-900/45 opacity-100' : 'bg-zinc-900/30 opacity-100'
           }`}
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) closeOverlay()
+            if (e.target !== e.currentTarget) return
+            if (publishOpen) closePublish()
+            else closeOverlay()
           }}
         >
           <div
-            className={`flex h-[88vh] w-full max-w-[1080px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm transition-all duration-200 ease-out ${
+            className={`relative z-10 flex h-[88vh] w-full max-w-[1080px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm transition-all duration-200 ease-out ${
               editorClosing
                 ? 'opacity-0 scale-[0.98] translate-y-2'
-                : 'opacity-100 scale-100 translate-y-0'
+                : finalizePriming || publishOpen
+                  ? 'scale-[0.985] opacity-[0.93]'
+                  : 'translate-y-0 scale-100 opacity-100'
             }`}
           >
             <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3">
@@ -689,18 +730,13 @@ export default function TablesAdminPage() {
                 </h3>
                 <div className="mt-1 inline-flex items-center gap-1.5">
                   <span
-                    className={`h-1.5 w-7 rounded-full transition-colors duration-200 ${
+                    className={`h-1.5 w-8 rounded-full transition-colors duration-200 ${
                       overlayStep === 1 ? 'bg-zinc-900' : 'bg-zinc-200'
                     }`}
                   />
                   <span
-                    className={`h-1.5 w-7 rounded-full transition-colors duration-200 ${
-                      overlayStep === 2 ? 'bg-zinc-900' : 'bg-zinc-200'
-                    }`}
-                  />
-                  <span
-                    className={`h-1.5 w-7 rounded-full transition-colors duration-200 ${
-                      overlayStep === 3 ? 'bg-zinc-900' : 'bg-zinc-200'
+                    className={`h-1.5 w-8 rounded-full transition-colors duration-200 ${
+                      overlayStep >= 2 ? 'bg-zinc-900' : 'bg-zinc-200'
                     }`}
                   />
                 </div>
@@ -779,7 +815,7 @@ export default function TablesAdminPage() {
                         <button
                           type="button"
                           onClick={advanceFromStep1}
-                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black text-white transition-transform hover:scale-[1.03] active:scale-[0.98]"
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black text-white shadow-sm transition-all hover:scale-[1.04] hover:shadow-md active:scale-[0.96]"
                           aria-label="Continue"
                         >
                           <svg
@@ -806,7 +842,7 @@ export default function TablesAdminPage() {
                             setFormName(chip)
                             setError(null)
                           }}
-                          className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
+                          className="rounded-full border border-zinc-200/90 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm transition-all hover:border-zinc-300 hover:bg-zinc-50 hover:shadow"
                         >
                           {chip}
                         </button>
