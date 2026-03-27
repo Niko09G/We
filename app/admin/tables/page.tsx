@@ -1253,7 +1253,7 @@ export default function TablesAdminPage() {
                     </div>
 
                     <div className="flex w-full shrink-0 justify-center overflow-hidden px-2 pt-8">
-                      <div className="relative w-full max-w-[340px] overflow-visible rounded-[28px] border border-zinc-200/90">
+                      <div className="relative w-full max-w-[340px] overflow-visible rounded-[28px]">
                         <div className="relative overflow-visible pt-1">
                           <div className="origin-top scale-[1.06] transition-transform duration-200 ease-out">
                             <PreviewPhone form={formTheme} name={formName || 'New table'} />
