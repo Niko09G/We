@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   adminValidationTypeLabel,
@@ -32,6 +32,14 @@ type MissionForm = {
   submission_hint: string
   is_active: boolean
 }
+
+const MISSION_NAME_SUGGESTION_CHIPS = [
+  'Send a photo greeting',
+  'Find the hidden presents',
+  'Submit your best idea',
+  'Record a cheers video',
+  'Share your funniest memory',
+]
 
 function emptyForm(): MissionForm {
   return {
@@ -86,8 +94,10 @@ export default function MissionsLibraryPage() {
   const [editorMode, setEditorMode] = useState<'create' | 'edit'>('create')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [step, setStep] = useState<MissionStep>(1)
+  const [step1Hint, setStep1Hint] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<MissionForm>(emptyForm)
+  const missionTitleInputRef = useRef<HTMLInputElement | null>(null)
 
   const showToast = useCallback((message: string, kind: 'success' | 'error') => {
     setToast({ kind, message })
@@ -124,6 +134,12 @@ export default function MissionsLibraryPage() {
     void refresh()
   }, [refresh])
 
+  useEffect(() => {
+    if (!editorOpen || step !== 1) return
+    const t = window.setTimeout(() => missionTitleInputRef.current?.focus(), 30)
+    return () => window.clearTimeout(t)
+  }, [editorOpen, step])
+
   const statusCounts = useMemo(() => {
     const active = missions.filter((m) => m.is_active).length
     const inactive = missions.filter((m) => !m.is_active).length
@@ -157,6 +173,7 @@ export default function MissionsLibraryPage() {
     setEditorMode('create')
     setEditingId(null)
     setStep(1)
+    setStep1Hint(null)
     setForm(emptyForm())
     setEditorOpen(true)
   }
@@ -165,8 +182,18 @@ export default function MissionsLibraryPage() {
     setEditorMode('edit')
     setEditingId(mission.id)
     setStep(1)
+    setStep1Hint(null)
     setForm(formFromMission(mission))
     setEditorOpen(true)
+  }
+
+  function advanceFromStep1() {
+    if (!form.title.trim()) {
+      setStep1Hint("Let's choose a title first")
+      return
+    }
+    setStep1Hint(null)
+    setStep(2)
   }
 
   async function onSaveMission() {
@@ -552,7 +579,7 @@ export default function MissionsLibraryPage() {
               }}
             >
               <div
-                className="relative z-10 flex h-[88vh] max-h-[860px] min-h-0 w-full max-w-[1060px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm"
+                        className="relative z-10 flex h-[90vh] max-h-[900px] min-h-0 w-full max-w-[1080px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm"
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3">
@@ -595,39 +622,106 @@ export default function MissionsLibraryPage() {
                   </button>
                 </div>
 
-                <div className="flex h-full min-h-0 flex-1 overflow-hidden px-5 py-4 pb-24">
-                  <div className="mx-auto h-full w-full max-w-[760px] overflow-y-auto">
+                        <div className="relative flex h-full min-h-0 flex-1 flex-col items-center justify-start overflow-hidden [&_button]:cursor-pointer">
+                          <div className="flex h-full min-h-0 w-full max-w-full flex-1 flex-col items-center justify-start overflow-hidden px-5 py-4 pb-28 [&_input]:!text-[14px] [&_textarea]:!text-[14px] [&_select]:!text-[14px]">
+                            <div className="relative min-h-full w-full overflow-x-visible">
+                              <div
+                                className={`absolute inset-0 transition-all duration-200 ease-out ${
+                                  step === 1 ? 'translate-x-0 opacity-100' : '-translate-x-3 pointer-events-none opacity-0'
+                                }`}
+                              >
+                                <div className="flex min-h-full items-center justify-center py-2">
+                                  <div className="w-full max-w-[760px] space-y-5 overflow-visible px-1.5">
+                                    <h4 className="text-center text-3xl font-semibold tracking-tight text-zinc-900">
+                                      What mission are we building?
+                                    </h4>
+                                    <div className="rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
+                                      <div
+                                        className={`flex h-14 items-center gap-2 rounded-2xl bg-white pl-4 pr-2 transition-[box-shadow] duration-200 ease-out ${
+                                          step1Hint ? 'shadow-[inset_0_0_0_1px_rgba(248,113,113,0.55)]' : ''
+                                        }`}
+                                      >
+                                        <input
+                                          ref={missionTitleInputRef}
+                                          value={form.title}
+                                          onChange={(e) => {
+                                            setForm((s) => ({ ...s, title: e.target.value }))
+                                            setStep1Hint(null)
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              e.preventDefault()
+                                              advanceFromStep1()
+                                            }
+                                          }}
+                                          className="min-w-0 flex-1 bg-transparent !text-[16px] outline-none"
+                                          placeholder="What's your mission called?"
+                                        />
+                                        <div className="relative shrink-0">
+                                          <select
+                                            value={form.validation_type}
+                                            onChange={(e) =>
+                                              setForm((s) => ({
+                                                ...s,
+                                                validation_type: e.target.value as ValidationType,
+                                              }))
+                                            }
+                                            className="h-9 min-w-[126px] appearance-none rounded-full border border-zinc-200 bg-white px-3 pr-8 text-[13px] font-medium text-zinc-800 outline-none transition-colors duration-150 ease-out hover:border-zinc-300 focus:border-zinc-400"
+                                            aria-label="Mission category"
+                                          >
+                                            {VALIDATION_TYPES.map((v) => (
+                                              <option key={v} value={v}>
+                                                {adminValidationTypeLabel(v)}
+                                              </option>
+                                            ))}
+                                          </select>
+                                          <svg
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth={2}
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500"
+                                            aria-hidden
+                                          >
+                                            <path d="m6 9 6 6 6-6" />
+                                          </svg>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    {step1Hint ? (
+                                      <p className="px-1 text-center text-sm font-medium leading-snug text-zinc-600">
+                                        {step1Hint}
+                                      </p>
+                                    ) : null}
+                                    <div className="flex flex-wrap justify-center gap-2">
+                                      {MISSION_NAME_SUGGESTION_CHIPS.map((chip) => (
+                                        <button
+                                          key={chip}
+                                          type="button"
+                                          onClick={() => {
+                                            setForm((s) => ({ ...s, title: chip }))
+                                            setStep1Hint(null)
+                                          }}
+                                          className="rounded-full border border-zinc-200/90 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-all duration-200 ease-out hover:border-zinc-300 hover:bg-zinc-50 hover:shadow"
+                                        >
+                                          {chip}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div
+                                className={`absolute inset-0 transition-all duration-200 ease-out ${
+                                  step >= 2 ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-3 opacity-0'
+                                }`}
+                              >
+                                <div className="mx-auto h-full w-full max-w-[760px] overflow-y-auto">
                     {step === 1 ? (
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-semibold text-zinc-900">Step 1 · Identity</h4>
-                        <label className="block text-xs">
-                          <span className="font-medium text-zinc-600">Mission title</span>
-                          <input
-                            value={form.title}
-                            onChange={(e) => setForm((s) => ({ ...s, title: e.target.value }))}
-                            placeholder="e.g. Best group pose"
-                            className="mt-1 h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-[14px]"
-                          />
-                        </label>
-                        <label className="block text-xs">
-                          <span className="font-medium text-zinc-600">Subtitle / description</span>
-                          <textarea
-                            value={form.description}
-                            onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
-                            rows={3}
-                            className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[14px]"
-                          />
-                        </label>
-                        <label className="block text-xs">
-                          <span className="font-medium text-zinc-600">Mission artwork URL</span>
-                          <input
-                            value={form.header_image_url}
-                            onChange={(e) => setForm((s) => ({ ...s, header_image_url: e.target.value }))}
-                            placeholder="https://..."
-                            className="mt-1 h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-[14px]"
-                          />
-                        </label>
-                      </div>
+                              <div />
                     ) : null}
 
                     {step === 2 ? (
@@ -737,28 +831,39 @@ export default function MissionsLibraryPage() {
                         </div>
                       </div>
                     ) : null}
-                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                 </div>
 
-                <div className="absolute inset-x-0 bottom-0 flex items-center justify-between border-t border-zinc-200 bg-white px-5 py-3">
+                        <div className="absolute bottom-6 right-6 z-20 flex flex-row gap-3">
                   <button
                     type="button"
                     onClick={() => {
-                      if (step === 1) setEditorOpen(false)
+                              if (step === 1) setEditorOpen(false)
                       else setStep((s) => Math.max(1, s - 1) as MissionStep)
                     }}
-                    className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700"
+                            className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
                   >
-                    {step === 1 ? 'Cancel' : 'Back'}
+                            Back
                   </button>
-                  {step < 4 ? (
+                          {step === 1 ? (
                     <button
                       type="button"
-                      onClick={() => setStep((s) => Math.min(4, s + 1) as MissionStep)}
-                      className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white"
+                              onClick={advanceFromStep1}
+                              className="rounded-full bg-black px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
                     >
                       Next
                     </button>
+                          ) : step < 4 ? (
+                            <button
+                              type="button"
+                              onClick={() => setStep((s) => Math.min(4, s + 1) as MissionStep)}
+                              className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
+                            >
+                              Next
+                            </button>
                   ) : (
                     <button
                       type="button"
