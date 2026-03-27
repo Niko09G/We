@@ -485,6 +485,17 @@ export default function TablesAdminPage() {
     )
     return sorted
   }, [rows, tableSearch, tableStatusFilter])
+  const tableStatusCounts = useMemo(() => {
+    const archived = rows.filter((row) => row.is_archived).length
+    const active = rows.filter((row) => !row.is_archived && row.is_active).length
+    const inactive = rows.filter((row) => !row.is_archived && !row.is_active).length
+    return {
+      all: rows.length,
+      active,
+      inactive,
+      archived,
+    }
+  }, [rows])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -798,7 +809,7 @@ export default function TablesAdminPage() {
               type="button"
               onClick={() => setTableView('cards')}
               className={`inline-flex h-8 items-center rounded-full px-[12px] text-[14px] font-medium transition-all ${
-                tableView === 'cards' ? 'bg-[#f2f2f2] text-[#171717]' : 'text-[#4d4d4d] hover:text-[#171717]'
+                tableView === 'cards' ? 'bg-black text-white' : 'text-[#4d4d4d] hover:text-[#171717]'
               }`}
             >
               <svg
@@ -822,7 +833,7 @@ export default function TablesAdminPage() {
               type="button"
               onClick={() => setTableView('list')}
               className={`inline-flex h-8 items-center rounded-full px-[12px] text-[14px] font-medium transition-all ${
-                tableView === 'list' ? 'bg-[#f2f2f2] text-[#171717]' : 'text-[#4d4d4d] hover:text-[#171717]'
+                tableView === 'list' ? 'bg-black text-white' : 'text-[#4d4d4d] hover:text-[#171717]'
               }`}
             >
               <svg
@@ -857,7 +868,7 @@ export default function TablesAdminPage() {
                     : 'text-[#4d4d4d] hover:text-[#171717]'
                 }`}
               >
-                {label}
+                {label} ({tableStatusCounts[value]})
               </button>
             ))}
           </div>
@@ -886,11 +897,10 @@ export default function TablesAdminPage() {
           </div>
           ) : tableView === 'list' ? (
           <div className="px-4 pb-4">
-            <div className="grid grid-cols-12 gap-x-2 px-3 pb-1.5 text-[14px] font-medium text-zinc-600">
+            <div className="grid grid-cols-12 gap-x-2 border-b border-[#ebebeb] px-3 pb-2 pt-[10px] text-[14px] font-medium text-[#18181b]">
               <div className="col-span-5">Table</div>
               <div className="col-span-2">Status</div>
-              <div className="col-span-2">Seats</div>
-              <div className="col-span-3 text-right">Actions</div>
+              <div className="col-span-5">Seats</div>
             </div>
             {visibleRows.length === 0 ? (
               <div className="rounded-lg bg-white px-4 py-6 text-[14px] text-zinc-500">
@@ -910,9 +920,11 @@ export default function TablesAdminPage() {
                       ? 'bg-[#fdfdfd] hover:bg-[#fafafa]'
                       : 'bg-[#1f1f1f08] hover:bg-[#ededed]'
                   return (
-                    <div
+                    <button
                       key={row.id}
-                      className={`grid min-h-[64px] grid-cols-12 items-center gap-x-2 rounded-lg px-3 py-2.5 transition-colors ${
+                      type="button"
+                      onClick={(e) => openEditEditor(row, e.currentTarget)}
+                      className={`grid h-[50px] cursor-pointer grid-cols-12 items-center gap-x-2 rounded-lg px-3 transition-colors ${
                         row.is_archived ? `${rowBgClass} opacity-80` : rowBgClass
                       }`}
                     >
@@ -947,19 +959,10 @@ export default function TablesAdminPage() {
                           {statusLabel}
                         </span>
                       </div>
-                      <div className="col-span-2 text-[14px] font-medium text-zinc-700 tabular-nums">
+                      <div className="col-span-5 text-[14px] font-medium text-zinc-700 tabular-nums">
                         {row.occupied_count}/{row.capacity}
                       </div>
-                      <div className="col-span-3 text-right">
-                        <button
-                          type="button"
-                          onClick={(e) => openEditEditor(row, e.currentTarget)}
-                          className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-[14px] font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
-                        >
-                          Open
-                        </button>
-                      </div>
-                    </div>
+                    </button>
                   )
                 })}
               </div>
