@@ -340,7 +340,7 @@ export default function TablesAdminPage() {
   const [rows, setRows] = useState<AdminTableRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [successToast, setSuccessToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorClosing, setEditorClosing] = useState(false)
   const [mode, setMode] = useState<EditorMode>('create')
@@ -377,6 +377,10 @@ export default function TablesAdminPage() {
   const overlayCloseTimerRef = useRef<number | null>(null)
   const overlayTriggerRef = useRef<HTMLButtonElement | null>(null)
 
+  const showToast = useCallback((message: string, kind: 'success' | 'error') => {
+    setToast({ kind, message })
+  }, [])
+
   const closeOverlay = useCallback(() => {
     if (!editorOpen || editorClosing) return
     setPublishOpen(false)
@@ -398,10 +402,10 @@ export default function TablesAdminPage() {
   }, [editorOpen, editorClosing])
 
   useEffect(() => {
-    if (!successToast) return
-    const t = window.setTimeout(() => setSuccessToast(null), 2200)
+    if (!toast) return
+    const t = window.setTimeout(() => setToast(null), 2400)
     return () => window.clearTimeout(t)
-  }, [successToast])
+  }, [toast])
 
   useEffect(() => {
     if (!editorOpen) return
@@ -503,11 +507,13 @@ export default function TablesAdminPage() {
       const list = await listTablesForAdmin()
       setRows(list)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load tables.')
+      const msg = e instanceof Error ? e.message : 'Failed to load tables.'
+      setError(msg)
+      showToast(msg, 'error')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [showToast])
 
   useEffect(() => {
     void load()
@@ -711,7 +717,7 @@ export default function TablesAdminPage() {
     }
     setSaving(true)
     setOverlayError(null)
-    setSuccessToast(null)
+    setToast(null)
     try {
       const pageConfig = pageConfigJsonFromAdminForm({
         ...formTheme,
@@ -730,7 +736,7 @@ export default function TablesAdminPage() {
           await updateTable(created.id, { page_config: pageConfig })
         }
         setRows(await listTablesForAdmin())
-        setSuccessToast('Table created.')
+        showToast('Table created.', 'success')
       } else if (editingId) {
         await updateTable(editingId, {
           name,
@@ -740,12 +746,12 @@ export default function TablesAdminPage() {
           page_config: pageConfig,
         })
         await load()
-        setSuccessToast('Table updated.')
+        showToast('Table updated.', 'success')
       }
       setPublishOpen(false)
       setEditorOpen(false)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed.')
+      showToast(e instanceof Error ? e.message : 'Save failed.', 'error')
     } finally {
       setSaving(false)
     }
@@ -757,8 +763,9 @@ export default function TablesAdminPage() {
     try {
       await archiveTable(id)
       await load()
+      showToast('Table archived.', 'success')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Archive failed.')
+      showToast(e instanceof Error ? e.message : 'Archive failed.', 'error')
     }
   }
 
@@ -767,8 +774,9 @@ export default function TablesAdminPage() {
     try {
       await restoreTable(id)
       await load()
+      showToast('Table restored.', 'success')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Restore failed.')
+      showToast(e instanceof Error ? e.message : 'Restore failed.', 'error')
     }
   }
 
@@ -778,14 +786,19 @@ export default function TablesAdminPage() {
     setError(null)
     try {
       await permanentlyDeleteTable(id)
+      setRows((prev) => prev.filter((row) => row.id !== id))
+      showToast('Table permanently deleted.', 'success')
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Delete failed.')
+      showToast(e instanceof Error ? e.message : 'Delete failed.', 'error')
     }
   }
 
   return (
     <div className="admin-page-shell">
+      <p className="sr-only" aria-live="polite">
+        {error ?? ''}
+      </p>
       <header className="flex items-end justify-between gap-3">
         <div>
           <h1 className="admin-page-title text-zinc-900">Tables</h1>
@@ -805,11 +818,6 @@ export default function TablesAdminPage() {
         </button>
       </header>
 
-      {error && !editorOpen && !editorClosing ? (
-        <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-          {error}
-        </p>
-      ) : null}
       <section className="admin-gap-intro-first-section">
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200/90 bg-white px-3 py-2">
           <div className="relative min-w-[210px] flex-1">
@@ -1778,9 +1786,15 @@ export default function TablesAdminPage() {
         </div>
       ) : null}
 
-      {successToast ? (
+      {toast ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[70] flex justify-center">
-          <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-700 shadow-sm animate-[fadeIn_180ms_ease-out]">
+          <div
+            className={`inline-flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm font-medium shadow-sm animate-[fadeIn_180ms_ease-out] ${
+              toast.kind === 'success'
+                ? 'border-emerald-200 text-emerald-700'
+                : 'border-rose-200 text-rose-700'
+            }`}
+          >
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -1791,9 +1805,9 @@ export default function TablesAdminPage() {
               className="h-4 w-4"
               aria-hidden
             >
-              <path d="m5 12 5 5L20 7" />
+              {toast.kind === 'success' ? <path d="m5 12 5 5L20 7" /> : <path d="M12 8v5m0 3h.01" />}
             </svg>
-            <span>{successToast}</span>
+            <span>{toast.message}</span>
           </div>
         </div>
       ) : null}
