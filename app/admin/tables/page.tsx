@@ -257,12 +257,17 @@ export default function TablesAdminPage() {
   const heroInputRef = useRef<HTMLInputElement | null>(null)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
   const overlayCloseTimerRef = useRef<number | null>(null)
+  const finalizeTimerRef = useRef<number | null>(null)
   const overlayTriggerRef = useRef<HTMLButtonElement | null>(null)
 
   const closeOverlay = useCallback(() => {
     if (!editorOpen || editorClosing) return
     setPublishOpen(false)
     setFinalizePriming(false)
+    if (finalizeTimerRef.current !== null) {
+      window.clearTimeout(finalizeTimerRef.current)
+      finalizeTimerRef.current = null
+    }
     setEditorClosing(true)
     if (overlayCloseTimerRef.current !== null) {
       window.clearTimeout(overlayCloseTimerRef.current)
@@ -860,8 +865,8 @@ export default function TablesAdminPage() {
                 }`}
               >
                 <div className="flex min-h-0 flex-1 flex-col px-5 py-3">
-                  <div className="mx-auto flex h-full min-h-0 w-full max-w-[700px] flex-col">
-                    <div className="relative h-[min(280px,32vh)] min-h-[248px] w-full shrink-0 sm:h-[min(300px,34vh)] sm:min-h-[260px]">
+                  <div className="mx-auto flex h-full min-h-0 w-full max-w-[700px] flex-1 flex-col">
+                    <div className="relative h-[min(260px,30vh)] min-h-[220px] w-full shrink-0 sm:h-[min(280px,32vh)] sm:min-h-[240px]">
                       <div
                         className={`absolute inset-0 overflow-y-auto overflow-x-hidden transition-all duration-200 ease-out ${
                           overlayStep === 2
@@ -883,98 +888,95 @@ export default function TablesAdminPage() {
                               />
                             </label>
                           </div>
-                          <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-3">
+                          <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-2.5">
                             <button
                               type="button"
                               onClick={() => avatarInputRef.current?.click()}
                               disabled={avatarUploading}
-                              className="group relative flex h-14 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-800 transition-all hover:border-transparent disabled:opacity-60"
+                              className="group relative flex h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50/90 text-sm font-medium text-zinc-800 transition-all hover:border-zinc-300/80 hover:shadow-sm disabled:opacity-60"
                             >
-                              <span className="absolute inset-0 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-                              <span className="relative z-10 group-hover:text-white">Add Avatar</span>
+                              <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,_#1ca0d822,_#5b38f222)] opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                              <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={1.7}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="relative z-10 h-4 w-4 text-zinc-500"
+                                aria-hidden
+                              >
+                                <circle cx="12" cy="8" r="3.5" />
+                                <path d="M5 20a7 7 0 0 1 14 0" />
+                              </svg>
+                              <span className="relative z-10">Avatar</span>
                             </button>
                             <button
                               type="button"
                               onClick={() => heroInputRef.current?.click()}
                               disabled={heroUploading}
-                              className="group relative flex h-14 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-800 transition-all hover:border-transparent disabled:opacity-60"
+                              className="group relative flex h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50/90 text-sm font-medium text-zinc-800 transition-all hover:border-zinc-300/80 hover:shadow-sm disabled:opacity-60"
                             >
-                              <span className="absolute inset-0 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-                              <span className="relative z-10 group-hover:text-white">Add Hero Image</span>
+                              <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,_#1ca0d822,_#5b38f222)] opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                              <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={1.7}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="relative z-10 h-4 w-4 text-zinc-500"
+                                aria-hidden
+                              >
+                                <rect x="3" y="5" width="18" height="14" rx="2" />
+                                <circle cx="8.5" cy="10" r="1.2" />
+                                <path d="m21 15-6-5-4 4-3-3-5 5" />
+                              </svg>
+                              <span className="relative z-10">Hero</span>
                             </button>
                           </div>
-                          <div className="flex justify-center gap-3">
-                            {THEME_PRESETS.map((preset) => {
-                              const selected = formPresetId === preset.id
-                              return (
-                                <button
-                                  key={preset.id}
-                                  type="button"
-                                  onClick={() => applyPreset(preset.id)}
-                                  aria-label={`Theme preset ${preset.name}`}
-                                  className={`h-11 w-11 rounded-full transition-all duration-200 hover:brightness-105 ${
-                                    selected
-                                      ? 'ring-2 ring-zinc-900/55 ring-offset-[3px]'
-                                      : 'ring-1 ring-zinc-200/90'
-                                  }`}
-                                  style={{
-                                    background: `linear-gradient(145deg, ${preset.tableGradTop}, ${preset.tableGradBottom})`,
-                                  }}
-                                />
-                              )
-                            })}
-                          </div>
-                          <div className="flex flex-wrap items-end justify-center gap-5">
-                            <label className="flex flex-col">
-                              <span className="mb-1 text-[11px] font-medium text-zinc-500">Seats</span>
-                              <input
-                                type="number"
-                                min={1}
-                                value={formCapacity}
-                                onChange={(e) => setFormCapacity(Math.max(1, Number(e.target.value) || 1))}
-                                className="h-9 w-20 rounded-lg border border-zinc-200 bg-white px-2 text-center text-[14px] outline-none transition-colors focus:border-zinc-300"
-                              />
-                            </label>
-                            <label className="inline-flex cursor-pointer items-center gap-2 pb-1 text-sm font-medium text-zinc-700">
-                              <span
-                                className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
-                                  formActive ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]' : 'bg-zinc-300'
-                                }`}
-                              >
-                                <span
-                                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                                    formActive ? 'translate-x-4.5' : 'translate-x-0.5'
-                                  }`}
-                                />
-                              </span>
-                              <input
-                                type="checkbox"
-                                checked={formActive}
-                                onChange={(e) => setFormActive(e.target.checked)}
-                                className="sr-only"
-                              />
-                              Active
-                            </label>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setOverlayStep(3)}
-                            className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3.5 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
-                          >
-                            <svg
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth={1.8}
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              className="h-3.5 w-3.5"
-                              aria-hidden
+                          <div className="flex flex-wrap items-center justify-center gap-3">
+                            <div className="flex items-center gap-2.5">
+                              {THEME_PRESETS.map((preset) => {
+                                const selected = formPresetId === preset.id
+                                return (
+                                  <button
+                                    key={preset.id}
+                                    type="button"
+                                    onClick={() => applyPreset(preset.id)}
+                                    aria-label={`Theme preset ${preset.name}`}
+                                    className={`h-10 w-10 rounded-full transition-all duration-200 hover:brightness-105 ${
+                                      selected
+                                        ? 'ring-2 ring-zinc-900/50 ring-offset-2'
+                                        : 'ring-1 ring-zinc-200/90'
+                                    }`}
+                                    style={{
+                                      background: `linear-gradient(145deg, ${preset.tableGradTop}, ${preset.tableGradBottom})`,
+                                    }}
+                                  />
+                                )
+                              })}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setOverlayStep(3)}
+                              className={`inline-flex items-center gap-2 ${FOOTER_BTN_SECONDARY} text-zinc-600`}
                             >
-                              <path d="M12 2 9.8 7.2 4.5 9.5l5.3 2.3L12 17l2.2-5.2 5.3-2.3-5.3-2.3L12 2Z" />
-                            </svg>
-                            Customize
-                          </button>
+                              <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={1.8}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="h-4 w-4 text-zinc-500"
+                                aria-hidden
+                              >
+                                <path d="M12 2 9.8 7.2 4.5 9.5l5.3 2.3L12 17l2.2-5.2 5.3-2.3-5.3-2.3L12 2Z" />
+                              </svg>
+                              Customize
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div
@@ -1009,10 +1011,7 @@ export default function TablesAdminPage() {
                               )
                             })}
                           </div>
-                          <div className="w-full space-y-2.5 rounded-2xl border border-zinc-100 bg-zinc-50/60 p-3">
-                            <p className="text-center text-[10px] font-medium uppercase tracking-wider text-zinc-400">
-                              Hero
-                            </p>
+                          <div className="w-full space-y-3 rounded-2xl border border-zinc-100/90 bg-zinc-50/50 p-3">
                             <div className="grid grid-cols-3 gap-2">
                               {[
                                 { key: 'heroTop' as const, label: 'Top' },
@@ -1021,15 +1020,14 @@ export default function TablesAdminPage() {
                               ].map(({ key, label }) => {
                                 const value = formTheme[key]
                                 return (
-                                  <div key={key} className="relative flex flex-col items-center gap-1">
+                                  <div key={key} className="relative flex flex-col items-center">
                                     <button
                                       type="button"
                                       onClick={() => setOpenColorField((prev) => (prev === key ? null : key))}
                                       className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
                                       style={{ backgroundColor: value }}
-                                      aria-label={`${label} hero color`}
+                                      aria-label={`Hero ${label} color`}
                                     />
-                                    <span className="text-[9px] font-medium text-zinc-500">{label}</span>
                                     {openColorField === key ? (
                                       <div className="absolute left-1/2 top-full z-30 mt-1 w-36 -translate-x-1/2 rounded-lg border border-zinc-200 bg-white p-2 shadow-md">
                                         <input
@@ -1049,25 +1047,21 @@ export default function TablesAdminPage() {
                                 )
                               })}
                             </div>
-                            <p className="pt-1 text-center text-[10px] font-medium uppercase tracking-wider text-zinc-400">
-                              Leaderboard
-                            </p>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-2 gap-3 border-t border-zinc-100/80 pt-3">
                               {[
                                 { key: 'lbGradTop' as const, label: 'Top' },
                                 { key: 'lbGradBottom' as const, label: 'Bot' },
                               ].map(({ key, label }) => {
                                 const value = formTheme[key]
                                 return (
-                                  <div key={key} className="relative flex flex-col items-center gap-1">
+                                  <div key={key} className="relative flex flex-col items-center">
                                     <button
                                       type="button"
                                       onClick={() => setOpenColorField((prev) => (prev === key ? null : key))}
                                       className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
                                       style={{ backgroundColor: value }}
-                                      aria-label={`Leaderboard ${label}`}
+                                      aria-label={`Leaderboard ${label} color`}
                                     />
-                                    <span className="text-[9px] font-medium text-zinc-500">{label}</span>
                                     {openColorField === key ? (
                                       <div className="absolute left-1/2 top-full z-30 mt-1 w-36 -translate-x-1/2 rounded-lg border border-zinc-200 bg-white p-2 shadow-md">
                                         <input
@@ -1087,10 +1081,7 @@ export default function TablesAdminPage() {
                                 )
                               })}
                             </div>
-                            <p className="pt-1 text-center text-[10px] font-medium uppercase tracking-wider text-zinc-400">
-                              CTA
-                            </p>
-                            <div className="flex justify-center">
+                            <div className="flex justify-center border-t border-zinc-100/80 pt-3">
                               <div className="relative flex flex-col items-center gap-1">
                                 <button
                                   type="button"
@@ -1123,12 +1114,14 @@ export default function TablesAdminPage() {
                       </div>
                     </div>
 
-                    <div className="mx-auto mt-2 w-full max-w-[540px] shrink-0 pb-1">
-                      <div className="relative h-[420px] w-full overflow-hidden rounded-[28px] border border-zinc-200 transition-[box-shadow] duration-200">
-                        <div className="origin-top scale-[1.09] transition-transform duration-200">
-                          <PreviewPhone form={formTheme} name={formName || 'New table'} />
+                    <div className="mt-auto flex w-full shrink-0 justify-center px-2 pb-1 pt-8">
+                      <div className="relative w-full max-w-[340px] overflow-hidden rounded-[28px] border border-zinc-200/90 shadow-sm">
+                        <div className="relative h-[480px] overflow-hidden">
+                          <div className="origin-top scale-[1.06] transition-transform duration-200 ease-out">
+                            <PreviewPhone form={formTheme} name={formName || 'New table'} />
+                          </div>
+                          <div className="pointer-events-none absolute inset-x-0 top-[58%] bottom-0 bg-gradient-to-b from-transparent via-white/75 to-white" />
                         </div>
-                        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%] bg-gradient-to-b from-transparent via-white/72 to-white" />
                       </div>
                     </div>
                   </div>
@@ -1136,7 +1129,7 @@ export default function TablesAdminPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-2 border-t border-zinc-200 px-5 py-3">
+            <div className="flex items-center justify-between gap-2 px-5 pb-5 pt-4">
               <div className="flex items-center gap-2">
                 {mode === 'edit' && editingId && (overlayStep === 2 || overlayStep === 3) ? (
                   <button
@@ -1156,7 +1149,7 @@ export default function TablesAdminPage() {
                     else if (overlayStep === 3) setOverlayStep(2)
                     else setOverlayStep(1)
                   }}
-                  className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700"
+                  className={FOOTER_BTN_SECONDARY}
                 >
                   Back
                 </button>
@@ -1171,16 +1164,84 @@ export default function TablesAdminPage() {
                 ) : (
                   <button
                     type="button"
-                    disabled={saving}
-                    onClick={() => void saveEditor()}
+                    disabled={saving || finalizePriming}
+                    onClick={openPublishFlow}
                     className={`rounded-full px-5 py-2 text-sm font-semibold disabled:opacity-60 ${GRADIENT_CTA}`}
                   >
-                    {saving ? 'Saving...' : 'Finalize'}
+                    Finalize
                   </button>
                 )}
               </div>
             </div>
           </div>
+
+          {publishOpen ? (
+            <div
+              className="absolute inset-0 z-[60] flex items-center justify-center px-4 transition-opacity duration-200 ease-out"
+              onMouseDown={(e) => {
+                if (e.target === e.currentTarget) closePublish()
+              }}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="publish-table-title"
+                className="w-full max-w-[380px] rounded-2xl bg-white p-7 shadow-xl transition-all duration-200 ease-out animate-[fadeIn_180ms_ease-out]"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <h2 id="publish-table-title" className="text-center text-lg font-semibold tracking-tight text-zinc-900">
+                  Ready to publish?
+                </h2>
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-6">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-sm text-zinc-500">{`\u00b7`}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={formCapacity}
+                      onChange={(e) => setFormCapacity(Math.max(1, Number(e.target.value) || 1))}
+                      className="w-14 rounded-lg border-0 border-b border-zinc-200 bg-transparent py-1 text-center text-sm font-medium text-zinc-900 outline-none transition-colors focus:border-zinc-400"
+                      aria-label="Seat capacity"
+                    />
+                    <span className="text-sm text-zinc-500">seats</span>
+                  </div>
+                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-zinc-700">
+                    <span
+                      className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
+                        formActive ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]' : 'bg-zinc-300'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                          formActive ? 'translate-x-4.5' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={formActive}
+                      onChange={(e) => setFormActive(e.target.checked)}
+                      className="sr-only"
+                    />
+                    Active
+                  </label>
+                </div>
+                <div className="mt-8 flex items-center justify-center gap-3">
+                  <button type="button" onClick={closePublish} className={FOOTER_BTN_SECONDARY}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void saveEditor()}
+                    className={`rounded-full px-5 py-2 text-sm font-semibold disabled:opacity-60 ${GRADIENT_CTA}`}
+                  >
+                    {saving ? 'Publishing…' : 'Publish'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
