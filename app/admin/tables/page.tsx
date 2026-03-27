@@ -781,7 +781,7 @@ export default function TablesAdminPage() {
           </div>
         </header>
 
-        <section className="admin-gap-intro-first-section flex h-[calc(100vh-220px)] min-h-[420px] flex-col overflow-hidden rounded-2xl border border-[#ebebeb] bg-white">
+        <section className="admin-gap-intro-first-section flex h-[calc(100vh-220px)] min-h-[420px] flex-col overflow-hidden rounded-t-2xl border-x border-t border-[#ebebeb] bg-white">
           <div className="z-20 flex flex-wrap items-center gap-2 border-b border-[#ebebeb] bg-white p-4 pb-3">
           <div className="relative w-full md:w-[360px]">
             <svg
@@ -809,7 +809,9 @@ export default function TablesAdminPage() {
               type="button"
               onClick={() => setTableView('cards')}
               className={`inline-flex h-full items-center px-[12px] text-[14px] font-medium transition-all first:rounded-l-full last:rounded-r-full ${
-                tableView === 'cards' ? 'bg-black text-white' : 'text-[#4d4d4d] hover:text-[#171717]'
+                tableView === 'cards'
+                  ? 'rounded-full bg-black text-white'
+                  : 'text-[#4d4d4d] hover:text-[#171717]'
               }`}
             >
               <svg
@@ -833,7 +835,9 @@ export default function TablesAdminPage() {
               type="button"
               onClick={() => setTableView('list')}
               className={`inline-flex h-full items-center px-[12px] text-[14px] font-medium transition-all first:rounded-l-full last:rounded-r-full ${
-                tableView === 'list' ? 'bg-black text-white' : 'text-[#4d4d4d] hover:text-[#171717]'
+                tableView === 'list'
+                  ? 'rounded-full bg-black text-white'
+                  : 'text-[#4d4d4d] hover:text-[#171717]'
               }`}
             >
               <svg
@@ -864,7 +868,7 @@ export default function TablesAdminPage() {
                 onClick={() => setTableStatusFilter(value)}
                 className={`inline-flex h-full items-center px-[12px] text-[14px] font-medium transition-all first:rounded-l-full last:rounded-r-full ${
                   tableStatusFilter === value
-                    ? 'bg-black text-white'
+                    ? 'rounded-full bg-black text-white'
                     : 'text-[#4d4d4d] hover:text-[#171717]'
                 }`}
               >
