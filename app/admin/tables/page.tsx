@@ -767,12 +767,12 @@ export default function TablesAdminPage() {
   }
 
   return (
-    <div className="admin-page-shell flex min-h-[calc(100vh-18px)] flex-col">
+    <div className="admin-page-shell flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden pb-0">
       <p className="sr-only" aria-live="polite">
         {error ?? ''}
       </p>
-      <div className="admin-page-controls flex flex-1 flex-col">
-        <header className="flex items-end justify-between gap-3">
+      <div className="admin-page-controls flex flex-1 min-h-0 flex-col overflow-hidden">
+        <header className="shrink-0 flex items-end justify-between gap-3">
           <div>
             <h1 className="admin-page-title text-zinc-900">Tables</h1>
             <p className="admin-gap-page-title-intro admin-intro">
