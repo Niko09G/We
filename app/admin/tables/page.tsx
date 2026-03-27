@@ -257,6 +257,7 @@ export default function TablesAdminPage() {
   const avatarInputRef = useRef<HTMLInputElement | null>(null)
   const heroInputRef = useRef<HTMLInputElement | null>(null)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
+  const colorPickerRef = useRef<HTMLDivElement | null>(null)
   const overlayCloseTimerRef = useRef<number | null>(null)
   const overlayTriggerRef = useRef<HTMLButtonElement | null>(null)
 
@@ -290,6 +291,10 @@ export default function TablesAdminPage() {
     if (!editorOpen) return
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
+      if (openColorField) {
+        setOpenColorField(null)
+        return
+      }
       if (publishOpen) {
         setPublishOpen(false)
         return
@@ -300,7 +305,7 @@ export default function TablesAdminPage() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [editorOpen, closeOverlay, publishOpen])
+  }, [editorOpen, closeOverlay, publishOpen, openColorField])
 
   useEffect(() => {
     return () => {
@@ -321,6 +326,21 @@ export default function TablesAdminPage() {
   useEffect(() => {
     setOpenColorField(null)
   }, [overlayStep])
+
+  useEffect(() => {
+    if (!editorOpen) return
+    const handleOutsidePointer = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null
+      if (!target) return
+      if (target.closest('[data-color-dot="true"]')) return
+      if (colorPickerRef.current?.contains(target)) return
+      setOpenColorField(null)
+    }
+    window.addEventListener('mousedown', handleOutsidePointer)
+    return () => {
+      window.removeEventListener('mousedown', handleOutsidePointer)
+    }
+  }, [editorOpen])
 
   const activeRows = useMemo(() => rows.filter((r) => !r.is_archived), [rows])
   const archivedRows = useMemo(() => rows.filter((r) => r.is_archived), [rows])
@@ -371,7 +391,7 @@ export default function TablesAdminPage() {
       tableColor: '#6335fb',
       tableName: 'New Table',
     })
-    setFormTheme({ ...d, avatarImageUrl: '' })
+    setFormTheme({ ...d, avatarImageUrl: '', teamText: d.teamText.trim() || 'Add a short tagline' })
     overlayTriggerRef.current = null
     setEditorClosing(false)
     setEditorOpen(true)
@@ -394,7 +414,11 @@ export default function TablesAdminPage() {
       tableColor: row.color,
       tableName: row.name,
     })
-    setFormTheme({ ...d, avatarImageUrl: d.avatarImageUrl ?? '' })
+    setFormTheme({
+      ...d,
+      avatarImageUrl: d.avatarImageUrl ?? '',
+      teamText: d.teamText.trim() || 'Add a short tagline',
+    })
     overlayTriggerRef.current = triggerEl ?? null
     setEditorClosing(false)
     setEditorOpen(true)
@@ -777,8 +801,8 @@ export default function TablesAdminPage() {
               </div>
             ) : null}
 
-            <div className="relative flex h-full min-h-0 flex-1 flex-col items-center justify-start overflow-hidden">
-              <div className="flex h-full min-h-0 w-full max-w-full flex-1 flex-col items-center justify-start overflow-x-visible overflow-y-auto overscroll-contain px-5 py-4 pb-28 [&_input]:!text-[14px] [&_textarea]:!text-[14px] [&_select]:!text-[14px]">
+            <div className="relative flex h-full min-h-0 flex-1 flex-col items-center justify-start overflow-hidden [&_button]:cursor-pointer">
+              <div className="flex h-full min-h-0 w-full max-w-full flex-1 flex-col items-center justify-start overflow-hidden px-5 py-4 pb-28 [&_input]:!text-[14px] [&_textarea]:!text-[14px] [&_select]:!text-[14px]">
               <input
                 ref={avatarInputRef}
                 type="file"
@@ -810,7 +834,7 @@ export default function TablesAdminPage() {
                 }`}
               >
                 <div className="flex min-h-full items-center justify-center py-2">
-                  <div className="w-full max-w-[736px] space-y-5 overflow-x-visible px-0.5">
+                  <div className="w-full max-w-[760px] space-y-5 overflow-visible px-1.5">
                     <h4 className="text-center text-3xl font-semibold tracking-tight text-zinc-900">
                       What are we calling this table?
                     </h4>
@@ -871,7 +895,7 @@ export default function TablesAdminPage() {
                             setOverlayError(null)
                             setOverlayStep(2)
                           }}
-                          className="rounded-full border border-zinc-200/90 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm transition-all duration-200 ease-out hover:border-zinc-300 hover:bg-zinc-50 hover:shadow"
+                          className="rounded-full border border-zinc-200/90 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-all duration-200 ease-out hover:border-zinc-300 hover:bg-zinc-50 hover:shadow"
                         >
                           {chip}
                         </button>
@@ -889,16 +913,16 @@ export default function TablesAdminPage() {
                 }`}
               >
                 <div className="flex min-h-0 flex-1 flex-col py-3">
-                  <div className="mx-auto flex h-full min-h-0 w-full max-w-[736px] flex-1 flex-col overflow-x-visible">
+                  <div className="mx-auto flex h-full min-h-0 w-full max-w-[760px] flex-1 flex-col overflow-visible">
                     <div className="relative h-[min(260px,30vh)] min-h-[220px] w-full shrink-0 sm:h-[min(280px,32vh)] sm:min-h-[240px]">
                       <div
-                        className={`absolute inset-0 overflow-y-auto overflow-x-visible transition-all duration-200 ease-out ${
+                        className={`absolute inset-0 overflow-hidden transition-all duration-200 ease-out ${
                           overlayStep === 2
                             ? 'z-10 translate-x-0 opacity-100'
                             : 'pointer-events-none z-0 -translate-x-2 opacity-0'
                         }`}
                       >
-                        <div className="flex flex-col items-center space-y-4 pb-2 pt-1">
+                        <div className="flex flex-col items-center space-y-5 pb-2 pt-2">
                           <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
                             What’s the team identity?
                           </h4>
@@ -908,7 +932,6 @@ export default function TablesAdminPage() {
                                 value={formTheme.teamText}
                                 onChange={(e) => setFormTheme((p) => ({ ...p, teamText: e.target.value }))}
                                 className="w-full bg-transparent !text-[15px] outline-none"
-                                placeholder="Add a short tagline"
                               />
                             </label>
                           </div>
@@ -933,7 +956,7 @@ export default function TablesAdminPage() {
                                 <path d="M5 20a7 7 0 0 1 14 0" />
                               </svg>
                               <span className="relative z-10 transition-colors duration-200 ease-out group-hover:text-white">
-                                Avatar
+                                Avatar image
                               </span>
                             </button>
                             <button
@@ -957,7 +980,7 @@ export default function TablesAdminPage() {
                                 <path d="m21 15-6-5-4 4-3-3-5 5" />
                               </svg>
                               <span className="relative z-10 transition-colors duration-200 ease-out group-hover:text-white">
-                                Hero
+                                Hero image
                               </span>
                             </button>
                           </div>
@@ -971,7 +994,7 @@ export default function TablesAdminPage() {
                                     type="button"
                                     onClick={() => applyPreset(preset.id)}
                                     aria-label={`Theme preset ${preset.name}`}
-                                    className={`h-10 w-10 rounded-full transition-all duration-200 hover:brightness-105 ${
+                                    className={`h-10 w-10 rounded-full cursor-pointer transition-all duration-200 hover:brightness-105 ${
                                       selected
                                         ? 'ring-2 ring-zinc-900/50 ring-offset-2'
                                         : 'ring-1 ring-zinc-200/90'
@@ -986,7 +1009,7 @@ export default function TablesAdminPage() {
                             <button
                               type="button"
                               onClick={() => setOverlayStep(3)}
-                              className={`inline-flex items-center gap-2 ${FOOTER_BTN_SECONDARY} text-zinc-600`}
+                              className={`group inline-flex items-center justify-center gap-2 ${FOOTER_BTN_SECONDARY} text-zinc-600 transition-all duration-200 ease-out hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white`}
                             >
                               <svg
                                 viewBox="0 0 24 24"
@@ -995,7 +1018,7 @@ export default function TablesAdminPage() {
                                 strokeWidth={1.8}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                className="h-4 w-4 text-zinc-500"
+                                className="h-4 w-4 text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white"
                                 aria-hidden
                               >
                                 <path d="M12 2 9.8 7.2 4.5 9.5l5.3 2.3L12 17l2.2-5.2 5.3-2.3-5.3-2.3L12 2Z" />
@@ -1006,7 +1029,7 @@ export default function TablesAdminPage() {
                         </div>
                       </div>
                       <div
-                        className={`absolute inset-0 overflow-y-auto overflow-x-visible transition-all duration-200 ease-out ${
+                        className={`absolute inset-0 overflow-hidden transition-all duration-200 ease-out ${
                           overlayStep === 3
                             ? 'z-10 translate-x-0 opacity-100'
                             : 'pointer-events-none z-0 translate-x-2 opacity-0'
@@ -1058,110 +1081,94 @@ export default function TablesAdminPage() {
                               )
                             })}
                           </div>
-                          <div className="w-full space-y-3 rounded-2xl border border-zinc-100/90 bg-zinc-50/50 p-3">
-                            <div className="grid grid-cols-3 gap-2">
-                              {[
-                                { key: 'heroTop' as const, label: 'Top' },
-                                { key: 'heroMiddle' as const, label: 'Mid' },
-                                { key: 'heroBottom' as const, label: 'Bot' },
-                              ].map(({ key, label }) => {
-                                const value = formTheme[key]
-                                return (
-                                  <div key={key} className="relative flex flex-col items-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => setOpenColorField((prev) => (prev === key ? null : key))}
-                                      className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
-                                      style={{ backgroundColor: value }}
-                                      aria-label={`Hero ${label} color`}
-                                    />
-                                    {openColorField === key ? (
-                                      <div className="absolute left-1/2 top-full z-30 mt-1 w-36 -translate-x-1/2 rounded-lg border border-zinc-200 bg-white p-2 shadow-md">
-                                        <input
-                                          type="color"
-                                          value={value}
-                                          onChange={(e) => setColorField(key, e.target.value)}
-                                          className="h-7 w-full cursor-pointer rounded border-0"
-                                        />
-                                        <input
-                                          value={value}
-                                          onChange={(e) => setColorField(key, e.target.value)}
-                                          className="mt-1.5 w-full rounded border border-zinc-100 px-1.5 py-1 text-[10px] text-zinc-600"
-                                        />
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                            <div className="grid grid-cols-2 gap-3 border-t border-zinc-100/80 pt-3">
-                              {[
-                                { key: 'lbGradTop' as const, label: 'Top' },
-                                { key: 'lbGradBottom' as const, label: 'Bot' },
-                              ].map(({ key, label }) => {
-                                const value = formTheme[key]
-                                return (
-                                  <div key={key} className="relative flex flex-col items-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => setOpenColorField((prev) => (prev === key ? null : key))}
-                                      className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
-                                      style={{ backgroundColor: value }}
-                                      aria-label={`Leaderboard ${label} color`}
-                                    />
-                                    {openColorField === key ? (
-                                      <div className="absolute left-1/2 top-full z-30 mt-1 w-36 -translate-x-1/2 rounded-lg border border-zinc-200 bg-white p-2 shadow-md">
-                                        <input
-                                          type="color"
-                                          value={value}
-                                          onChange={(e) => setColorField(key, e.target.value)}
-                                          className="h-7 w-full cursor-pointer rounded border-0"
-                                        />
-                                        <input
-                                          value={value}
-                                          onChange={(e) => setColorField(key, e.target.value)}
-                                          className="mt-1.5 w-full rounded border border-zinc-100 px-1.5 py-1 text-[10px] text-zinc-600"
-                                        />
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                            <div className="flex justify-center border-t border-zinc-100/80 pt-3">
-                              <div className="relative flex flex-col items-center gap-1">
+                          <div className="relative w-full space-y-3 rounded-2xl border border-zinc-100/90 bg-zinc-50/50 p-3">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="flex items-center justify-center gap-3">
+                                <span className="text-xs font-medium text-zinc-600">Main color</span>
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    setOpenColorField((prev) => (prev === 'primaryColor' ? null : 'primaryColor'))
-                                  }
+                                  data-color-dot="true"
+                                  onClick={() => setOpenColorField('primaryColor')}
                                   className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
                                   style={{ backgroundColor: formTheme.primaryColor }}
-                                  aria-label="Primary CTA color"
+                                  aria-label="Main color"
                                 />
-                                {openColorField === 'primaryColor' ? (
-                                  <div className="absolute left-1/2 top-full z-30 mt-1 w-36 -translate-x-1/2 rounded-lg border border-zinc-200 bg-white p-2 shadow-md">
-                                    <input
-                                      type="color"
-                                      value={formTheme.primaryColor}
-                                      onChange={(e) => setColorField('primaryColor', e.target.value)}
-                                      className="h-7 w-full cursor-pointer rounded border-0"
-                                    />
-                                    <input
-                                      value={formTheme.primaryColor}
-                                      onChange={(e) => setColorField('primaryColor', e.target.value)}
-                                      className="mt-1.5 w-full rounded border border-zinc-100 px-1.5 py-1 text-[10px] text-zinc-600"
-                                    />
-                                  </div>
-                                ) : null}
+                              </div>
+                              <div className="flex items-center justify-center gap-3">
+                                <span className="text-xs font-medium text-zinc-600">Leaderboard gradient</span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    data-color-dot="true"
+                                    onClick={() => setOpenColorField('lbGradTop')}
+                                    className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
+                                    style={{ backgroundColor: formTheme.lbGradTop }}
+                                    aria-label="Leaderboard gradient top"
+                                  />
+                                  <button
+                                    type="button"
+                                    data-color-dot="true"
+                                    onClick={() => setOpenColorField('lbGradBottom')}
+                                    className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
+                                    style={{ backgroundColor: formTheme.lbGradBottom }}
+                                    aria-label="Leaderboard gradient bottom"
+                                  />
+                                </div>
                               </div>
                             </div>
+                            <div className="flex items-center justify-center gap-3 border-t border-zinc-100/80 pt-3">
+                              <span className="text-xs font-medium text-zinc-600">Hero section gradient</span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  data-color-dot="true"
+                                  onClick={() => setOpenColorField('heroTop')}
+                                  className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
+                                  style={{ backgroundColor: formTheme.heroTop }}
+                                  aria-label="Hero section top"
+                                />
+                                <button
+                                  type="button"
+                                  data-color-dot="true"
+                                  onClick={() => setOpenColorField('heroMiddle')}
+                                  className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
+                                  style={{ backgroundColor: formTheme.heroMiddle }}
+                                  aria-label="Hero section middle"
+                                />
+                                <button
+                                  type="button"
+                                  data-color-dot="true"
+                                  onClick={() => setOpenColorField('heroBottom')}
+                                  className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
+                                  style={{ backgroundColor: formTheme.heroBottom }}
+                                  aria-label="Hero section bottom"
+                                />
+                              </div>
+                            </div>
+                            {openColorField ? (
+                              <div
+                                ref={colorPickerRef}
+                                className="absolute left-1/2 top-full z-30 mt-2 w-44 -translate-x-1/2 rounded-xl border border-zinc-200 bg-white p-3 shadow-md"
+                              >
+                                <input
+                                  type="color"
+                                  value={formTheme[openColorField]}
+                                  onChange={(e) => setColorField(openColorField, e.target.value)}
+                                  className="h-24 w-full cursor-pointer rounded border-0"
+                                />
+                                <input
+                                  value={formTheme[openColorField]}
+                                  onChange={(e) => setColorField(openColorField, e.target.value)}
+                                  className="mt-2 w-full rounded border border-zinc-200 px-2 py-1.5 text-xs font-medium text-zinc-700"
+                                />
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex w-full shrink-0 justify-center overflow-visible px-2 pt-8">
+                    <div className="flex w-full shrink-0 justify-center overflow-hidden px-2 pt-8">
                       <div className="relative w-full max-w-[340px] overflow-visible rounded-[28px] border border-zinc-200/90 shadow-sm">
                         <div className="relative overflow-visible pt-1">
                           <div className="origin-top scale-[1.06] transition-transform duration-200 ease-out">
@@ -1247,7 +1254,7 @@ export default function TablesAdminPage() {
                       className="w-14 shrink-0 rounded-lg border-0 border-b border-zinc-200 bg-transparent py-1 text-center text-sm font-medium text-zinc-900 outline-none transition-colors duration-200 ease-out focus:border-zinc-400"
                       aria-label="Seat capacity"
                     />
-                    <span className="text-sm font-medium text-zinc-700">seats</span>
+                    <span className="text-sm font-medium text-zinc-700">Seats</span>
                   </div>
                   <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-zinc-700">
                     <span
