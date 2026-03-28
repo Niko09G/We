@@ -16,12 +16,14 @@ import { listActiveMissionAssignmentsForAdmin } from '@/lib/admin-mission-assign
 import { missionTypeIcon } from '@/app/admin/missions/_components/mission-admin-shared'
 import {
   MissionOverlaySplitPreviews,
+  previewGradientForMissionForm,
   type MissionPreviewInput,
 } from '@/app/admin/missions/_components/MissionLivePreview'
 import { listTablesForAdmin, type AdminTableRow } from '@/lib/admin-tables'
 import {
   MISSION_CARD_BACKGROUNDS,
   MISSION_CARD_THEME_LABELS,
+  firstStopColorFromMissionGradient,
 } from '@/lib/guest-missions-gradients'
 import {
   removeMissionImageAssetByPublicUrl,
@@ -59,6 +61,123 @@ const CATEGORY_DESCRIPTIONS: Record<ValidationType, string> = {
 
 const MISSION_BUILDER_GRADIENT_HOVER =
   'hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white'
+
+const MISSION_STEP2_UPLOAD_HOVER =
+  'hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white'
+
+function parseHexRgb(input: string): { r: number; g: number; b: number } | null {
+  let h = input.trim()
+  if (h.startsWith('#')) h = h.slice(1)
+  if (h.length === 3) {
+    h = h
+      .split('')
+      .map((c) => c + c)
+      .join('')
+  }
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return null
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  }
+}
+
+function colorDistanceSq(
+  a: { r: number; g: number; b: number },
+  b: { r: number; g: number; b: number }
+) {
+  return (a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2
+}
+
+function nearestMissionThemeIndexFromHex(hexInput: string): number {
+  const raw = hexInput.trim()
+  const withHash = raw.startsWith('#') ? raw : `#${raw}`
+  const target = parseHexRgb(withHash)
+  if (!target) return 0
+  let bestI = 0
+  let bestD = Infinity
+  for (let i = 0; i < MISSION_CARD_BACKGROUNDS.length; i++) {
+    const stop = firstStopColorFromMissionGradient(MISSION_CARD_BACKGROUNDS[i]!)
+    const rgb = parseHexRgb(stop)
+    if (!rgb) continue
+    const d = colorDistanceSq(target, rgb)
+    if (d < bestD) {
+      bestD = d
+      bestI = i
+    }
+  }
+  return bestI
+}
+
+function missionGradientFromAccentHex(hexInput: string): string {
+  const raw = hexInput.trim()
+  const withHash = raw.startsWith('#') ? raw : `#${raw}`
+  const base = parseHexRgb(withHash)
+  if (!base) return MISSION_CARD_BACKGROUNDS[0]!
+  const t = 0.42
+  const r2 = Math.round(base.r + (255 - base.r) * t)
+  const g2 = Math.round(base.g + (255 - base.g) * t)
+  const b2 = Math.round(base.b + (255 - base.b) * t)
+  const to = `#${r2.toString(16).padStart(2, '0')}${g2.toString(16).padStart(2, '0')}${b2.toString(16).padStart(2, '0')}`
+  return `linear-gradient(to bottom, ${withHash}, ${to})`
+}
+
+const MISSION_STEP2_SECONDARY_BTN =
+  'inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 transition-all duration-200 ease-out hover:bg-zinc-50'
+
+function MissionAccentPickerPopover({
+  open,
+  draftHex,
+  onDraftHex,
+  onApply,
+}: {
+  open: boolean
+  draftHex: string
+  onDraftHex: (hex: string) => void
+  onApply: () => void
+}) {
+  if (!open) return null
+  return (
+    <div
+      className="absolute left-1/2 top-full z-[45] mt-2 w-56 -translate-x-1/2 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg"
+      role="dialog"
+      aria-label="Custom accent color"
+    >
+      <p className="mb-2 text-center text-[11px] font-medium text-zinc-500">Pick an accent — preview updates instantly</p>
+      <input
+        type="color"
+        value={draftHex}
+        onChange={(e) => onDraftHex(e.target.value)}
+        className="h-10 w-full cursor-pointer overflow-hidden rounded-lg border border-zinc-200 bg-white"
+        aria-label="Accent color"
+      />
+      <button
+        type="button"
+        onClick={onApply}
+        className="mt-3 w-full rounded-lg bg-zinc-900 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
+      >
+        Apply
+      </button>
+    </div>
+  )
+}
+
+function RemoveImageIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  )
+}
 
 function emptyForm(): MissionForm {
   return {
@@ -163,13 +282,17 @@ export default function MissionsLibraryPage() {
   const [step, setStep] = useState<MissionStep>(1)
   const [step1Hint, setStep1Hint] = useState<string | null>(null)
   const [step2View, setStep2View] = useState<'main' | 'customize'>('main')
+  const [step2GradientOverride, setStep2GradientOverride] = useState<string | null>(null)
+  const [missionCustomColorOpen, setMissionCustomColorOpen] = useState(false)
+  const [missionAccentDraftHex, setMissionAccentDraftHex] = useState('#6366f1')
   const [uploadSlot, setUploadSlot] = useState<'card' | 'overlay' | null>(null)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<MissionForm>(emptyForm)
   const missionTitleInputRef = useRef<HTMLInputElement | null>(null)
-  const missionDescInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const missionDescInputRef = useRef<HTMLInputElement | null>(null)
   const cardCoverInputRef = useRef<HTMLInputElement | null>(null)
   const headerImageInputRef = useRef<HTMLInputElement | null>(null)
+  const missionAccentWrapRef = useRef<HTMLDivElement | null>(null)
 
   const showToast = useCallback((message: string, kind: 'success' | 'error') => {
     setToast({ kind, message })
@@ -223,6 +346,10 @@ export default function MissionsLibraryPage() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       e.preventDefault()
+      if (missionCustomColorOpen) {
+        setMissionCustomColorOpen(false)
+        return
+      }
       if (step === 2 && step2View === 'customize') {
         setStep2View('main')
         return
@@ -231,7 +358,18 @@ export default function MissionsLibraryPage() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [editorOpen, step, step2View])
+  }, [editorOpen, missionCustomColorOpen, step, step2View])
+
+  useEffect(() => {
+    if (!missionCustomColorOpen) return
+    const onMouseDown = (e: MouseEvent) => {
+      const el = missionAccentWrapRef.current
+      if (!el || el.contains(e.target as Node)) return
+      setMissionCustomColorOpen(false)
+    }
+    window.addEventListener('mousedown', onMouseDown)
+    return () => window.removeEventListener('mousedown', onMouseDown)
+  }, [missionCustomColorOpen])
 
   useEffect(() => {
     if (step !== 2) setStep2View('main')
@@ -245,13 +383,18 @@ export default function MissionsLibraryPage() {
       card_theme_choice: form.card_theme_index == null ? 'auto' : form.card_theme_index,
       card_cover_image_url: form.card_cover_image_url,
       header_image_url: form.header_image_url,
+      description: form.description,
+      gradient_preview_override: step2GradientOverride,
       card_cta_label: '',
       card_completed_label: '',
       cardCompleted: false,
       cardPending: false,
     }),
-    [form]
+    [form, step2GradientOverride]
   )
+
+  const cardCoverReady = form.card_cover_image_url.trim().length > 0
+  const headerImageReady = form.header_image_url.trim().length > 0
 
   const statusCounts = useMemo(() => {
     const active = missions.filter((m) => m.is_active).length
@@ -288,6 +431,8 @@ export default function MissionsLibraryPage() {
     setStep(1)
     setStep1Hint(null)
     setStep2View('main')
+    setStep2GradientOverride(null)
+    setMissionCustomColorOpen(false)
     setForm(emptyForm())
     setEditorOpen(true)
   }
@@ -298,6 +443,8 @@ export default function MissionsLibraryPage() {
     setStep(1)
     setStep1Hint(null)
     setStep2View('main')
+    setStep2GradientOverride(null)
+    setMissionCustomColorOpen(false)
     setForm(formFromMission(mission))
     setEditorOpen(true)
   }
@@ -336,6 +483,44 @@ export default function MissionsLibraryPage() {
     } finally {
       setUploadSlot(null)
     }
+  }
+
+  async function removeCardCoverImage() {
+    const prev = form.card_cover_image_url.trim() || null
+    setForm((s) => ({ ...s, card_cover_image_url: '' }))
+    if (!prev) return
+    try {
+      await removeMissionImageAssetByPublicUrl(prev)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not remove image from storage.', 'error')
+    }
+  }
+
+  async function removeHeaderMissionImage() {
+    const prev = form.header_image_url.trim() || null
+    setForm((s) => ({ ...s, header_image_url: '' }))
+    if (!prev) return
+    try {
+      await removeMissionImageAssetByPublicUrl(prev)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not remove image from storage.', 'error')
+    }
+  }
+
+  function openMissionCustomAccentPicker() {
+    const g = previewGradientForMissionForm(missionStep2PreviewInput)
+    setMissionAccentDraftHex(firstStopColorFromMissionGradient(g))
+    setMissionCustomColorOpen(true)
+  }
+
+  function applyMissionCustomAccent() {
+    const g = missionGradientFromAccentHex(missionAccentDraftHex)
+    setStep2GradientOverride(g)
+    setForm((s) => ({
+      ...s,
+      card_theme_index: nearestMissionThemeIndexFromHex(missionAccentDraftHex),
+    }))
+    setMissionCustomColorOpen(false)
   }
 
   function advanceFromStep1() {
@@ -798,7 +983,7 @@ export default function MissionsLibraryPage() {
                               if (file) void uploadHeaderImage(file)
                             }}
                           />
-                          <div className="flex h-full min-h-0 w-full max-w-full flex-1 flex-col items-center justify-start overflow-hidden px-5 py-4 pb-28 [&_input]:!text-[14px] [&_textarea]:!text-[14px] [&_select]:!text-[14px]">
+                          <div className="flex h-full min-h-0 w-full max-w-full flex-1 flex-col items-center justify-start overflow-y-auto overflow-x-visible px-5 py-4 pb-32 [&_input]:!text-[14px] [&_select]:!text-[14px]">
                             <div className="relative min-h-full w-full overflow-x-visible">
                               <div
                                 className={`absolute inset-0 transition-all duration-200 ease-out ${
@@ -909,9 +1094,9 @@ export default function MissionsLibraryPage() {
                                   step >= 2 ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-3 opacity-0'
                                 }`}
                               >
-                                <div className="mx-auto flex h-full min-h-0 w-full max-w-[760px] flex-col overflow-y-auto py-3">
+                                <div className="mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col overflow-visible py-3 pb-28">
                     {step === 2 && step2View === 'customize' ? (
-                      <div className="flex min-h-full flex-col items-center space-y-5 px-1 pb-6">
+                      <div className="flex min-h-full flex-col items-center space-y-5 px-1 pb-32">
                         <div className="relative w-full max-w-lg">
                           <button
                             type="button"
@@ -936,10 +1121,13 @@ export default function MissionsLibraryPage() {
                             Mission color palette
                           </h4>
                           <p className="mt-2 text-center text-[13px] font-medium text-zinc-500">
-                            Canva-style gradients for cards — separate from table team themes.
+                            Mission color themes are separate from table team themes.
                           </p>
                         </div>
-                        <div className="flex w-full max-w-[760px] flex-wrap justify-center gap-4">
+                        <div
+                          ref={missionAccentWrapRef}
+                          className="relative flex w-full max-w-[760px] flex-wrap justify-center gap-4"
+                        >
                           {MISSION_CARD_BACKGROUNDS.map((bg, i) => {
                             const selected = form.card_theme_index === i
                             return (
@@ -947,7 +1135,10 @@ export default function MissionsLibraryPage() {
                                 key={i}
                                 type="button"
                                 aria-label={MISSION_CARD_THEME_LABELS[i]}
-                                onClick={() => setForm((s) => ({ ...s, card_theme_index: i }))}
+                                onClick={() => {
+                                  setStep2GradientOverride(null)
+                                  setForm((s) => ({ ...s, card_theme_index: i }))
+                                }}
                                 className={`flex h-[4.5rem] w-[4.5rem] shrink-0 flex-col items-center justify-end rounded-2xl p-1.5 text-[10px] font-semibold text-white/95 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)] transition-[transform,box-shadow] duration-200 ease-out ${
                                   selected
                                     ? 'scale-[1.03] ring-2 ring-zinc-900 ring-offset-2'
@@ -961,137 +1152,197 @@ export default function MissionsLibraryPage() {
                               </button>
                             )
                           })}
+                          <button
+                            type="button"
+                            onClick={openMissionCustomAccentPicker}
+                            aria-label="Custom accent color"
+                            className={`flex h-[4.5rem] w-[4.5rem] shrink-0 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-300 bg-zinc-50 text-[11px] font-semibold text-zinc-600 ring-1 ring-zinc-200/80 transition-[transform,background-color] duration-200 ease-out hover:border-zinc-400 hover:bg-white hover:text-zinc-900`}
+                          >
+                            Custom
+                          </button>
+                          <MissionAccentPickerPopover
+                            open={missionCustomColorOpen}
+                            draftHex={missionAccentDraftHex}
+                            onDraftHex={setMissionAccentDraftHex}
+                            onApply={applyMissionCustomAccent}
+                          />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setForm((s) => ({ ...s, card_theme_index: null }))}
-                          className="text-[13px] font-medium text-zinc-600 underline-offset-2 transition-colors hover:text-zinc-900 hover:underline"
-                        >
-                          Use automatic gradient (by title)
-                        </button>
                       </div>
                     ) : null}
 
                     {step === 2 && step2View === 'main' ? (
-                      <div className="flex min-h-full flex-col items-center space-y-5 px-1 pb-8">
+                      <div className="flex min-h-full flex-col items-center space-y-5 px-1 pb-32">
                         <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
-                          What&apos;s the design?
+                          Card cover, overlay copy &amp; images
                         </h4>
-                        <div className="w-full rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
-                          <textarea
-                            ref={missionDescInputRef}
-                            value={form.description}
-                            onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
-                            rows={4}
-                            placeholder="What's this mission about?"
-                            className="min-h-[6.5rem] w-full resize-y rounded-2xl bg-white px-4 py-3 !text-[15px] outline-none"
-                          />
+                        <p className="max-w-lg px-2 text-center text-[13px] font-medium text-zinc-500">
+                          One line in the field below appears in the overlay preview as guest-facing body copy.
+                        </p>
+                        <div className="w-full max-w-[760px] rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
+                          <label className="flex h-12 items-center rounded-2xl bg-white px-4">
+                            <input
+                              ref={missionDescInputRef}
+                              value={form.description}
+                              onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
+                              className="w-full max-w-[680px] resize-none bg-transparent !text-[15px] outline-none"
+                              placeholder="Short line for the mission overlay (under the title)"
+                            />
+                          </label>
                         </div>
-                        <div className="grid w-full max-w-md grid-cols-2 gap-2.5">
-                          <button
-                            type="button"
-                            onClick={() => cardCoverInputRef.current?.click()}
-                            disabled={uploadSlot === 'card'}
-                            className={`group relative flex h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 text-sm font-medium transition-all duration-200 ease-out disabled:opacity-60 ${
-                              form.card_cover_image_url.trim() || uploadSlot === 'card'
-                                ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white'
-                                : `bg-zinc-50/90 text-zinc-800 ${MISSION_BUILDER_GRADIENT_HOVER}`
-                            }`}
-                          >
-                            <svg
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth={1.7}
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              className={`relative z-10 h-4 w-4 transition-colors duration-200 ease-out ${
-                                form.card_cover_image_url.trim() || uploadSlot === 'card'
-                                  ? 'text-white'
-                                  : 'text-zinc-500 group-hover:text-white'
-                              }`}
-                              aria-hidden
-                            >
-                              <rect x="3" y="5" width="18" height="14" rx="2" />
-                              <circle cx="8.5" cy="10" r="1.2" />
-                              <path d="m21 15-6-5-4 4-3-3-5 5" />
-                            </svg>
-                            <span
-                              className={`relative z-10 transition-colors duration-200 ease-out ${
-                                form.card_cover_image_url.trim() || uploadSlot === 'card'
-                                  ? 'text-white'
-                                  : 'group-hover:text-white'
+                        <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-2.5">
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => cardCoverInputRef.current?.click()}
+                              disabled={uploadSlot === 'card'}
+                              className={`group relative flex h-12 w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 text-sm font-medium transition-all duration-200 ease-out disabled:opacity-60 ${
+                                uploadSlot === 'card' || cardCoverReady
+                                  ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white'
+                                  : `bg-zinc-50/90 text-zinc-800 ${MISSION_STEP2_UPLOAD_HOVER}`
                               }`}
                             >
-                              Card cover image
-                            </span>
-                            {uploadSlot === 'card' ? (
                               <svg
                                 viewBox="0 0 24 24"
                                 fill="none"
                                 stroke="currentColor"
-                                strokeWidth={2}
+                                strokeWidth={1.7}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                className="absolute right-3 h-4 w-4 animate-spin text-white"
+                                className={`relative z-10 h-4 w-4 shrink-0 transition-colors duration-200 ease-out ${
+                                  uploadSlot === 'card' || cardCoverReady
+                                    ? 'text-white'
+                                    : 'text-zinc-500 group-hover:text-white'
+                                }`}
                                 aria-hidden
                               >
-                                <path d="M21 12a9 9 0 1 1-3.2-6.9" />
+                                <rect x="3" y="5" width="18" height="14" rx="2" />
+                                <circle cx="8.5" cy="10" r="1.2" />
+                                <path d="m21 15-6-5-4 4-3-3-5 5" />
                               </svg>
+                              <span
+                                className={`relative z-10 transition-colors duration-200 ease-out ${
+                                  uploadSlot === 'card' || cardCoverReady ? 'text-white' : 'group-hover:text-white'
+                                }`}
+                              >
+                                Card cover image
+                              </span>
+                              {uploadSlot === 'card' ? (
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="absolute right-3 h-4 w-4 shrink-0 animate-spin text-white"
+                                  aria-hidden
+                                >
+                                  <path d="M21 12a9 9 0 1 1-3.2-6.9" />
+                                </svg>
+                              ) : cardCoverReady ? (
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="absolute right-3 h-4 w-4 shrink-0 text-white"
+                                  aria-hidden
+                                >
+                                  <path d="m5 12 5 5L20 7" />
+                                </svg>
+                              ) : null}
+                            </button>
+                            {cardCoverReady && uploadSlot !== 'card' ? (
+                              <button
+                                type="button"
+                                onClick={() => void removeCardCoverImage()}
+                                className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-sm transition-colors hover:bg-red-50"
+                                aria-label="Remove card cover image"
+                              >
+                                <RemoveImageIcon className="h-3 w-3" />
+                              </button>
                             ) : null}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => headerImageInputRef.current?.click()}
-                            disabled={uploadSlot === 'overlay'}
-                            className={`group relative flex h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 text-sm font-medium transition-all duration-200 ease-out disabled:opacity-60 ${
-                              form.header_image_url.trim() || uploadSlot === 'overlay'
-                                ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white'
-                                : `bg-zinc-50/90 text-zinc-800 ${MISSION_BUILDER_GRADIENT_HOVER}`
-                            }`}
-                          >
-                            <svg
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth={1.7}
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              className={`relative z-10 h-4 w-4 transition-colors duration-200 ease-out ${
-                                form.header_image_url.trim() || uploadSlot === 'overlay'
-                                  ? 'text-white'
-                                  : 'text-zinc-500 group-hover:text-white'
-                              }`}
-                              aria-hidden
-                            >
-                              <path d="M12 2 9.8 7.2 4.5 9.5l5.3 2.3L12 17l2.2-5.2 5.3-2.3-5.3-2.3L12 2Z" />
-                            </svg>
-                            <span
-                              className={`relative z-10 transition-colors duration-200 ease-out ${
-                                form.header_image_url.trim() || uploadSlot === 'overlay'
-                                  ? 'text-white'
-                                  : 'group-hover:text-white'
+                          </div>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => headerImageInputRef.current?.click()}
+                              disabled={uploadSlot === 'overlay'}
+                              className={`group relative flex h-12 w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 text-sm font-medium transition-all duration-200 ease-out disabled:opacity-60 ${
+                                uploadSlot === 'overlay' || headerImageReady
+                                  ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white'
+                                  : `bg-zinc-50/90 text-zinc-800 ${MISSION_STEP2_UPLOAD_HOVER}`
                               }`}
                             >
-                              Overlay header image
-                            </span>
-                            {uploadSlot === 'overlay' ? (
                               <svg
                                 viewBox="0 0 24 24"
                                 fill="none"
                                 stroke="currentColor"
-                                strokeWidth={2}
+                                strokeWidth={1.7}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                className="absolute right-3 h-4 w-4 animate-spin text-white"
+                                className={`relative z-10 h-4 w-4 shrink-0 transition-colors duration-200 ease-out ${
+                                  uploadSlot === 'overlay' || headerImageReady
+                                    ? 'text-white'
+                                    : 'text-zinc-500 group-hover:text-white'
+                                }`}
                                 aria-hidden
                               >
-                                <path d="M21 12a9 9 0 1 1-3.2-6.9" />
+                                <path d="M12 2 9.8 7.2 4.5 9.5l5.3 2.3L12 17l2.2-5.2 5.3-2.3-5.3-2.3L12 2Z" />
                               </svg>
+                              <span
+                                className={`relative z-10 transition-colors duration-200 ease-out ${
+                                  uploadSlot === 'overlay' || headerImageReady ? 'text-white' : 'group-hover:text-white'
+                                }`}
+                              >
+                                Overlay header image
+                              </span>
+                              {uploadSlot === 'overlay' ? (
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="absolute right-3 h-4 w-4 shrink-0 animate-spin text-white"
+                                  aria-hidden
+                                >
+                                  <path d="M21 12a9 9 0 1 1-3.2-6.9" />
+                                </svg>
+                              ) : headerImageReady ? (
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="absolute right-3 h-4 w-4 shrink-0 text-white"
+                                  aria-hidden
+                                >
+                                  <path d="m5 12 5 5L20 7" />
+                                </svg>
+                              ) : null}
+                            </button>
+                            {headerImageReady && uploadSlot !== 'overlay' ? (
+                              <button
+                                type="button"
+                                onClick={() => void removeHeaderMissionImage()}
+                                className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-sm transition-colors hover:bg-red-50"
+                                aria-label="Remove overlay header image"
+                              >
+                                <RemoveImageIcon className="h-3 w-3" />
+                              </button>
                             ) : null}
-                          </button>
+                          </div>
                         </div>
-                        <div className="flex w-full max-w-[760px] flex-wrap items-center justify-center gap-3">
+                        <div
+                          ref={missionAccentWrapRef}
+                          className="relative flex w-full max-w-[760px] flex-wrap items-center justify-center gap-3"
+                        >
                           {MISSION_CARD_BACKGROUNDS.map((bg, i) => {
                             const selected = form.card_theme_index === i
                             return (
@@ -1099,7 +1350,10 @@ export default function MissionsLibraryPage() {
                                 key={i}
                                 type="button"
                                 aria-label={MISSION_CARD_THEME_LABELS[i]}
-                                onClick={() => setForm((s) => ({ ...s, card_theme_index: i }))}
+                                onClick={() => {
+                                  setStep2GradientOverride(null)
+                                  setForm((s) => ({ ...s, card_theme_index: i }))
+                                }}
                                 className={`h-10 w-10 cursor-pointer rounded-full transition-[transform,box-shadow,filter] duration-200 ease-out hover:scale-[1.05] hover:brightness-105 ${
                                   selected
                                     ? 'scale-[1.02] ring-2 ring-zinc-900/50 ring-offset-2'
@@ -1111,8 +1365,16 @@ export default function MissionsLibraryPage() {
                           })}
                           <button
                             type="button"
+                            onClick={openMissionCustomAccentPicker}
+                            aria-label="Custom theme accent"
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-zinc-300 bg-zinc-50 text-sm font-semibold text-zinc-500 ring-1 ring-zinc-200/90 transition-colors hover:border-zinc-400 hover:bg-white hover:text-zinc-800"
+                          >
+                            +
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setStep2View('customize')}
-                            className={`group inline-flex items-center justify-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-600 transition-all duration-200 ease-out ${MISSION_BUILDER_GRADIENT_HOVER}`}
+                            className={`group ${MISSION_STEP2_SECONDARY_BTN} text-zinc-600 ${MISSION_BUILDER_GRADIENT_HOVER}`}
                           >
                             <svg
                               viewBox="0 0 24 24"
@@ -1121,13 +1383,19 @@ export default function MissionsLibraryPage() {
                               strokeWidth={1.8}
                               strokeLinecap="round"
                               strokeLinejoin="round"
-                              className="h-4 w-4 text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white"
+                              className="h-4 w-4 shrink-0 self-center text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white"
                               aria-hidden
                             >
                               <path d="M12 2 9.8 7.2 4.5 9.5l5.3 2.3L12 17l2.2-5.2 5.3-2.3-5.3-2.3L12 2Z" />
                             </svg>
                             Customize
                           </button>
+                          <MissionAccentPickerPopover
+                            open={missionCustomColorOpen}
+                            draftHex={missionAccentDraftHex}
+                            onDraftHex={setMissionAccentDraftHex}
+                            onApply={applyMissionCustomAccent}
+                          />
                         </div>
                         <MissionOverlaySplitPreviews form={missionStep2PreviewInput} />
                       </div>

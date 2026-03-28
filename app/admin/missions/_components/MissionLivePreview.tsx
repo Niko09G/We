@@ -7,6 +7,7 @@ import {
 } from '@/lib/guest-missions-gradients'
 import { missionTypeIcon } from '@/app/admin/missions/_components/mission-admin-shared'
 import type { ValidationType } from '@/lib/admin-missions'
+import { RewardAmount } from '@/components/reward/RewardAmount'
 
 export type MissionPreviewInput = {
   title: string
@@ -15,6 +16,10 @@ export type MissionPreviewInput = {
   card_theme_choice: number | 'auto'
   card_cover_image_url: string
   header_image_url: string
+  /** Mission description / overlay body copy (admin preview). */
+  description?: string
+  /** Admin builder only: exact gradient for preview; publish still uses theme index in DB. */
+  gradient_preview_override?: string | null
   /** Guest card primary CTA; blank → “Start mission”. */
   card_cta_label: string
   /** Guest card when complete; blank → “Completed”. */
@@ -30,6 +35,8 @@ const PREVIEW_TABS = [
 ]
 
 export function previewGradientForMissionForm(form: MissionPreviewInput): string {
+  const override = form.gradient_preview_override?.trim()
+  if (override) return override
   if (form.card_theme_choice !== 'auto') {
     return MISSION_CARD_BACKGROUNDS[form.card_theme_choice]!
   }
@@ -80,6 +87,7 @@ export function MissionOverlaySplitPreviews({ form }: { form: MissionPreviewInpu
           surface={surface}
           title={title}
           overlayImg={overlayImg}
+          overlayBodyText={(form.description ?? '').trim()}
           beatcoin={form.validation_type === 'beatcoin'}
           ctaLabel={ctaLabel}
           completedLabel={completedLabel}
@@ -147,6 +155,7 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
           surface={surface}
           title={title}
           overlayImg={overlayImg}
+          overlayBodyText={(form.description ?? '').trim()}
           beatcoin={form.validation_type === 'beatcoin'}
           ctaLabel={ctaLabel}
           completedLabel={completedLabel}
@@ -187,6 +196,7 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
             surface={surface}
             title={title}
             overlayImg={overlayImg}
+            overlayBodyText={(form.description ?? '').trim()}
             beatcoin={form.validation_type === 'beatcoin'}
             ctaLabel={ctaLabel}
             completedLabel={completedLabel}
@@ -236,6 +246,7 @@ function PreviewCard({
   points,
   typeIcon,
   overlayImg,
+  overlayBodyText,
   beatcoin,
   pending,
   completed,
@@ -250,6 +261,8 @@ function PreviewCard({
   points?: number
   typeIcon?: string
   overlayImg?: string | null
+  /** Overlay description preview; empty shows a muted placeholder. */
+  overlayBodyText?: string
   beatcoin?: boolean
   pending?: boolean
   completed?: boolean
@@ -258,6 +271,7 @@ function PreviewCard({
   compact?: boolean
 }) {
   if (mode === 'overlay') {
+    const bodyCopy = (overlayBodyText ?? '').trim()
     return (
       <div
         className={`overflow-hidden rounded-2xl ring-1 ring-zinc-200/80 dark:ring-zinc-700 ${
@@ -295,7 +309,15 @@ function PreviewCard({
             >
               {!overlayImg ? <span aria-hidden>{beatcoin ? '🪙' : '📷'}</span> : null}
             </div>
-            <p className={`mt-2 text-center text-zinc-500 ${compact ? 'text-[10px]' : 'text-xs'}`}>Guest content</p>
+            <p
+              className={`mt-2 line-clamp-3 text-center text-zinc-500 ${compact ? 'text-[10px]' : 'text-xs'}`}
+            >
+              {bodyCopy ? (
+                <span className="text-zinc-700">{bodyCopy}</span>
+              ) : (
+                <span className="text-zinc-400 italic">Guest content</span>
+              )}
+            </p>
           </div>
           <div
             className={`rounded-lg bg-zinc-100 py-1.5 text-center font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 ${
@@ -353,7 +375,13 @@ function PreviewCard({
             compact ? 'text-[10px]' : 'text-xs'
           }`}
         >
-          +{points} pts
+          <RewardAmount
+            showPlus
+            amount={points}
+            iconSize={compact ? 12 : 16}
+            displayVariant="onDark"
+            className="text-white/95"
+          />
         </p>
       ) : null}
       {pending && !doneState ? (

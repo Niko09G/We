@@ -129,7 +129,7 @@ const GRADIENT_CTA =
   'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white border-transparent'
 
 const FOOTER_BTN_SECONDARY =
-  'rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-all duration-200 ease-out hover:bg-zinc-50'
+  'inline-flex h-10 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 transition-all duration-200 ease-out hover:bg-zinc-50'
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(Math.max(n, min), max)
@@ -1492,7 +1492,7 @@ export default function TablesAdminPage() {
                             <button
                               type="button"
                               onClick={() => setOverlayStep(3)}
-                              className={`group inline-flex items-center justify-center gap-2 ${FOOTER_BTN_SECONDARY} text-zinc-600 transition-all duration-200 ease-out hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white`}
+                              className={`group gap-2 ${FOOTER_BTN_SECONDARY} text-zinc-600 transition-all duration-200 ease-out hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white`}
                             >
                               <svg
                                 viewBox="0 0 24 24"
@@ -1501,7 +1501,7 @@ export default function TablesAdminPage() {
                                 strokeWidth={1.8}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                className="h-4 w-4 text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white"
+                                className="h-4 w-4 shrink-0 self-center text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white"
                                 aria-hidden
                               >
                                 <path d="M12 2 9.8 7.2 4.5 9.5l5.3 2.3L12 17l2.2-5.2 5.3-2.3-5.3-2.3L12 2Z" />
