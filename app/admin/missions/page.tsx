@@ -1157,12 +1157,12 @@ export default function MissionsLibraryPage() {
                                 </p>
                                 <div className="w-full max-w-[760px] overflow-visible px-3 py-2">
                                   <div className="rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
-                                    <label className="flex h-12 w-full max-w-[680px] items-center rounded-2xl bg-white px-4">
+                                    <label className="flex h-12 w-full min-w-0 items-center rounded-2xl bg-white px-4">
                                       <input
                                         ref={missionDescInputRef}
                                         value={form.description}
                                         onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
-                                        className="min-w-0 flex-1 bg-transparent !text-[15px] outline-none"
+                                        className="min-w-0 w-full flex-1 bg-transparent !text-[15px] outline-none"
                                         placeholder="Describe the mission task"
                                       />
                                     </label>
