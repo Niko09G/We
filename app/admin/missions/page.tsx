@@ -13,7 +13,7 @@ import {
   type ValidationType,
 } from '@/lib/admin-missions'
 import { listActiveMissionAssignmentsForAdmin } from '@/lib/admin-mission-assignments'
-import { missionTypeIcon } from '@/app/admin/missions/_components/mission-admin-shared'
+import { MissionCategoryTypeIcon } from '@/app/admin/missions/_components/mission-admin-shared'
 import {
   MissionOverlaySplitPreviews,
   previewGradientForMissionForm,
@@ -70,9 +70,9 @@ type MissionForm = {
 const CATEGORY_DESCRIPTIONS: Record<ValidationType, string> = {
   photo: 'Submit a photo',
   video: 'Record a video',
-  text: 'Written response',
+  text: 'Submit a response',
   signature: 'Get someone to confirm',
-  beatcoin: 'Hidden collectible / token',
+  beatcoin: 'Event currency (BeatCoin)',
 }
 
 const MISSION_BUILDER_GRADIENT_HOVER =
@@ -187,47 +187,6 @@ function formFromMission(m: MissionRecord): MissionForm {
 function missionStatusBadge(isActive: boolean): { label: string; className: string } {
   if (isActive) return { label: 'Active', className: 'bg-emerald-50 text-emerald-700' }
   return { label: 'Inactive', className: 'bg-zinc-100 text-zinc-600' }
-}
-
-function missionValidationIcon(type: ValidationType, className: string) {
-  if (type === 'photo') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
-        <path d="M4 7h4l1.4-2h5.2L16 7h4v12H4z" />
-        <circle cx="12" cy="13" r="3.2" />
-      </svg>
-    )
-  }
-  if (type === 'video') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
-        <rect x="3" y="6" width="14" height="12" rx="2" />
-        <path d="m17 10 4-2v8l-4-2z" />
-      </svg>
-    )
-  }
-  if (type === 'signature') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
-        <path d="m4 20 4.5-1 9.7-9.7a2.3 2.3 0 0 0-3.2-3.3L5.3 15.7z" />
-        <path d="M13 7l3.8 3.8" />
-      </svg>
-    )
-  }
-  if (type === 'beatcoin') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
-        <circle cx="12" cy="12" r="8" />
-        <path d="M9.2 12h5.6M12 9.2v5.6" />
-      </svg>
-    )
-  }
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
-      <path d="M7 4h8l4 4v12H7z" />
-      <path d="M15 4v4h4M9 13h6M9 17h6" />
-    </svg>
-  )
 }
 
 export default function MissionsLibraryPage() {
@@ -636,7 +595,7 @@ export default function MissionsLibraryPage() {
         </header>
 
         <section className="admin-gap-intro-first-section flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-2xl border-x border-t border-[#ebebeb] bg-white">
-          <div className="z-20 border-b border-[#ebebeb] bg-white p-4 pb-3">
+          <div className="z-20 rounded-t-2xl border-b border-[#ebebeb] bg-white p-4 pb-3">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex min-w-0 flex-wrap items-center gap-3">
                 <div className="relative w-full md:w-[360px]">
@@ -856,8 +815,8 @@ export default function MissionsLibraryPage() {
                         className={`grid w-full min-h-[52px] cursor-pointer grid-cols-[1.5fr_0.8fr_0.7fr_0.9fr_1fr] items-center gap-x-3 rounded-lg px-3 py-1.5 text-left transition-colors ${rowBg}`}
                       >
                         <span className="inline-flex items-center gap-3">
-                          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-base" aria-hidden>
-                            {missionTypeIcon(m.validation_type)}
+                          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100" aria-hidden>
+                            <MissionCategoryTypeIcon type={m.validation_type} size={20} className="h-5 w-5" />
                           </span>
                           <span className="truncate text-[14px] font-medium text-zinc-900">{m.title}</span>
                         </span>
@@ -927,9 +886,12 @@ export default function MissionsLibraryPage() {
                       <div className="relative flex h-full flex-col justify-between p-3 text-white">
                         <div>
                           <div className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/25 backdrop-blur-sm">
-                            <span className="text-base" aria-hidden>
-                              {missionTypeIcon(m.validation_type)}
-                            </span>
+                            <MissionCategoryTypeIcon
+                              type={m.validation_type}
+                              size={20}
+                              className="h-5 w-5"
+                              beatcoinDisplayVariant="onDark"
+                            />
                           </div>
                           <p className="mt-3 line-clamp-2 text-[16px] font-semibold leading-snug">{m.title}</p>
                           <p className="mt-2 inline-flex items-center gap-1 text-[13px] font-medium text-white/95">
@@ -1106,7 +1068,12 @@ export default function MissionsLibraryPage() {
                                                     : 'text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white'
                                                 }
                                               >
-                                                {missionValidationIcon(v, 'h-4 w-4 shrink-0')}
+                                                <MissionCategoryTypeIcon
+                                                  type={v}
+                                                  size={16}
+                                                  className={`h-4 w-4 shrink-0 ${selected ? '' : 'group-hover:brightness-0 group-hover:invert'}`}
+                                                  onGradient={selected}
+                                                />
                                               </span>
                                               <span className="text-[14px] font-semibold leading-tight">
                                                 {adminValidationTypeLabel(v)}
@@ -1152,9 +1119,6 @@ export default function MissionsLibraryPage() {
                                 <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
                                   Card cover, overlay copy &amp; images
                                 </h4>
-                                <p className="max-w-lg px-2 text-center text-[13px] font-medium text-zinc-500">
-                                  One line in the field below appears in the overlay preview as guest-facing body copy.
-                                </p>
                                 <div className="w-full max-w-[760px] overflow-visible px-3 py-2">
                                   <div className="rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
                                     <label className="flex h-12 w-full min-w-0 items-center rounded-2xl bg-white px-4">

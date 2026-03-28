@@ -30,7 +30,7 @@ import {
   MISSION_CARD_THEME_LABELS,
 } from '@/lib/guest-missions-gradients'
 import MissionLivePreview, { type MissionPreviewInput } from '@/app/admin/missions/_components/MissionLivePreview'
-import { missionTypeIcon } from '@/app/admin/missions/_components/mission-admin-shared'
+import { MissionCategoryTypeIcon } from '@/app/admin/missions/_components/mission-admin-shared'
 
 type BuilderSectionId =
   | 'basics'
@@ -467,7 +467,7 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
     form.validation_type === 'photo' ||
     form.validation_type === 'video' ||
     form.validation_type === 'text'
-  const typePill = `${adminValidationTypeLabel(form.validation_type)} · ${missionTypeIcon(form.validation_type)}`
+  const typeLabel = adminValidationTypeLabel(form.validation_type)
 
   if (loading) {
     return (
@@ -565,7 +565,10 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
                 >
                   {savedActive ? 'Live' : workingId ? 'Draft' : 'Not saved'}
                 </span>
-                <span className="text-xs text-zinc-500">{typePill}</span>
+                <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
+                  <MissionCategoryTypeIcon type={form.validation_type} size={14} />
+                  <span>{typeLabel}</span>
+                </span>
               </div>
             </div>
           </header>
@@ -770,8 +773,8 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
 
                   <p className="mt-4 text-xs text-zinc-500">
                     Type icon:{' '}
-                    <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                      {missionTypeIcon(form.validation_type)}{' '}
+                    <span className="inline-flex items-center gap-1.5 font-medium text-zinc-700 dark:text-zinc-300">
+                      <MissionCategoryTypeIcon type={form.validation_type} size={16} className="h-4 w-4 shrink-0" />
                       {adminValidationTypeLabel(form.validation_type)}
                     </span>
                   </p>
@@ -1102,7 +1105,10 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
                 </div>
                 <div>
                   <dt className="text-xs font-medium text-zinc-500">Type</dt>
-                  <dd className="text-zinc-900 dark:text-zinc-100">{typePill}</dd>
+                  <dd className="flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
+                    <MissionCategoryTypeIcon type={form.validation_type} size={16} />
+                    <span>{typeLabel}</span>
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-xs font-medium text-zinc-500">Reward</dt>

@@ -5,8 +5,8 @@ import {
   MISSION_CARD_BACKGROUNDS,
   missionGradientAt,
 } from '@/lib/guest-missions-gradients'
-import { missionTypeIcon } from '@/app/admin/missions/_components/mission-admin-shared'
 import type { ValidationType } from '@/lib/admin-missions'
+import { MissionCategoryTypeIcon } from '@/components/mission/MissionCategoryTypeIcon'
 import { RewardAmount } from '@/components/reward/RewardAmount'
 
 export type MissionPreviewInput = {
@@ -55,7 +55,6 @@ export function MissionOverlaySplitPreviews({
   const surface = useMemo(() => previewGradientForMissionForm(form), [form])
   const title = form.title.trim() || 'Mission title'
   const pts = Math.max(0, Math.floor(form.points))
-  const typeIcon = missionTypeIcon(form.validation_type)
   const ctaLabel = (form.card_cta_label ?? '').trim() || 'Start mission'
   const completedLabel = (form.card_completed_label ?? '').trim() || 'Completed'
   const cover =
@@ -82,8 +81,7 @@ export function MissionOverlaySplitPreviews({
               cover={cover}
               title={title}
               points={pts}
-              typeIcon={typeIcon}
-              beatcoin={form.validation_type === 'beatcoin'}
+              validationType={form.validation_type}
               pending={form.cardPending && !form.cardCompleted}
               completed={form.cardCompleted}
               ctaLabel={ctaLabel}
@@ -102,7 +100,7 @@ export function MissionOverlaySplitPreviews({
               title={title}
               overlayImg={overlayImg}
               overlayBodyText={(form.description ?? '').trim()}
-              beatcoin={form.validation_type === 'beatcoin'}
+              validationType={form.validation_type}
               ctaLabel={ctaLabel}
               completedLabel={completedLabel}
             />
@@ -123,8 +121,7 @@ export function MissionOverlaySplitPreviews({
           cover={cover}
           title={title}
           points={pts}
-          typeIcon={typeIcon}
-          beatcoin={form.validation_type === 'beatcoin'}
+          validationType={form.validation_type}
           pending={form.cardPending && !form.cardCompleted}
           completed={form.cardCompleted}
           ctaLabel={ctaLabel}
@@ -140,7 +137,7 @@ export function MissionOverlaySplitPreviews({
           title={title}
           overlayImg={overlayImg}
           overlayBodyText={(form.description ?? '').trim()}
-          beatcoin={form.validation_type === 'beatcoin'}
+          validationType={form.validation_type}
           ctaLabel={ctaLabel}
           completedLabel={completedLabel}
         />
@@ -154,7 +151,6 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
   const surface = useMemo(() => previewGradientForMissionForm(form), [form])
   const title = form.title.trim() || 'Mission title'
   const pts = Math.max(0, Math.floor(form.points))
-  const typeIcon = missionTypeIcon(form.validation_type)
   const ctaLabel = (form.card_cta_label ?? '').trim() || 'Start mission'
   const completedLabel = (form.card_completed_label ?? '').trim() || 'Completed'
   const cover =
@@ -195,8 +191,7 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
           cover={cover}
           title={title}
           points={pts}
-          typeIcon={typeIcon}
-          beatcoin={form.validation_type === 'beatcoin'}
+          validationType={form.validation_type}
           pending={form.cardPending && !form.cardCompleted}
           completed={form.cardCompleted}
           ctaLabel={ctaLabel}
@@ -208,7 +203,7 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
           title={title}
           overlayImg={overlayImg}
           overlayBodyText={(form.description ?? '').trim()}
-          beatcoin={form.validation_type === 'beatcoin'}
+          validationType={form.validation_type}
           ctaLabel={ctaLabel}
           completedLabel={completedLabel}
         />
@@ -218,8 +213,7 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
           cover={cover}
           title={title}
           points={pts}
-          typeIcon={typeIcon}
-          beatcoin={form.validation_type === 'beatcoin'}
+          validationType={form.validation_type}
           pending={false}
           completed
           ctaLabel={ctaLabel}
@@ -235,8 +229,7 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
             cover={cover}
             title={title}
             points={pts}
-            typeIcon={typeIcon}
-            beatcoin={form.validation_type === 'beatcoin'}
+            validationType={form.validation_type}
             pending={form.cardPending && !form.cardCompleted}
             completed={form.cardCompleted}
             ctaLabel={ctaLabel}
@@ -249,7 +242,7 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
             title={title}
             overlayImg={overlayImg}
             overlayBodyText={(form.description ?? '').trim()}
-            beatcoin={form.validation_type === 'beatcoin'}
+            validationType={form.validation_type}
             ctaLabel={ctaLabel}
             completedLabel={completedLabel}
           />
@@ -260,8 +253,7 @@ export default function MissionLivePreview({ form }: { form: MissionPreviewInput
             cover={cover}
             title={title}
             points={pts}
-            typeIcon={typeIcon}
-            beatcoin={form.validation_type === 'beatcoin'}
+            validationType={form.validation_type}
             pending={false}
             completed
             ctaLabel={ctaLabel}
@@ -296,10 +288,9 @@ function PreviewCard({
   cover,
   title,
   points,
-  typeIcon,
+  validationType,
   overlayImg,
   overlayBodyText,
-  beatcoin,
   pending,
   completed,
   ctaLabel,
@@ -312,11 +303,10 @@ function PreviewCard({
   cover?: string | null
   title: string
   points?: number
-  typeIcon?: string
+  validationType: ValidationType
   overlayImg?: string | null
   /** Overlay description preview; empty shows a muted placeholder. */
   overlayBodyText?: string
-  beatcoin?: boolean
   pending?: boolean
   completed?: boolean
   ctaLabel: string
@@ -380,7 +370,13 @@ function PreviewCard({
                   : undefined
               }
             >
-              {!overlayImg ? <span aria-hidden>{beatcoin ? '🪙' : '📷'}</span> : null}
+              {!overlayImg ? (
+                <MissionCategoryTypeIcon
+                  type={validationType}
+                  size={compact ? (builderFlush ? 16 : 20) : 24}
+                  className={builderFlush ? 'h-4 w-4' : compact ? 'h-5 w-5' : 'h-6 w-6'}
+                />
+              ) : null}
             </div>
             <p
               className={`line-clamp-3 text-center text-zinc-500 ${
@@ -438,11 +434,15 @@ function PreviewCard({
       ) : null}
       <span
         className={`relative z-10 flex items-center justify-center rounded-full bg-white/90 leading-none text-zinc-800 ${
-          builderFlush ? 'h-6 w-6 text-[10px]' : compact ? 'h-7 w-7 text-sm' : 'h-9 w-9 text-base'
+          builderFlush ? 'h-6 w-6' : compact ? 'h-7 w-7' : 'h-9 w-9'
         }`}
         aria-hidden
       >
-        {beatcoin ? '🪙' : typeIcon}
+        <MissionCategoryTypeIcon
+          type={validationType}
+          size={builderFlush ? 14 : compact ? 16 : 16}
+          className={builderFlush ? 'h-3.5 w-3.5' : compact ? 'h-4 w-4' : 'h-4 w-4'}
+        />
       </span>
       <h3
         className={`relative z-10 font-bold leading-snug text-white ${

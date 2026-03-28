@@ -32,6 +32,7 @@ import {
   type GuestMissionFeedItem,
 } from '@/lib/guest-mission-feed'
 import { saveGuestTableContext } from '@/lib/guest-table-context'
+import { MissionCategoryTypeIcon } from '@/components/mission/MissionCategoryTypeIcon'
 import { COIN_SIZE, safeRewardPoints } from '@/lib/mission-ui'
 import {
   fetchGuestEmblemsConfig,
@@ -1005,15 +1006,6 @@ export default function MissionsTablePage({
                 const limitReached = st === 'limit_reached'
                 const surface = guestMissionSurfaceGradient(m, orderedMissions, i)
                 const rewardAmount = guestMissionDisplayReward(m)
-                const typeIcon = m.validation_type === 'video'
-                  ? '🎥'
-                  : m.validation_type === 'photo'
-                    ? '📸'
-                    : m.validation_type === 'signature'
-                      ? '🖊️'
-                      : m.validation_type === 'text'
-                        ? '📝'
-                        : '💬'
                 const isTableGreetingCard = /post a table greeting/i.test(m.title)
                 const isTrumpetStoryCard =
                   /get alex to explain the trumpet story/i.test(m.title)
@@ -1064,10 +1056,10 @@ export default function MissionsTablePage({
                       />
                     ) : null}
                     <span
-                      className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-lg leading-none text-zinc-800"
+                      className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 leading-none text-zinc-800"
                       aria-hidden
                     >
-                      {m.validation_type === 'beatcoin' ? <RewardUnitIcon size={COIN_SIZE} /> : typeIcon}
+                      <MissionCategoryTypeIcon type={m.validation_type} size={COIN_SIZE} className="h-6 w-6" />
                     </span>
 
                     <h3 className="relative z-10 pr-12 text-left text-lg font-bold leading-snug text-white">

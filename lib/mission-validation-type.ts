@@ -34,9 +34,9 @@ export function missionValidationTypeLabel(type: MissionValidationType): string 
     case 'signature':
       return 'Signature'
     case 'text':
-      return 'Text'
+      return 'Response'
     case 'beatcoin':
-      return 'Beatcoin'
+      return 'Currency farm'
     default:
       return 'Photo'
   }
@@ -52,9 +52,9 @@ export function pendingReviewHintForMissionType(type: MissionValidationType): st
     case 'signature':
       return 'Awaiting review: signature confirmation.'
     case 'text':
-      return 'Awaiting review: read the text response, then approve or reject.'
+      return 'Awaiting review: read the response, then approve or reject.'
     case 'beatcoin':
-      return 'Beatcoin scan claim.'
+      return 'Currency / token claim pending review.'
     default:
       return 'Awaiting review.'
   }

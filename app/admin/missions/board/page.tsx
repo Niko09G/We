@@ -8,7 +8,7 @@ import {
   setMissionAssignmentsForMission,
 } from '@/lib/admin-mission-assignments'
 import { listTablesForAdmin, type AdminTableRow } from '@/lib/admin-tables'
-import { missionTypeIcon } from '@/app/admin/missions/_components/mission-admin-shared'
+import { MissionCategoryTypeIcon } from '@/app/admin/missions/_components/mission-admin-shared'
 
 export default function MissionBoardPage() {
   const [loading, setLoading] = useState(true)
@@ -186,7 +186,9 @@ export default function MissionBoardPage() {
                                 className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
                               >
                                 <div className="min-w-0 flex items-center gap-1.5">
-                                  <span aria-hidden>{missionTypeIcon(m.validation_type)}</span>
+                                  <span aria-hidden className="inline-flex shrink-0">
+                                    <MissionCategoryTypeIcon type={m.validation_type} size={14} className="h-3.5 w-3.5" />
+                                  </span>
                                   <span className="truncate font-medium text-zinc-800 dark:text-zinc-200">
                                     {m.title}
                                   </span>

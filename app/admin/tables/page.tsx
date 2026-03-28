@@ -976,18 +976,47 @@ export default function TablesAdminPage() {
               const isActiveStatus = row.is_active && !row.is_archived
               const statusLabel = row.is_archived ? 'Archived' : isActiveStatus ? 'Active' : 'Inactive'
               return (
-                <button
+                <div
                   key={row.id}
-                  type="button"
-                  onClick={(e) => openEditEditor(row, e.currentTarget)}
-                  className={`group relative h-[290px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 text-left outline-none transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/70 focus-visible:ring-offset-2 ${
+                  className={`group relative h-[290px] overflow-hidden rounded-2xl border border-zinc-200 text-left outline-none transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm focus-within:ring-2 focus-within:ring-zinc-400/70 focus-within:ring-offset-2 ${
                     row.is_archived ? 'opacity-75 saturate-[0.85]' : ''
                   }`}
                   style={{
                     background: `linear-gradient(to bottom, ${resolved.heroTop}, ${resolved.heroMiddle || resolved.heroBottom}, ${resolved.heroBottom})`,
                   }}
                 >
-                  <div className="relative flex h-full flex-col justify-between p-3 text-white">
+                  <button
+                    type="button"
+                    onClick={(e) => openEditEditor(row, e.currentTarget)}
+                    className="absolute inset-0 z-0 cursor-pointer rounded-2xl"
+                    aria-label={`Edit ${row.name}`}
+                  />
+                  <div className="pointer-events-none absolute left-0 right-0 top-3 z-20 flex justify-center gap-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+                    <a
+                      href={`/missions/${row.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="pointer-events-auto inline-flex h-8 shrink-0 items-center rounded-full bg-black px-3 text-xs font-medium text-white shadow-sm"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Visit page
+                    </a>
+                    <button
+                      type="button"
+                      className="pointer-events-auto inline-flex h-8 shrink-0 items-center rounded-full border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 shadow-sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const url = new URL(`/missions/${row.id}`, window.location.origin).href
+                        void navigator.clipboard
+                          .writeText(url)
+                          .then(() => showToast('Link copied.', 'success'))
+                          .catch(() => showToast('Copy failed.', 'error'))
+                      }}
+                    >
+                      Copy page link
+                    </button>
+                  </div>
+                  <div className="relative z-[1] flex h-full flex-col justify-between p-3 text-white pointer-events-none">
                     {resolved.heroImageUrl.trim() ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -1055,7 +1084,7 @@ export default function TablesAdminPage() {
                       </div>
                     </div>
                   </div>
-                </button>
+                </div>
               )
             })}
             </div>
