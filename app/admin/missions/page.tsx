@@ -33,14 +33,6 @@ type MissionForm = {
   is_active: boolean
 }
 
-const MISSION_NAME_SUGGESTION_CHIPS = [
-  'Send a photo greeting',
-  'Find the hidden presents',
-  'Submit your best idea',
-  'Record a cheers video',
-  'Share your funniest memory',
-]
-
 function emptyForm(): MissionForm {
   return {
     title: '',
@@ -136,11 +128,9 @@ export default function MissionsLibraryPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [step, setStep] = useState<MissionStep>(1)
   const [step1Hint, setStep1Hint] = useState<string | null>(null)
-  const [categoryMenuOpen, setCategoryMenuOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<MissionForm>(emptyForm)
   const missionTitleInputRef = useRef<HTMLInputElement | null>(null)
-  const categoryMenuRef = useRef<HTMLDivElement | null>(null)
 
   const showToast = useCallback((message: string, kind: 'success' | 'error') => {
     setToast({ kind, message })
@@ -183,31 +173,6 @@ export default function MissionsLibraryPage() {
     return () => window.clearTimeout(t)
   }, [editorOpen, step])
 
-  useEffect(() => {
-    if (!categoryMenuOpen) return
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target
-      if (!(target instanceof Node)) return
-      if (categoryMenuRef.current?.contains(target)) return
-      setCategoryMenuOpen(false)
-    }
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      setCategoryMenuOpen(false)
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [categoryMenuOpen])
-
-  useEffect(() => {
-    if (editorOpen && step === 1) return
-    setCategoryMenuOpen(false)
-  }, [editorOpen, step])
-
   const statusCounts = useMemo(() => {
     const active = missions.filter((m) => m.is_active).length
     const inactive = missions.filter((m) => !m.is_active).length
@@ -242,7 +207,6 @@ export default function MissionsLibraryPage() {
     setEditingId(null)
     setStep(1)
     setStep1Hint(null)
-    setCategoryMenuOpen(false)
     setForm(emptyForm())
     setEditorOpen(true)
   }
@@ -252,7 +216,6 @@ export default function MissionsLibraryPage() {
     setEditingId(mission.id)
     setStep(1)
     setStep1Hint(null)
-    setCategoryMenuOpen(false)
     setForm(formFromMission(mission))
     setEditorOpen(true)
   }
@@ -707,7 +670,7 @@ export default function MissionsLibraryPage() {
                                     </h4>
                                     <div className="rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
                                       <div
-                                        className={`flex h-14 items-stretch rounded-2xl bg-white pl-4 transition-[box-shadow] duration-200 ease-out ${
+                                        className={`flex h-14 items-center gap-2 rounded-2xl bg-white pl-4 pr-2 transition-[box-shadow] duration-200 ease-out ${
                                           step1Hint ? 'shadow-[inset_0_0_0_1px_rgba(248,113,113,0.55)]' : ''
                                         }`}
                                       >
@@ -727,56 +690,25 @@ export default function MissionsLibraryPage() {
                                           className="min-w-0 flex-1 bg-transparent !text-[16px] outline-none"
                                           placeholder="What's your mission called?"
                                         />
-                                        <div ref={categoryMenuRef} className="relative h-full shrink-0">
-                                          <button
-                                            type="button"
-                                            onClick={() => setCategoryMenuOpen((s) => !s)}
-                                            className="inline-flex h-full items-center gap-2 rounded-l-none rounded-r-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] px-3 text-white transition-opacity hover:opacity-95"
-                                            aria-haspopup="menu"
-                                            aria-expanded={categoryMenuOpen}
-                                            aria-label="Mission category"
+                                        <button
+                                          type="button"
+                                          onClick={advanceFromStep1}
+                                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black text-white shadow-sm transition-all duration-200 ease-out hover:scale-[1.04] hover:shadow-md active:scale-[0.96]"
+                                          aria-label="Continue"
+                                        >
+                                          <svg
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth={2}
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            className="h-4 w-4"
+                                            aria-hidden
                                           >
-                                            {missionValidationIcon(form.validation_type, 'h-3.5 w-3.5')}
-                                            <span className="text-[13px] font-medium">{adminValidationTypeLabel(form.validation_type)}</span>
-                                            <svg
-                                              viewBox="0 0 24 24"
-                                              fill="none"
-                                              stroke="currentColor"
-                                              strokeWidth={2}
-                                              strokeLinecap="round"
-                                              strokeLinejoin="round"
-                                              className="h-3.5 w-3.5"
-                                              aria-hidden
-                                            >
-                                              <path d="m6 9 6 6 6-6" />
-                                            </svg>
-                                          </button>
-                                          {categoryMenuOpen ? (
-                                            <div
-                                              role="menu"
-                                              className="absolute right-0 top-[calc(100%+8px)] z-20 w-[210px] overflow-hidden rounded-[10px] border border-[#ebebeb] bg-white py-1 shadow-[0_10px_30px_rgba(24,24,27,0.14)]"
-                                            >
-                                              {VALIDATION_TYPES.map((v) => (
-                                                <button
-                                                  key={v}
-                                                  type="button"
-                                                  onClick={() => {
-                                                    setForm((s) => ({ ...s, validation_type: v }))
-                                                    setCategoryMenuOpen(false)
-                                                  }}
-                                                  className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] transition-colors ${
-                                                    form.validation_type === v
-                                                      ? 'bg-zinc-100 text-zinc-900'
-                                                      : 'text-zinc-700 hover:bg-zinc-50'
-                                                  }`}
-                                                >
-                                                  {missionValidationIcon(v, 'h-4 w-4')}
-                                                  <span className="font-medium">{adminValidationTypeLabel(v)}</span>
-                                                </button>
-                                              ))}
-                                            </div>
-                                          ) : null}
-                                        </div>
+                                            <path d="M5 12h14M13 6l6 6-6 6" />
+                                          </svg>
+                                        </button>
                                       </div>
                                     </div>
                                     {step1Hint ? (
@@ -784,20 +716,36 @@ export default function MissionsLibraryPage() {
                                         {step1Hint}
                                       </p>
                                     ) : null}
+                                    <p className="text-center text-[13px] font-medium leading-snug text-zinc-500">
+                                      Select mission category
+                                    </p>
                                     <div className="flex flex-wrap justify-center gap-2">
-                                      {MISSION_NAME_SUGGESTION_CHIPS.map((chip) => (
-                                        <button
-                                          key={chip}
-                                          type="button"
-                                          onClick={() => {
-                                            setForm((s) => ({ ...s, title: chip }))
-                                            setStep1Hint(null)
-                                          }}
-                                          className="rounded-full border border-zinc-200/90 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-all duration-200 ease-out hover:border-zinc-300 hover:bg-zinc-50 hover:shadow"
-                                        >
-                                          {chip}
-                                        </button>
-                                      ))}
+                                      {VALIDATION_TYPES.map((v) => {
+                                        const selected = form.validation_type === v
+                                        return (
+                                          <button
+                                            key={v}
+                                            type="button"
+                                            onClick={() => setForm((s) => ({ ...s, validation_type: v }))}
+                                            className={`group inline-flex cursor-pointer items-center gap-2 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-all duration-200 ease-out ${
+                                              selected
+                                                ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white ring-2 ring-zinc-900/20'
+                                                : 'border border-zinc-200/90 bg-white text-zinc-700 hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white hover:shadow'
+                                            }`}
+                                          >
+                                            <span
+                                              className={
+                                                selected
+                                                  ? 'text-white'
+                                                  : 'text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white'
+                                              }
+                                            >
+                                              {missionValidationIcon(v, 'h-4 w-4')}
+                                            </span>
+                                            <span>{adminValidationTypeLabel(v)}</span>
+                                          </button>
+                                        )
+                                      })}
                                     </div>
                                   </div>
                                 </div>
