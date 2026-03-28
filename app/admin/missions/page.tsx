@@ -14,8 +14,21 @@ import {
 } from '@/lib/admin-missions'
 import { listActiveMissionAssignmentsForAdmin } from '@/lib/admin-mission-assignments'
 import { missionTypeIcon } from '@/app/admin/missions/_components/mission-admin-shared'
+import {
+  MissionOverlaySplitPreviews,
+  type MissionPreviewInput,
+} from '@/app/admin/missions/_components/MissionLivePreview'
 import { listTablesForAdmin, type AdminTableRow } from '@/lib/admin-tables'
-import { MISSION_CARD_BACKGROUNDS } from '@/lib/guest-missions-gradients'
+import {
+  MISSION_CARD_BACKGROUNDS,
+  MISSION_CARD_THEME_LABELS,
+} from '@/lib/guest-missions-gradients'
+import {
+  removeMissionImageAssetByPublicUrl,
+  uploadMissionCardCoverAsset,
+  uploadMissionImageAsset,
+} from '@/lib/mission-image-assets'
+import { MAX_IMAGE_UPLOAD_BYTES, prettyMb } from '@/lib/upload-constraints'
 
 type MissionView = 'cards' | 'list'
 type MissionStatusFilter = 'all' | 'active' | 'inactive' | 'archived'
@@ -25,6 +38,9 @@ type MissionForm = {
   title: string
   description: string
   header_image_url: string
+  card_cover_image_url: string
+  /** `null` = auto / unset in DB (guest list picks gradient by title). */
+  card_theme_index: number | null
   points: string
   validation_type: ValidationType
   approval_mode: 'auto' | 'manual'
@@ -33,11 +49,24 @@ type MissionForm = {
   is_active: boolean
 }
 
+const CATEGORY_DESCRIPTIONS: Record<ValidationType, string> = {
+  photo: 'Submit a photo',
+  video: 'Record a video',
+  text: 'Written response',
+  signature: 'Get someone to confirm',
+  beatcoin: 'Hidden collectible / token',
+}
+
+const MISSION_BUILDER_GRADIENT_HOVER =
+  'hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white'
+
 function emptyForm(): MissionForm {
   return {
     title: '',
     description: '',
     header_image_url: '',
+    card_cover_image_url: '',
+    card_theme_index: null,
     points: '10',
     validation_type: 'photo',
     approval_mode: 'auto',
@@ -48,10 +77,15 @@ function emptyForm(): MissionForm {
 }
 
 function formFromMission(m: MissionRecord): MissionForm {
+  const idx = m.card_theme_index
+  const themeOk =
+    typeof idx === 'number' && Number.isFinite(idx) && idx >= 0 && idx < MISSION_CARD_BACKGROUNDS.length
   return {
     title: m.title ?? '',
     description: m.description ?? '',
     header_image_url: m.header_image_url ?? '',
+    card_cover_image_url: m.card_cover_image_url ?? '',
+    card_theme_index: themeOk ? Math.floor(idx) : null,
     points: String(m.points ?? 0),
     validation_type: VALIDATION_TYPES.includes(m.validation_type as ValidationType)
       ? (m.validation_type as ValidationType)
@@ -128,9 +162,14 @@ export default function MissionsLibraryPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [step, setStep] = useState<MissionStep>(1)
   const [step1Hint, setStep1Hint] = useState<string | null>(null)
+  const [step2View, setStep2View] = useState<'main' | 'customize'>('main')
+  const [uploadSlot, setUploadSlot] = useState<'card' | 'overlay' | null>(null)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<MissionForm>(emptyForm)
   const missionTitleInputRef = useRef<HTMLInputElement | null>(null)
+  const missionDescInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const cardCoverInputRef = useRef<HTMLInputElement | null>(null)
+  const headerImageInputRef = useRef<HTMLInputElement | null>(null)
 
   const showToast = useCallback((message: string, kind: 'success' | 'error') => {
     setToast({ kind, message })
@@ -173,6 +212,47 @@ export default function MissionsLibraryPage() {
     return () => window.clearTimeout(t)
   }, [editorOpen, step])
 
+  useEffect(() => {
+    if (!editorOpen || step !== 2 || step2View !== 'main') return
+    const t = window.setTimeout(() => missionDescInputRef.current?.focus(), 30)
+    return () => window.clearTimeout(t)
+  }, [editorOpen, step, step2View])
+
+  useEffect(() => {
+    if (!editorOpen) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      if (step === 2 && step2View === 'customize') {
+        setStep2View('main')
+        return
+      }
+      setEditorOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [editorOpen, step, step2View])
+
+  useEffect(() => {
+    if (step !== 2) setStep2View('main')
+  }, [step])
+
+  const missionStep2PreviewInput = useMemo<MissionPreviewInput>(
+    () => ({
+      title: form.title,
+      points: Math.max(0, Math.floor(Number(form.points) || 0)),
+      validation_type: form.validation_type,
+      card_theme_choice: form.card_theme_index == null ? 'auto' : form.card_theme_index,
+      card_cover_image_url: form.card_cover_image_url,
+      header_image_url: form.header_image_url,
+      card_cta_label: '',
+      card_completed_label: '',
+      cardCompleted: false,
+      cardPending: false,
+    }),
+    [form]
+  )
+
   const statusCounts = useMemo(() => {
     const active = missions.filter((m) => m.is_active).length
     const inactive = missions.filter((m) => !m.is_active).length
@@ -207,6 +287,7 @@ export default function MissionsLibraryPage() {
     setEditingId(null)
     setStep(1)
     setStep1Hint(null)
+    setStep2View('main')
     setForm(emptyForm())
     setEditorOpen(true)
   }
@@ -216,8 +297,45 @@ export default function MissionsLibraryPage() {
     setEditingId(mission.id)
     setStep(1)
     setStep1Hint(null)
+    setStep2View('main')
     setForm(formFromMission(mission))
     setEditorOpen(true)
+  }
+
+  async function uploadCardCover(file: File) {
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      showToast(`Image is too large. Max ${prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.`, 'error')
+      return
+    }
+    setUploadSlot('card')
+    try {
+      const prev = form.card_cover_image_url.trim() || null
+      const url = await uploadMissionCardCoverAsset(file)
+      await removeMissionImageAssetByPublicUrl(prev)
+      setForm((s) => ({ ...s, card_cover_image_url: url }))
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Upload failed.', 'error')
+    } finally {
+      setUploadSlot(null)
+    }
+  }
+
+  async function uploadHeaderImage(file: File) {
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      showToast(`Image is too large. Max ${prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.`, 'error')
+      return
+    }
+    setUploadSlot('overlay')
+    try {
+      const prev = form.header_image_url.trim() || null
+      const url = await uploadMissionImageAsset(file)
+      await removeMissionImageAssetByPublicUrl(prev)
+      setForm((s) => ({ ...s, header_image_url: url }))
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Upload failed.', 'error')
+    } finally {
+      setUploadSlot(null)
+    }
   }
 
   function advanceFromStep1() {
@@ -246,6 +364,8 @@ export default function MissionsLibraryPage() {
         message_required: form.message_required,
         submission_hint: form.submission_hint.trim() || null,
         header_image_url: form.header_image_url.trim() || null,
+        card_cover_image_url: form.card_cover_image_url.trim() || null,
+        card_theme_index: form.card_theme_index,
       }
       if (editorMode === 'create') {
         await createMission(payload)
@@ -656,6 +776,28 @@ export default function MissionsLibraryPage() {
                 </div>
 
                         <div className="relative flex h-full min-h-0 flex-1 flex-col items-center justify-start overflow-hidden [&_button]:cursor-pointer">
+                          <input
+                            ref={cardCoverInputRef}
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png,image/webp"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] ?? null
+                              e.currentTarget.value = ''
+                              if (file) void uploadCardCover(file)
+                            }}
+                          />
+                          <input
+                            ref={headerImageInputRef}
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png,image/webp"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] ?? null
+                              e.currentTarget.value = ''
+                              if (file) void uploadHeaderImage(file)
+                            }}
+                          />
                           <div className="flex h-full min-h-0 w-full max-w-full flex-1 flex-col items-center justify-start overflow-hidden px-5 py-4 pb-28 [&_input]:!text-[14px] [&_textarea]:!text-[14px] [&_select]:!text-[14px]">
                             <div className="relative min-h-full w-full overflow-x-visible">
                               <div
@@ -716,10 +858,10 @@ export default function MissionsLibraryPage() {
                                         {step1Hint}
                                       </p>
                                     ) : null}
-                                    <p className="text-center text-[13px] font-medium leading-snug text-zinc-500">
+                                    <p className="text-center text-[15px] font-semibold leading-snug text-zinc-900">
                                       Select mission category
                                     </p>
-                                    <div className="flex flex-wrap justify-center gap-2">
+                                    <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                                       {VALIDATION_TYPES.map((v) => {
                                         const selected = form.validation_type === v
                                         return (
@@ -727,22 +869,33 @@ export default function MissionsLibraryPage() {
                                             key={v}
                                             type="button"
                                             onClick={() => setForm((s) => ({ ...s, validation_type: v }))}
-                                            className={`group inline-flex cursor-pointer items-center gap-2 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-all duration-200 ease-out ${
+                                            className={`group flex w-full cursor-pointer flex-col rounded-xl border px-3.5 py-3.5 text-left transition-colors duration-200 ease-out ${
                                               selected
-                                                ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white ring-2 ring-zinc-900/20'
-                                                : 'border border-zinc-200/90 bg-white text-zinc-700 hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white hover:shadow'
+                                                ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white'
+                                                : `border border-zinc-200 bg-white text-zinc-800 ${MISSION_BUILDER_GRADIENT_HOVER}`
                                             }`}
                                           >
-                                            <span
-                                              className={
-                                                selected
-                                                  ? 'text-white'
-                                                  : 'text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white'
-                                              }
-                                            >
-                                              {missionValidationIcon(v, 'h-4 w-4')}
+                                            <span className="inline-flex items-center gap-2">
+                                              <span
+                                                className={
+                                                  selected
+                                                    ? 'text-white'
+                                                    : 'text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white'
+                                                }
+                                              >
+                                                {missionValidationIcon(v, 'h-4 w-4 shrink-0')}
+                                              </span>
+                                              <span className="text-[14px] font-semibold leading-tight">
+                                                {adminValidationTypeLabel(v)}
+                                              </span>
                                             </span>
-                                            <span>{adminValidationTypeLabel(v)}</span>
+                                            <span
+                                              className={`mt-1.5 text-[11px] font-medium leading-snug ${
+                                                selected ? 'text-white/85' : 'text-zinc-500 group-hover:text-white/90'
+                                              }`}
+                                            >
+                                              {CATEGORY_DESCRIPTIONS[v]}
+                                            </span>
                                           </button>
                                         )
                                       })}
@@ -756,14 +909,233 @@ export default function MissionsLibraryPage() {
                                   step >= 2 ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-3 opacity-0'
                                 }`}
                               >
-                                <div className="mx-auto h-full w-full max-w-[760px] overflow-y-auto">
-                    {step === 1 ? (
-                              <div />
+                                <div className="mx-auto flex h-full min-h-0 w-full max-w-[760px] flex-col overflow-y-auto py-3">
+                    {step === 2 && step2View === 'customize' ? (
+                      <div className="flex min-h-full flex-col items-center space-y-5 px-1 pb-6">
+                        <div className="relative w-full max-w-lg">
+                          <button
+                            type="button"
+                            onClick={() => setStep2View('main')}
+                            className="absolute left-0 top-0.5 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-zinc-900 shadow-sm transition-transform duration-200 ease-out hover:scale-105 active:scale-95"
+                            aria-label="Back to design"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="h-4 w-4"
+                              aria-hidden
+                            >
+                              <path d="M19 12H5M12 19l-7-7 7-7" />
+                            </svg>
+                          </button>
+                          <h4 className="px-11 text-center text-2xl font-semibold tracking-tight text-zinc-900">
+                            Mission color palette
+                          </h4>
+                          <p className="mt-2 text-center text-[13px] font-medium text-zinc-500">
+                            Canva-style gradients for cards — separate from table team themes.
+                          </p>
+                        </div>
+                        <div className="flex w-full max-w-[760px] flex-wrap justify-center gap-4">
+                          {MISSION_CARD_BACKGROUNDS.map((bg, i) => {
+                            const selected = form.card_theme_index === i
+                            return (
+                              <button
+                                key={i}
+                                type="button"
+                                aria-label={MISSION_CARD_THEME_LABELS[i]}
+                                onClick={() => setForm((s) => ({ ...s, card_theme_index: i }))}
+                                className={`flex h-[4.5rem] w-[4.5rem] shrink-0 flex-col items-center justify-end rounded-2xl p-1.5 text-[10px] font-semibold text-white/95 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)] transition-[transform,box-shadow] duration-200 ease-out ${
+                                  selected
+                                    ? 'scale-[1.03] ring-2 ring-zinc-900 ring-offset-2'
+                                    : 'ring-1 ring-zinc-200/90 hover:scale-[1.04] hover:brightness-105'
+                                }`}
+                                style={{ background: bg }}
+                              >
+                                <span className="line-clamp-2 text-center leading-tight drop-shadow-sm">
+                                  {MISSION_CARD_THEME_LABELS[i]}
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setForm((s) => ({ ...s, card_theme_index: null }))}
+                          className="text-[13px] font-medium text-zinc-600 underline-offset-2 transition-colors hover:text-zinc-900 hover:underline"
+                        >
+                          Use automatic gradient (by title)
+                        </button>
+                      </div>
                     ) : null}
 
-                    {step === 2 ? (
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-semibold text-zinc-900">Step 2 · Rewards</h4>
+                    {step === 2 && step2View === 'main' ? (
+                      <div className="flex min-h-full flex-col items-center space-y-5 px-1 pb-8">
+                        <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
+                          What&apos;s the design?
+                        </h4>
+                        <div className="w-full rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
+                          <textarea
+                            ref={missionDescInputRef}
+                            value={form.description}
+                            onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
+                            rows={4}
+                            placeholder="What's this mission about?"
+                            className="min-h-[6.5rem] w-full resize-y rounded-2xl bg-white px-4 py-3 !text-[15px] outline-none"
+                          />
+                        </div>
+                        <div className="grid w-full max-w-md grid-cols-2 gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => cardCoverInputRef.current?.click()}
+                            disabled={uploadSlot === 'card'}
+                            className={`group relative flex h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 text-sm font-medium transition-all duration-200 ease-out disabled:opacity-60 ${
+                              form.card_cover_image_url.trim() || uploadSlot === 'card'
+                                ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white'
+                                : `bg-zinc-50/90 text-zinc-800 ${MISSION_BUILDER_GRADIENT_HOVER}`
+                            }`}
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth={1.7}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className={`relative z-10 h-4 w-4 transition-colors duration-200 ease-out ${
+                                form.card_cover_image_url.trim() || uploadSlot === 'card'
+                                  ? 'text-white'
+                                  : 'text-zinc-500 group-hover:text-white'
+                              }`}
+                              aria-hidden
+                            >
+                              <rect x="3" y="5" width="18" height="14" rx="2" />
+                              <circle cx="8.5" cy="10" r="1.2" />
+                              <path d="m21 15-6-5-4 4-3-3-5 5" />
+                            </svg>
+                            <span
+                              className={`relative z-10 transition-colors duration-200 ease-out ${
+                                form.card_cover_image_url.trim() || uploadSlot === 'card'
+                                  ? 'text-white'
+                                  : 'group-hover:text-white'
+                              }`}
+                            >
+                              Card cover image
+                            </span>
+                            {uploadSlot === 'card' ? (
+                              <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="absolute right-3 h-4 w-4 animate-spin text-white"
+                                aria-hidden
+                              >
+                                <path d="M21 12a9 9 0 1 1-3.2-6.9" />
+                              </svg>
+                            ) : null}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => headerImageInputRef.current?.click()}
+                            disabled={uploadSlot === 'overlay'}
+                            className={`group relative flex h-12 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 text-sm font-medium transition-all duration-200 ease-out disabled:opacity-60 ${
+                              form.header_image_url.trim() || uploadSlot === 'overlay'
+                                ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white'
+                                : `bg-zinc-50/90 text-zinc-800 ${MISSION_BUILDER_GRADIENT_HOVER}`
+                            }`}
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth={1.7}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className={`relative z-10 h-4 w-4 transition-colors duration-200 ease-out ${
+                                form.header_image_url.trim() || uploadSlot === 'overlay'
+                                  ? 'text-white'
+                                  : 'text-zinc-500 group-hover:text-white'
+                              }`}
+                              aria-hidden
+                            >
+                              <path d="M12 2 9.8 7.2 4.5 9.5l5.3 2.3L12 17l2.2-5.2 5.3-2.3-5.3-2.3L12 2Z" />
+                            </svg>
+                            <span
+                              className={`relative z-10 transition-colors duration-200 ease-out ${
+                                form.header_image_url.trim() || uploadSlot === 'overlay'
+                                  ? 'text-white'
+                                  : 'group-hover:text-white'
+                              }`}
+                            >
+                              Overlay header image
+                            </span>
+                            {uploadSlot === 'overlay' ? (
+                              <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="absolute right-3 h-4 w-4 animate-spin text-white"
+                                aria-hidden
+                              >
+                                <path d="M21 12a9 9 0 1 1-3.2-6.9" />
+                              </svg>
+                            ) : null}
+                          </button>
+                        </div>
+                        <div className="flex w-full max-w-[760px] flex-wrap items-center justify-center gap-3">
+                          {MISSION_CARD_BACKGROUNDS.map((bg, i) => {
+                            const selected = form.card_theme_index === i
+                            return (
+                              <button
+                                key={i}
+                                type="button"
+                                aria-label={MISSION_CARD_THEME_LABELS[i]}
+                                onClick={() => setForm((s) => ({ ...s, card_theme_index: i }))}
+                                className={`h-10 w-10 cursor-pointer rounded-full transition-[transform,box-shadow,filter] duration-200 ease-out hover:scale-[1.05] hover:brightness-105 ${
+                                  selected
+                                    ? 'scale-[1.02] ring-2 ring-zinc-900/50 ring-offset-2'
+                                    : 'ring-1 ring-zinc-200/90'
+                                }`}
+                                style={{ background: bg }}
+                              />
+                            )
+                          })}
+                          <button
+                            type="button"
+                            onClick={() => setStep2View('customize')}
+                            className={`group inline-flex items-center justify-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-600 transition-all duration-200 ease-out ${MISSION_BUILDER_GRADIENT_HOVER}`}
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth={1.8}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="h-4 w-4 text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white"
+                              aria-hidden
+                            >
+                              <path d="M12 2 9.8 7.2 4.5 9.5l5.3 2.3L12 17l2.2-5.2 5.3-2.3-5.3-2.3L12 2Z" />
+                            </svg>
+                            Customize
+                          </button>
+                        </div>
+                        <MissionOverlaySplitPreviews form={missionStep2PreviewInput} />
+                      </div>
+                    ) : null}
+
+                    {step === 3 ? (
+                      <div className="space-y-4 px-1 pb-8">
+                        <h4 className="text-sm font-semibold text-zinc-900">Step 3 · Rewards & submission</h4>
                         <label className="block text-xs">
                           <span className="font-medium text-zinc-600">BeatCoin reward (points)</span>
                           <input
@@ -774,15 +1146,7 @@ export default function MissionsLibraryPage() {
                             className="mt-1 h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-[14px]"
                           />
                         </label>
-                        <p className="text-xs text-zinc-500">
-                          Reward appears on cards and mission detail.
-                        </p>
-                      </div>
-                    ) : null}
-
-                    {step === 3 ? (
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-semibold text-zinc-900">Step 3 · Submission</h4>
+                        <p className="text-xs text-zinc-500">Shown on cards and in the mission overlay.</p>
                         <label className="block text-xs">
                           <span className="font-medium text-zinc-600">Submission type</span>
                           <select
@@ -833,7 +1197,7 @@ export default function MissionsLibraryPage() {
                     ) : null}
 
                     {step === 4 ? (
-                      <div className="space-y-4">
+                      <div className="space-y-4 px-1 pb-8">
                         <h4 className="text-sm font-semibold text-zinc-900">Step 4 · Publish</h4>
                         <div className="rounded-xl border border-zinc-200 p-3">
                           <div className="flex items-center justify-between gap-3">
@@ -878,7 +1242,11 @@ export default function MissionsLibraryPage() {
                   <button
                     type="button"
                     onClick={() => {
-                              if (step === 1) setEditorOpen(false)
+                      if (step === 2 && step2View === 'customize') {
+                        setStep2View('main')
+                        return
+                      }
+                      if (step === 1) setEditorOpen(false)
                       else setStep((s) => Math.max(1, s - 1) as MissionStep)
                     }}
                             className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
@@ -893,7 +1261,7 @@ export default function MissionsLibraryPage() {
                     >
                       Next
                     </button>
-                          ) : step < 4 ? (
+                          ) : step === 2 && step2View === 'customize' ? null : step < 4 ? (
                             <button
                               type="button"
                               onClick={() => setStep((s) => Math.min(4, s + 1) as MissionStep)}
