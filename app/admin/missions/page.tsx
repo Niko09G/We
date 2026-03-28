@@ -1147,7 +1147,7 @@ export default function MissionsLibraryPage() {
                               : 'pointer-events-none z-0 -translate-x-2 opacity-0'
                           }`}
                         >
-                          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-visible px-1 pb-2 pt-1">
+                          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-visible px-3 pb-2 pt-1">
                               <div className="flex flex-col items-center space-y-5">
                                 <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
                                   Card cover, overlay copy &amp; images
@@ -1155,16 +1155,18 @@ export default function MissionsLibraryPage() {
                                 <p className="max-w-lg px-2 text-center text-[13px] font-medium text-zinc-500">
                                   One line in the field below appears in the overlay preview as guest-facing body copy.
                                 </p>
-                                <div className="w-full max-w-[760px] rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
-                                  <label className="flex h-12 items-center rounded-2xl bg-white px-4">
-                                    <input
-                                      ref={missionDescInputRef}
-                                      value={form.description}
-                                      onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
-                                      className="w-full max-w-[680px] resize-none bg-transparent !text-[15px] outline-none"
-                                      placeholder="Short line for the mission overlay (under the title)"
-                                    />
-                                  </label>
+                                <div className="w-full max-w-[760px] overflow-visible px-3 py-2">
+                                  <div className="rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
+                                    <label className="flex h-12 w-full max-w-[680px] items-center rounded-2xl bg-white px-4">
+                                      <input
+                                        ref={missionDescInputRef}
+                                        value={form.description}
+                                        onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
+                                        className="min-w-0 flex-1 bg-transparent !text-[15px] outline-none"
+                                        placeholder="Describe the mission task"
+                                      />
+                                    </label>
+                                  </div>
                                 </div>
                                 <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-2.5">
                                   <div className="relative">
@@ -1369,7 +1371,7 @@ export default function MissionsLibraryPage() {
                               : 'pointer-events-none z-0 translate-x-2 opacity-0'
                           }`}
                         >
-                          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-visible px-1 pb-2 pt-1">
+                          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-visible px-3 pb-2 pt-1">
                               <div className="flex flex-col items-center space-y-5">
                                 <div className="relative w-full max-w-lg">
                                   <button
@@ -1505,10 +1507,7 @@ export default function MissionsLibraryPage() {
                         </div>
                         </div>
 
-                        <div className="relative z-10 mt-auto shrink-0 border-t border-zinc-100/80 bg-white pt-2">
-                          <p className="mb-2 text-center text-[11px] font-medium uppercase tracking-wide text-zinc-400">
-                            Live preview
-                          </p>
+                        <div className="relative z-10 mt-auto shrink-0 bg-white pt-1">
                           <div className="mx-auto flex w-full justify-center px-1 pb-0">
                             <div className="h-[min(300px,38vh)] min-h-[220px] w-full max-w-[480px]">
                               <MissionOverlaySplitPreviews builderFlush form={missionStep2PreviewInput} />
