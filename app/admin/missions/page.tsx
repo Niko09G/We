@@ -48,6 +48,8 @@ import {
   AdminBuilderColorPickerPortal,
   computePickerAnchorPosition,
 } from '@/app/admin/_components/AdminBuilderColorPickerPortal'
+import { AdminDropdown } from '@/app/admin/_components/AdminDropdown'
+import { AdminSegmentedControl } from '@/app/admin/_components/AdminSegmentedControl'
 import {
   AdminBuilderShellHeader,
   BUILDER_PROGRESS_ACTIVE_CLASS,
@@ -56,7 +58,7 @@ import {
 
 type MissionView = 'cards' | 'list'
 type MissionStatusFilter = 'all' | 'active' | 'inactive' | 'archived'
-type MissionStep = 1 | 2 | 3 | 4
+type MissionStep = 1 | 2 | 3
 
 type MissionGradDotKey = 'gradTop' | 'gradMid' | 'gradBottom'
 
@@ -75,6 +77,8 @@ type MissionForm = {
   is_active: boolean
   /** Empty string = unlimited repeatability (per table). */
   max_submissions_per_table: string
+  /** Photo / response: show approved submissions in live greetings feed when applicable. */
+  add_to_greetings: boolean
 }
 
 const CATEGORY_DESCRIPTIONS: Record<ValidationType, string> = {
@@ -169,6 +173,7 @@ function emptyForm(): MissionForm {
     submission_hint: '',
     is_active: true,
     max_submissions_per_table: '',
+    add_to_greetings: false,
   }
 }
 
@@ -193,6 +198,7 @@ function formFromMission(m: MissionRecord): MissionForm {
     submission_hint: m.submission_hint ?? '',
     is_active: m.is_active ?? true,
     max_submissions_per_table: maxSubmissionsDisplayValue(m),
+    add_to_greetings: m.add_to_greetings ?? false,
   }
 }
 
@@ -261,8 +267,6 @@ export default function MissionsLibraryPage() {
   const [form, setForm] = useState<MissionForm>(emptyForm)
   const [missionAssignAllTables, setMissionAssignAllTables] = useState(true)
   const [missionSelectedTableIds, setMissionSelectedTableIds] = useState<Set<string>>(new Set())
-  const [currencyMenuOpen, setCurrencyMenuOpen] = useState(false)
-  const currencyMenuRef = useRef<HTMLDivElement | null>(null)
   const missionTitleInputRef = useRef<HTMLInputElement | null>(null)
   const missionDescInputRef = useRef<HTMLInputElement | null>(null)
   const cardCoverInputRef = useRef<HTMLInputElement | null>(null)
@@ -453,16 +457,6 @@ export default function MissionsLibraryPage() {
     },
     [activeTableRows, assignmentsByMission]
   )
-
-  useEffect(() => {
-    if (!currencyMenuOpen) return
-    const onDown = (e: MouseEvent) => {
-      const el = currencyMenuRef.current
-      if (el && !el.contains(e.target as Node)) setCurrencyMenuOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [currencyMenuOpen])
 
   useEffect(() => {
     if (!editorOpen || editorMode !== 'create') return
@@ -662,6 +656,7 @@ export default function MissionsLibraryPage() {
         card_cover_image_url: form.card_cover_image_url.trim() || null,
         card_theme_index: form.card_theme_index,
         max_submissions_per_table: form.max_submissions_per_table,
+        add_to_greetings: form.add_to_greetings,
       }
       if (editorMode === 'create') {
         const newId = await createMission(payload)
@@ -1049,7 +1044,7 @@ export default function MissionsLibraryPage() {
                   onClose={() => setEditorOpen(false)}
                   center={
                     <div className="inline-flex items-center gap-1.5">
-                      {[1, 2, 3, 4].map((n) => (
+                      {[1, 2, 3].map((n) => (
                         <button
                           key={n}
                           type="button"
@@ -1089,7 +1084,11 @@ export default function MissionsLibraryPage() {
                           />
                           <div
                             className={`flex h-full min-h-0 w-full max-w-full flex-1 flex-col items-center justify-start overflow-x-visible px-5 py-4 [&_input]:!text-[14px] [&_select]:!text-[14px] ${
-                              step === 2 ? 'overflow-hidden pb-1' : 'overflow-y-auto pb-32'
+                              step === 2
+                                ? 'overflow-hidden pb-1'
+                                : step === 3
+                                  ? 'overflow-hidden pb-4'
+                                  : 'overflow-y-auto pb-4'
                             }`}
                           >
                             <div className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-x-visible">
@@ -1162,10 +1161,10 @@ export default function MissionsLibraryPage() {
                                             key={v}
                                             type="button"
                                             onClick={() => setForm((s) => ({ ...s, validation_type: v }))}
-                                            className={`group relative flex h-[120px] w-full cursor-pointer overflow-hidden rounded-2xl text-left transition-all duration-200 ease-out ${
+                                            className={`group relative flex h-[120px] w-full cursor-pointer overflow-hidden rounded-2xl border text-left transition-all duration-200 ease-out ${
                                               selected
                                                 ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white shadow-md'
-                                                : 'border border-zinc-200/90 bg-white text-zinc-900 shadow-sm hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white hover:shadow-md'
+                                                : 'border-zinc-200/90 bg-white text-zinc-900 shadow-sm hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white hover:shadow-md'
                                             }`}
                                           >
                                             <div className="pointer-events-none absolute left-0 top-1/2 z-0 h-[112px] w-[112px] -translate-x-1/2 -translate-y-1/2 sm:h-[120px] sm:w-[120px]">
@@ -1197,7 +1196,7 @@ export default function MissionsLibraryPage() {
                                                 </span>
                                               )}
                                             </div>
-                                            <div className="relative z-10 flex h-full min-w-0 flex-1 flex-col justify-center py-4 pl-[calc(50%+0.875rem)] pr-4 sm:min-h-[120px] sm:pr-6">
+                                            <div className="relative z-10 flex h-full min-w-0 flex-1 flex-col justify-center py-4 pl-[calc(38%+0.625rem)] pr-4 sm:min-h-[120px] sm:pr-6">
                                               <span
                                                 className={`text-[16px] font-semibold leading-snug tracking-tight sm:text-[17px] ${
                                                   selected ? 'text-white' : 'text-zinc-900 group-hover:text-white'
@@ -1228,12 +1227,14 @@ export default function MissionsLibraryPage() {
                                   step >= 2 ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-3 opacity-0'
                                 }`}
                               >
-                                <div
-                                  className={`mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col overflow-x-visible py-3 ${
-                                    step === 2 ? 'min-h-0 overflow-hidden pb-0' : 'overflow-y-auto pb-24'
-                                  }`}
-                                >
-                    {step === 2 ? (
+                                <div className="relative mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col overflow-x-visible py-3">
+                                  <div
+                                    className={`absolute inset-0 flex min-h-0 flex-col transition-all duration-200 ease-out ${
+                                      step === 2
+                                        ? 'z-10 translate-x-0 opacity-100'
+                                        : 'pointer-events-none z-0 translate-x-3 opacity-0'
+                                    }`}
+                                  >
                       <div className="relative flex min-h-0 flex-1 flex-col">
                         <div className="relative min-h-0 flex-1 overflow-hidden">
                         <div
@@ -1245,7 +1246,7 @@ export default function MissionsLibraryPage() {
                         >
                           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-visible px-3 pb-2 pt-1">
                               <div className="flex flex-col items-center space-y-5">
-                                <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
+                                <h4 className="text-center text-3xl font-semibold tracking-tight text-zinc-900">
                                   Card cover, overlay copy &amp; images
                                 </h4>
                                 <div className="w-full max-w-[760px] overflow-visible px-3 py-2">
@@ -1608,205 +1609,199 @@ export default function MissionsLibraryPage() {
                           </div>
                         </div>
                       </div>
-                    ) : null}
+                                  </div>
 
-                    {step === 3 ? (
-                      <div className="flex min-h-0 flex-1 flex-col px-2 pb-8 pt-1">
-                        <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
+                                  <div
+                                    className={`absolute inset-0 flex min-h-0 flex-col overflow-hidden px-2 pb-4 pt-1 transition-all duration-200 ease-out ${
+                                      step === 3
+                                        ? 'z-10 translate-x-0 opacity-100'
+                                        : 'pointer-events-none z-0 -translate-x-3 opacity-0'
+                                    }`}
+                                  >
+                        <h4 className="text-center text-3xl font-semibold tracking-tight text-zinc-900">
                           What are the mechanics?
                         </h4>
 
-                        <div className="mx-auto mt-8 w-full max-w-[760px] space-y-8">
-                          <section className="space-y-3">
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-                              Rewards
-                            </p>
-                            <div className="flex flex-wrap items-center gap-3">
-                              <div ref={currencyMenuRef} className="relative min-w-[min(100%,220px)] flex-1 sm:min-w-[200px]">
-                                <button
-                                  type="button"
-                                  onClick={() => setCurrencyMenuOpen((o) => !o)}
-                                  className="flex h-11 w-full items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-4 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300"
+                        <div className="mx-auto mt-5 w-full max-w-[760px] flex-1 space-y-4 overflow-y-auto overflow-x-hidden pb-2">
+                          <div className="space-y-3 rounded-2xl border border-zinc-100/90 bg-zinc-50/50 p-3">
+                            <p className="text-center text-xs font-semibold text-zinc-600">Rewards &amp; feed</p>
+                            <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+                              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                <span className="text-xs font-semibold text-zinc-600">Currency</span>
+                                <AdminDropdown
+                                  className="w-auto shrink-0"
+                                  buttonClassName="inline-flex h-10 w-auto max-w-[200px] shrink-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 pr-2.5 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300"
+                                  trigger={
+                                    <>
+                                      <span className="inline-flex min-w-0 items-center gap-2">
+                                        <RewardUnitIcon size={20} className="shrink-0" />
+                                        <span className="truncate">{rewardUnitCompactLabel(rewardUnit)}</span>
+                                      </span>
+                                      <svg
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                        className="h-4 w-4 shrink-0 text-zinc-400"
+                                        aria-hidden
+                                      >
+                                        <path d="m6 9 6 6 6-6" />
+                                      </svg>
+                                    </>
+                                  }
                                 >
-                                  <span className="inline-flex min-w-0 flex-1 items-center gap-2">
-                                    <RewardUnitIcon size={22} className="shrink-0" />
-                                    <span className="truncate">{rewardUnitCompactLabel(rewardUnit)}</span>
-                                  </span>
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${currencyMenuOpen ? 'rotate-180' : ''}`}
-                                    aria-hidden
+                                  <button
+                                    type="button"
+                                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[14px] font-medium text-[#171717] hover:bg-zinc-50"
                                   >
-                                    <path d="m6 9 6 6 6-6" />
-                                  </svg>
-                                </button>
-                                {currencyMenuOpen ? (
-                                  <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-2xl border border-[#ebebeb] bg-white py-1 shadow-lg">
-                                    <button
-                                      type="button"
-                                      onClick={() => setCurrencyMenuOpen(false)}
-                                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[14px] font-medium text-[#171717] hover:bg-zinc-50"
-                                    >
-                                      <RewardUnitIcon size={22} className="shrink-0" />
-                                      <span className="truncate">{rewardUnitCompactLabel(rewardUnit)}</span>
-                                    </button>
-                                  </div>
+                                    <RewardUnitIcon size={20} className="shrink-0" />
+                                    <span className="truncate">{rewardUnitCompactLabel(rewardUnit)}</span>
+                                  </button>
+                                </AdminDropdown>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={form.points}
+                                  onChange={(e) => setForm((s) => ({ ...s, points: e.target.value }))}
+                                  className="h-10 w-[5.5rem] shrink-0 rounded-full border border-[#ebebeb] bg-white px-3 text-center text-[14px] font-medium text-[#171717] outline-none focus:border-zinc-400"
+                                  aria-label="Reward amount"
+                                />
+                              </div>
+                              {(form.validation_type === 'photo' || form.validation_type === 'text') ? (
+                                <div className="flex min-w-[11rem] flex-1 flex-col gap-1 sm:max-w-[14rem]">
+                                  <span className="text-xs font-semibold text-zinc-600">Live feed</span>
+                                  <AdminSegmentedControl
+                                    size="sm"
+                                    ariaLabel="Live feed"
+                                    options={[
+                                      { value: 'on' as const, label: 'On' },
+                                      { value: 'off' as const, label: 'Off' },
+                                    ]}
+                                    value={form.add_to_greetings ? 'on' : 'off'}
+                                    onChange={(v) =>
+                                      setForm((s) => ({ ...s, add_to_greetings: v === 'on' }))
+                                    }
+                                  />
+                                </div>
+                              ) : null}
+                              <div className="flex min-w-[12rem] flex-1 flex-col gap-1 sm:max-w-[16rem]">
+                                <span className="text-xs font-semibold text-zinc-600">Require message</span>
+                                <AdminSegmentedControl
+                                  size="sm"
+                                  ariaLabel="Require message"
+                                  options={[
+                                    { value: 'yes' as const, label: 'Yes' },
+                                    { value: 'no' as const, label: 'No' },
+                                  ]}
+                                  value={form.message_required ? 'yes' : 'no'}
+                                  onChange={(v) =>
+                                    setForm((s) => ({ ...s, message_required: v === 'yes' }))
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3 rounded-2xl border border-zinc-100/90 bg-zinc-50/50 p-3">
+                            <p className="text-center text-xs font-semibold text-zinc-600">Row 2</p>
+                            <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+                              <div className="flex min-w-[12rem] max-w-[20rem] flex-1 flex-col gap-1">
+                                <span className="text-xs font-semibold text-zinc-600">Repeatability</span>
+                                <AdminSegmentedControl
+                                  size="sm"
+                                  ariaLabel="Repeatability"
+                                  options={[
+                                    { value: 'repeat' as const, label: 'Repeatable' },
+                                    { value: 'limit' as const, label: 'Limit' },
+                                  ]}
+                                  value={form.max_submissions_per_table.trim() === '' ? 'repeat' : 'limit'}
+                                  onChange={(v) => {
+                                    if (v === 'repeat') {
+                                      setForm((s) => ({ ...s, max_submissions_per_table: '' }))
+                                    } else {
+                                      setForm((s) => ({
+                                        ...s,
+                                        max_submissions_per_table: s.max_submissions_per_table.trim() || '1',
+                                      }))
+                                    }
+                                  }}
+                                />
+                                {form.max_submissions_per_table.trim() !== '' ? (
+                                  <label className="mt-1 inline-flex items-center gap-2 text-[12px] text-zinc-600">
+                                    <span>Attempts</span>
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      value={form.max_submissions_per_table}
+                                      onChange={(e) =>
+                                        setForm((s) => ({
+                                          ...s,
+                                          max_submissions_per_table: e.target.value,
+                                        }))
+                                      }
+                                      className="h-8 w-14 rounded-full border border-[#ebebeb] bg-white px-2 text-center text-[13px] font-medium outline-none focus:border-zinc-400"
+                                    />
+                                  </label>
                                 ) : null}
                               </div>
-                              <input
-                                type="number"
-                                min={0}
-                                value={form.points}
-                                onChange={(e) => setForm((s) => ({ ...s, points: e.target.value }))}
-                                className="h-11 w-[min(100%,140px)] min-w-[7rem] rounded-full border border-[#ebebeb] bg-white px-4 text-[14px] font-medium text-[#171717] outline-none transition-colors focus:border-zinc-400"
-                                aria-label="Reward amount"
-                              />
-                              <div className="flex flex-1 flex-wrap items-center justify-end gap-2 sm:min-w-[9rem]">
-                                <span className="text-[13px] font-medium text-zinc-600">Active</span>
+                              <div className="flex min-w-[12rem] max-w-[18rem] flex-1 flex-col gap-1">
+                                <span className="text-xs font-semibold text-zinc-600">Approval</span>
+                                <AdminSegmentedControl
+                                  size="sm"
+                                  ariaLabel="Approval mode"
+                                  options={[
+                                    { value: 'manual' as const, label: 'Manual' },
+                                    { value: 'auto' as const, label: 'Automatic' },
+                                  ]}
+                                  value={form.approval_mode}
+                                  onChange={(v) =>
+                                    setForm((s) => ({ ...s, approval_mode: v }))
+                                  }
+                                />
+                              </div>
+                              <div className="flex flex-col gap-1.5">
+                                <span className="text-xs font-semibold text-zinc-600">Active</span>
                                 <button
                                   type="button"
                                   onClick={() => setForm((s) => ({ ...s, is_active: !s.is_active }))}
-                                  className={`inline-flex h-7 w-12 shrink-0 items-center rounded-full p-1 transition-colors ${
-                                    form.is_active ? 'bg-zinc-900' : 'bg-zinc-300'
+                                  className={`relative inline-flex h-8 w-[3.25rem] shrink-0 items-center rounded-full p-1 transition-colors ${
+                                    form.is_active
+                                      ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]'
+                                      : 'bg-zinc-300'
                                   }`}
                                   aria-label="Toggle mission active"
                                 >
                                   <span
-                                    className={`h-5 w-5 rounded-full bg-white transition-transform ${
-                                      form.is_active ? 'translate-x-5' : 'translate-x-0'
+                                    className={`h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ease-out ${
+                                      form.is_active ? 'translate-x-[1.35rem]' : 'translate-x-0'
                                     }`}
                                   />
                                 </button>
                               </div>
                             </div>
-                            <p className="text-[12px] text-zinc-500">Shown on cards and in the mission overlay.</p>
-                          </section>
+                          </div>
 
-                          <section className="space-y-3">
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-                              Repeatability
-                            </p>
-                            <div className="flex flex-wrap items-center gap-3">
-                              <div className="inline-flex h-10 items-stretch overflow-hidden rounded-full border border-[#ebebeb] bg-white">
-                                <button
-                                  type="button"
-                                  onClick={() => setForm((s) => ({ ...s, max_submissions_per_table: '' }))}
-                                  className={`px-4 text-[14px] font-medium transition-colors ${
-                                    form.max_submissions_per_table.trim() === ''
-                                      ? 'bg-black text-white'
-                                      : 'text-[#4d4d4d] hover:text-[#171717]'
-                                  }`}
-                                >
-                                  Repeatable
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setForm((s) => ({
-                                      ...s,
-                                      max_submissions_per_table:
-                                        s.max_submissions_per_table.trim() || '1',
-                                    }))
-                                  }
-                                  className={`px-4 text-[14px] font-medium transition-colors ${
-                                    form.max_submissions_per_table.trim() !== ''
-                                      ? 'bg-black text-white'
-                                      : 'text-[#4d4d4d] hover:text-[#171717]'
-                                  }`}
-                                >
-                                  Limit
-                                </button>
-                              </div>
-                              {form.max_submissions_per_table.trim() !== '' ? (
-                                <label className="inline-flex flex-wrap items-center gap-2 text-[13px] text-zinc-700">
-                                  <span className="font-medium">Max attempts</span>
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    value={form.max_submissions_per_table}
-                                    onChange={(e) =>
-                                      setForm((s) => ({
-                                        ...s,
-                                        max_submissions_per_table: e.target.value,
-                                      }))
-                                    }
-                                    className="h-10 w-20 rounded-full border border-[#ebebeb] bg-white px-3 text-center text-[14px] font-medium outline-none focus:border-zinc-400"
-                                  />
-                                </label>
-                              ) : null}
-                            </div>
-                          </section>
-
-                          <section className="space-y-3">
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-                              Approval
-                            </p>
-                            <div className="inline-flex h-10 items-stretch overflow-hidden rounded-full border border-[#ebebeb] bg-white">
-                              <button
-                                type="button"
-                                onClick={() => setForm((s) => ({ ...s, approval_mode: 'manual' }))}
-                                className={`px-4 text-[14px] font-medium transition-colors ${
-                                  form.approval_mode === 'manual'
-                                    ? 'bg-black text-white'
-                                    : 'text-[#4d4d4d] hover:text-[#171717]'
-                                }`}
-                              >
-                                Manual
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setForm((s) => ({ ...s, approval_mode: 'auto' }))}
-                                className={`px-4 text-[14px] font-medium transition-colors ${
-                                  form.approval_mode === 'auto'
-                                    ? 'bg-black text-white'
-                                    : 'text-[#4d4d4d] hover:text-[#171717]'
-                                }`}
-                              >
-                                Automatic
-                              </button>
-                            </div>
-                          </section>
-
-                          <section className="space-y-3">
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-                              Table assignment
-                            </p>
-                            <div className="inline-flex h-9 w-full max-w-md items-stretch overflow-hidden rounded-full border border-[#ebebeb] bg-white">
-                              <button
-                                type="button"
-                                onClick={() => {
+                          <div className="space-y-3 rounded-2xl border border-zinc-100/90 bg-zinc-50/50 p-3">
+                            <p className="text-center text-xs font-semibold text-zinc-600">Table assignment</p>
+                            <AdminSegmentedControl
+                              size="sm"
+                              className="max-w-md"
+                              ariaLabel="Table assignment mode"
+                              options={[
+                                { value: 'all' as const, label: 'All tables' },
+                                { value: 'pick' as const, label: 'Pick tables' },
+                              ]}
+                              value={missionAssignAllTables ? 'all' : 'pick'}
+                              onChange={(v) => {
+                                if (v === 'all') {
                                   setMissionAssignAllTables(true)
                                   setMissionSelectedTableIds(new Set(activeTableRows.map((t) => t.id)))
-                                }}
-                                className={`flex-1 px-3 text-[13px] font-medium transition-colors ${
-                                  missionAssignAllTables
-                                    ? 'bg-black text-white'
-                                    : 'text-[#4d4d4d] hover:text-[#171717]'
-                                }`}
-                              >
-                                All tables
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
+                                } else {
                                   setMissionAssignAllTables(false)
-                                  setMissionSelectedTableIds((prev) => {
-                                    if (prev.size > 0) return prev
-                                    return new Set(activeTableRows.map((t) => t.id))
-                                  })
-                                }}
-                                className={`flex-1 px-3 text-[13px] font-medium transition-colors ${
-                                  !missionAssignAllTables
-                                    ? 'bg-black text-white'
-                                    : 'text-[#4d4d4d] hover:text-[#171717]'
-                                }`}
-                              >
-                                Pick tables
-                              </button>
-                            </div>
+                                  setMissionSelectedTableIds(new Set())
+                                }
+                              }}
+                            />
                             {activeTableRows.length === 0 ? (
                               <p className="text-[13px] text-zinc-500">No active tables yet.</p>
                             ) : (
@@ -1826,9 +1821,7 @@ export default function MissionsLibraryPage() {
                                       onClick={() => {
                                         if (missionAssignAllTables) {
                                           setMissionAssignAllTables(false)
-                                          const all = new Set(activeTableRows.map((r) => r.id))
-                                          all.delete(t.id)
-                                          setMissionSelectedTableIds(all)
+                                          setMissionSelectedTableIds(new Set([t.id]))
                                           return
                                         }
                                         setMissionSelectedTableIds((prev) => {
@@ -1838,7 +1831,7 @@ export default function MissionsLibraryPage() {
                                           return next
                                         })
                                       }}
-                                      className={`flex min-h-[72px] w-full flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-center transition-all ${
+                                      className={`flex min-h-[68px] w-full flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-center transition-all ${
                                         selected
                                           ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white shadow-sm'
                                           : 'border border-[#ebebeb] bg-white text-zinc-800 hover:border-zinc-300'
@@ -1881,63 +1874,13 @@ export default function MissionsLibraryPage() {
                                 })}
                               </div>
                             )}
-                          </section>
-
-                          <section className="space-y-3 rounded-2xl border border-[#ebebeb] bg-zinc-50/50 p-4">
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-                              Submission details
-                            </p>
-                            <label className="flex cursor-pointer items-center gap-2 text-[13px] font-medium text-zinc-800">
-                              <input
-                                type="checkbox"
-                                checked={form.message_required}
-                                onChange={(e) =>
-                                  setForm((s) => ({ ...s, message_required: e.target.checked }))
-                                }
-                                className="rounded border-zinc-300"
-                              />
-                              Require message with submission
-                            </label>
-                            <label className="block text-[13px]">
-                              <span className="font-medium text-zinc-700">Submission hint</span>
-                              <input
-                                value={form.submission_hint}
-                                onChange={(e) =>
-                                  setForm((s) => ({ ...s, submission_hint: e.target.value }))
-                                }
-                                className="mt-1.5 h-11 w-full rounded-full border border-[#ebebeb] bg-white px-4 text-[14px] outline-none focus:border-zinc-400"
-                                placeholder="e.g. Keep the whole table in frame"
-                              />
-                            </label>
-                          </section>
+                          </div>
                         </div>
-                      </div>
-                    ) : null}
-
-                    {step === 4 ? (
-                      <div className="space-y-5 px-2 pb-8 pt-1">
-                        <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
-                          Ready to publish
-                        </h4>
-                        <div className="mx-auto w-full max-w-[760px] rounded-2xl border border-[#ebebeb] bg-white p-5 text-[14px] text-zinc-700 shadow-sm">
-                          <p>
-                            <span className="font-semibold text-zinc-900">Mission:</span>{' '}
-                            {form.title || 'Untitled mission'}
-                          </p>
-                          <p className="mt-2 text-[13px] leading-relaxed text-zinc-600">
-                            {adminValidationTypeLabel(form.validation_type)} · {form.points || 0}{' '}
-                            {rewardUnitCompactLabel(rewardUnit)} ·{' '}
-                            {form.approval_mode === 'manual' ? 'Manual review' : 'Automatic approval'} ·{' '}
-                            {form.is_active ? 'Active' : 'Inactive'}
-                          </p>
-                        </div>
-                      </div>
-                    ) : null}
+                                  </div>
                                 </div>
                               </div>
                             </div>
                           </div>
-                </div>
 
                         <div className="absolute bottom-6 right-6 z-20 flex flex-row gap-3">
                   <button
@@ -1962,30 +1905,27 @@ export default function MissionsLibraryPage() {
                     >
                       Next
                     </button>
-                          ) : step === 2 && step2View === 'customize' ? null : step < 4 ? (
+                          ) : step === 2 && step2View === 'customize' ? null : step === 3 ? (
                             <button
                               type="button"
-                              onClick={() => setStep((s) => Math.min(4, s + 1) as MissionStep)}
-                              className={
-                                step === 3
-                                  ? MISSION_BUILDER_NEXT_GRADIENT
-                                  : 'rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-800'
-                              }
+                              disabled={saving}
+                              onClick={() => void onSaveMission()}
+                              className={`${MISSION_BUILDER_NEXT_GRADIENT} disabled:opacity-60`}
+                            >
+                              {saving ? 'Saving…' : 'Publish'}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setStep((s) => Math.min(3, s + 1) as MissionStep)}
+                              className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
                             >
                               Next
                             </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => void onSaveMission()}
-                      className={`${MISSION_BUILDER_NEXT_GRADIENT} disabled:opacity-60`}
-                    >
-                      {saving ? 'Saving…' : editorMode === 'create' ? 'Publish mission' : 'Save mission'}
-                    </button>
-                  )}
+                          )}
                 </div>
               </div>
+            </div>
             </div>,
             document.body
           )
