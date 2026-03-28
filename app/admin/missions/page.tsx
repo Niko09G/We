@@ -1017,7 +1017,11 @@ export default function MissionsLibraryPage() {
                               if (file) void uploadHeaderImage(file)
                             }}
                           />
-                          <div className="flex h-full min-h-0 w-full max-w-full flex-1 flex-col items-center justify-start overflow-y-auto overflow-x-visible px-5 py-4 pb-32 [&_input]:!text-[14px] [&_select]:!text-[14px]">
+                          <div
+                            className={`flex h-full min-h-0 w-full max-w-full flex-1 flex-col items-center justify-start overflow-x-visible px-5 py-4 [&_input]:!text-[14px] [&_select]:!text-[14px] ${
+                              step === 2 ? 'overflow-hidden pb-3' : 'overflow-y-auto pb-32'
+                            }`}
+                          >
                             <div className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-x-visible">
                               <div
                                 className={`absolute inset-0 transition-all duration-200 ease-out ${
@@ -1128,365 +1132,395 @@ export default function MissionsLibraryPage() {
                                   step >= 2 ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-3 opacity-0'
                                 }`}
                               >
-                                <div className="mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col overflow-y-auto overflow-x-visible py-3 pb-24">
-                    {step === 2 && step2View === 'customize' ? (
-                      <div className="flex min-h-full flex-col items-center space-y-5 px-1 pb-32">
-                        <div className="relative w-full max-w-lg">
-                          <button
-                            type="button"
-                            onClick={() => setStep2View('main')}
-                            className="absolute left-0 top-0.5 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-zinc-900 shadow-sm transition-transform duration-200 ease-out hover:scale-105 active:scale-95"
-                            aria-label="Back to design"
-                          >
-                            <svg
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth={2}
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              className="h-4 w-4"
-                              aria-hidden
-                            >
-                              <path d="M19 12H5M12 19l-7-7 7-7" />
-                            </svg>
-                          </button>
-                          <h4 className="px-11 text-center text-2xl font-semibold tracking-tight text-zinc-900">
-                            Mission color palette
-                          </h4>
-                          <p className="mt-2 text-center text-[13px] font-medium text-zinc-500">
-                            Mission color themes are separate from table team themes.
-                          </p>
-                        </div>
-                        <div className="relative flex w-full max-w-[760px] flex-wrap justify-center gap-4">
-                          {MISSION_CARD_BACKGROUNDS.map((bg, i) => {
-                            const selected = form.card_theme_index === i
-                            return (
-                              <button
-                                key={i}
-                                type="button"
-                                aria-label={MISSION_CARD_THEME_LABELS[i]}
-                                onClick={() => {
-                                  setStep2GradientOverride(null)
-                                  setMissionGradStops(tripleStopsFromGradientCss(bg))
-                                  setForm((s) => ({ ...s, card_theme_index: i }))
-                                }}
-                                className={`flex h-[4.5rem] w-[4.5rem] shrink-0 flex-col items-center justify-end rounded-2xl p-1.5 text-[10px] font-semibold text-white/95 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)] transition-[transform,box-shadow] duration-200 ease-out ${
-                                  selected
-                                    ? 'scale-[1.03] ring-2 ring-zinc-900 ring-offset-2'
-                                    : 'ring-1 ring-zinc-200/90 hover:scale-[1.04] hover:brightness-105'
-                                }`}
-                                style={{ background: bg }}
-                              >
-                                <span className="line-clamp-2 text-center leading-tight drop-shadow-sm">
-                                  {MISSION_CARD_THEME_LABELS[i]}
-                                </span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                        <div className="relative w-full max-w-lg space-y-3 rounded-2xl border border-zinc-100/90 bg-zinc-50/50 p-3">
-                          <p className="text-center text-xs font-semibold text-zinc-600">Card gradient stops</p>
-                          <div className="flex flex-wrap items-center justify-center gap-3">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-semibold text-zinc-600">Top</span>
-                              <button
-                                type="button"
-                                data-mission-color-dot="true"
-                                onClick={(e) => openMissionColorPicker('gradTop', e.currentTarget)}
-                                className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
-                                style={{ backgroundColor: missionGradStops.top }}
-                                aria-label="Gradient top color"
-                              />
+                                <div
+                                  className={`mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col overflow-x-visible py-3 ${
+                                    step === 2 ? 'min-h-0 overflow-hidden pb-0' : 'overflow-y-auto pb-24'
+                                  }`}
+                                >
+                    {step === 2 ? (
+                      <div className="relative flex min-h-0 flex-1 flex-col">
+                        <div
+                          className={`absolute inset-0 flex min-h-0 flex-col overflow-hidden transition-all duration-200 ease-out ${
+                            step2View === 'main'
+                              ? 'z-10 translate-x-0 opacity-100'
+                              : 'pointer-events-none z-0 -translate-x-2 opacity-0'
+                          }`}
+                        >
+                          <div className="flex min-h-0 flex-1 flex-col">
+                            <div className="min-h-0 max-h-[min(380px,48vh)] shrink-0 overflow-y-auto overflow-x-visible px-1 pb-3">
+                              <div className="flex flex-col items-center space-y-5">
+                                <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
+                                  Card cover, overlay copy &amp; images
+                                </h4>
+                                <p className="max-w-lg px-2 text-center text-[13px] font-medium text-zinc-500">
+                                  One line in the field below appears in the overlay preview as guest-facing body copy.
+                                </p>
+                                <div className="w-full max-w-[760px] rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
+                                  <label className="flex h-12 items-center rounded-2xl bg-white px-4">
+                                    <input
+                                      ref={missionDescInputRef}
+                                      value={form.description}
+                                      onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
+                                      className="w-full max-w-[680px] resize-none bg-transparent !text-[15px] outline-none"
+                                      placeholder="Short line for the mission overlay (under the title)"
+                                    />
+                                  </label>
+                                </div>
+                                <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-2.5">
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      onClick={() => cardCoverInputRef.current?.click()}
+                                      disabled={uploadSlot === 'card'}
+                                      className={`group relative flex h-12 w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 text-sm font-medium transition-all duration-200 ease-out disabled:opacity-60 ${
+                                        uploadSlot === 'card' || cardCoverReady
+                                          ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white'
+                                          : `bg-zinc-50/90 text-zinc-800 ${MISSION_STEP2_UPLOAD_HOVER}`
+                                      }`}
+                                    >
+                                      <svg
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={1.7}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        className={`relative z-10 h-4 w-4 shrink-0 transition-colors duration-200 ease-out ${
+                                          uploadSlot === 'card' || cardCoverReady
+                                            ? 'text-white'
+                                            : 'text-zinc-500 group-hover:text-white'
+                                        }`}
+                                        aria-hidden
+                                      >
+                                        <rect x="3" y="5" width="18" height="14" rx="2" />
+                                        <circle cx="8.5" cy="10" r="1.2" />
+                                        <path d="m21 15-6-5-4 4-3-3-5 5" />
+                                      </svg>
+                                      <span
+                                        className={`relative z-10 transition-colors duration-200 ease-out ${
+                                          uploadSlot === 'card' || cardCoverReady ? 'text-white' : 'group-hover:text-white'
+                                        }`}
+                                      >
+                                        Card cover image
+                                      </span>
+                                      {uploadSlot === 'card' ? (
+                                        <svg
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth={2}
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          className="absolute right-3 h-4 w-4 shrink-0 animate-spin text-white"
+                                          aria-hidden
+                                        >
+                                          <path d="M21 12a9 9 0 1 1-3.2-6.9" />
+                                        </svg>
+                                      ) : cardCoverReady ? (
+                                        <svg
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth={2}
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          className="absolute right-3 h-4 w-4 shrink-0 text-white"
+                                          aria-hidden
+                                        >
+                                          <path d="m5 12 5 5L20 7" />
+                                        </svg>
+                                      ) : null}
+                                    </button>
+                                    {cardCoverReady && uploadSlot !== 'card' ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => void removeCardCoverImage()}
+                                        className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-sm transition-colors hover:bg-red-50"
+                                        aria-label="Remove card cover image"
+                                      >
+                                        <RemoveImageIcon className="h-3 w-3" />
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      onClick={() => headerImageInputRef.current?.click()}
+                                      disabled={uploadSlot === 'overlay'}
+                                      className={`group relative flex h-12 w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 text-sm font-medium transition-all duration-200 ease-out disabled:opacity-60 ${
+                                        uploadSlot === 'overlay' || headerImageReady
+                                          ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white'
+                                          : `bg-zinc-50/90 text-zinc-800 ${MISSION_STEP2_UPLOAD_HOVER}`
+                                      }`}
+                                    >
+                                      <svg
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={1.7}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        className={`relative z-10 h-4 w-4 shrink-0 transition-colors duration-200 ease-out ${
+                                          uploadSlot === 'overlay' || headerImageReady
+                                            ? 'text-white'
+                                            : 'text-zinc-500 group-hover:text-white'
+                                        }`}
+                                        aria-hidden
+                                      >
+                                        <path d="M12 2 9.8 7.2 4.5 9.5l5.3 2.3L12 17l2.2-5.2 5.3-2.3-5.3-2.3L12 2Z" />
+                                      </svg>
+                                      <span
+                                        className={`relative z-10 transition-colors duration-200 ease-out ${
+                                          uploadSlot === 'overlay' || headerImageReady ? 'text-white' : 'group-hover:text-white'
+                                        }`}
+                                      >
+                                        Header image
+                                      </span>
+                                      {uploadSlot === 'overlay' ? (
+                                        <svg
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth={2}
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          className="absolute right-3 h-4 w-4 shrink-0 animate-spin text-white"
+                                          aria-hidden
+                                        >
+                                          <path d="M21 12a9 9 0 1 1-3.2-6.9" />
+                                        </svg>
+                                      ) : headerImageReady ? (
+                                        <svg
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth={2}
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          className="absolute right-3 h-4 w-4 shrink-0 text-white"
+                                          aria-hidden
+                                        >
+                                          <path d="m5 12 5 5L20 7" />
+                                        </svg>
+                                      ) : null}
+                                    </button>
+                                    {headerImageReady && uploadSlot !== 'overlay' ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => void removeHeaderMissionImage()}
+                                        className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-sm transition-colors hover:bg-red-50"
+                                        aria-label="Remove header image"
+                                      >
+                                        <RemoveImageIcon className="h-3 w-3" />
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                <div className="flex w-full max-w-[760px] flex-wrap items-center justify-center gap-3 pb-1">
+                                  {MISSION_CARD_BACKGROUNDS.map((bg, i) => {
+                                    const selected = form.card_theme_index === i
+                                    return (
+                                      <button
+                                        key={i}
+                                        type="button"
+                                        aria-label={MISSION_CARD_THEME_LABELS[i]}
+                                        onClick={() => {
+                                          setStep2GradientOverride(null)
+                                          setMissionGradStops(tripleStopsFromGradientCss(bg))
+                                          setForm((s) => ({ ...s, card_theme_index: i }))
+                                        }}
+                                        className={`h-10 w-10 cursor-pointer rounded-full transition-[transform,box-shadow,filter] duration-200 ease-out hover:scale-[1.05] hover:brightness-105 ${
+                                          selected
+                                            ? 'scale-[1.02] ring-2 ring-zinc-900/50 ring-offset-2'
+                                            : 'ring-1 ring-zinc-200/90'
+                                        }`}
+                                        style={{ background: bg }}
+                                      />
+                                    )
+                                  })}
+                                  <button
+                                    type="button"
+                                    onClick={() => setStep2View('customize')}
+                                    className={`group ${MISSION_STEP2_SECONDARY_BTN} text-zinc-600 ${MISSION_BUILDER_GRADIENT_HOVER}`}
+                                  >
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={1.8}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="h-4 w-4 shrink-0 self-center text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white"
+                                      aria-hidden
+                                    >
+                                      <path d="M12 2 9.8 7.2 4.5 9.5l5.3 2.3L12 17l2.2-5.2 5.3-2.3-5.3-2.3L12 2Z" />
+                                    </svg>
+                                    Customize
+                                  </button>
+                                </div>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-semibold text-zinc-600">Middle</span>
-                              <button
-                                type="button"
-                                data-mission-color-dot="true"
-                                onClick={(e) => openMissionColorPicker('gradMid', e.currentTarget)}
-                                className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
-                                style={{ backgroundColor: missionGradStops.mid }}
-                                aria-label="Gradient middle color"
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-semibold text-zinc-600">Bottom</span>
-                              <button
-                                type="button"
-                                data-mission-color-dot="true"
-                                onClick={(e) => openMissionColorPicker('gradBottom', e.currentTarget)}
-                                className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
-                                style={{ backgroundColor: missionGradStops.bottom }}
-                                aria-label="Gradient bottom color"
-                              />
+                            <div className="flex min-h-0 flex-1 flex-col px-1 pt-1">
+                              <p className="mb-2 shrink-0 text-center text-[11px] font-medium uppercase tracking-wide text-zinc-400">
+                                Live preview
+                              </p>
+                              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                                <MissionOverlaySplitPreviews builderFlush form={missionStep2PreviewInput} />
+                              </div>
                             </div>
                           </div>
-                          <AdminBuilderColorPickerPortal
-                            open={Boolean(openMissionColorKey && missionColorPopoverPos)}
-                            position={missionColorPopoverPos}
-                            pickerRef={missionColorPickerRef}
-                            svPanelRef={missionSvPanelRef}
-                            pickerHsv={pickerHsv}
-                            pickerHex={pickerHex}
-                            onHueChange={(h) =>
-                              updateMissionPickerColor({
-                                h,
-                                s: pickerHsv.s,
-                                v: pickerHsv.v,
-                              })
-                            }
-                            onSvPanelMouseDown={(e) => {
-                              e.preventDefault()
-                              draggingMissionSvRef.current = true
-                              updateMissionSvFromPointer(e.clientX, e.clientY)
-                            }}
-                            onHexInputChange={(raw) => {
-                              setPickerHex(raw)
-                              const normalized = normalizeHex(raw)
-                              if (!normalized || !openMissionColorKey) return
-                              setPickerHsv(hexToHsv(normalized))
-                              setMissionGradStops((prev) => {
-                                const n = { ...prev }
-                                if (openMissionColorKey === 'gradTop') n.top = normalized
-                                else if (openMissionColorKey === 'gradMid') n.mid = normalized
-                                else n.bottom = normalized
-                                queueMicrotask(() => {
-                                  setStep2GradientOverride(missionGradientCssFromTriple(n.top, n.mid, n.bottom))
-                                  setForm((s) => ({ ...s, card_theme_index: nearestMissionThemeIndexFromHex(n.top) }))
-                                })
-                                return n
-                              })
-                            }}
-                          />
                         </div>
-                        <div className="mt-6 w-full max-w-[760px] shrink-0 px-1">
-                          <p className="mb-2 text-center text-[11px] font-medium uppercase tracking-wide text-zinc-400">
-                            Live preview
-                          </p>
-                          <MissionOverlaySplitPreviews form={missionStep2PreviewInput} />
-                        </div>
-                      </div>
-                    ) : null}
 
-                    {step === 2 && step2View === 'main' ? (
-                      <div className="flex w-full flex-col gap-6 px-1 pb-28">
-                        <div className="flex shrink-0 flex-col items-center space-y-5">
-                        <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
-                          Card cover, overlay copy &amp; images
-                        </h4>
-                        <p className="max-w-lg px-2 text-center text-[13px] font-medium text-zinc-500">
-                          One line in the field below appears in the overlay preview as guest-facing body copy.
-                        </p>
-                        <div className="w-full max-w-[760px] rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
-                          <label className="flex h-12 items-center rounded-2xl bg-white px-4">
-                            <input
-                              ref={missionDescInputRef}
-                              value={form.description}
-                              onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
-                              className="w-full max-w-[680px] resize-none bg-transparent !text-[15px] outline-none"
-                              placeholder="Short line for the mission overlay (under the title)"
-                            />
-                          </label>
-                        </div>
-                        <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-2.5">
-                          <div className="relative">
-                            <button
-                              type="button"
-                              onClick={() => cardCoverInputRef.current?.click()}
-                              disabled={uploadSlot === 'card'}
-                              className={`group relative flex h-12 w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 text-sm font-medium transition-all duration-200 ease-out disabled:opacity-60 ${
-                                uploadSlot === 'card' || cardCoverReady
-                                  ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white'
-                                  : `bg-zinc-50/90 text-zinc-800 ${MISSION_STEP2_UPLOAD_HOVER}`
-                              }`}
-                            >
-                              <svg
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth={1.7}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className={`relative z-10 h-4 w-4 shrink-0 transition-colors duration-200 ease-out ${
-                                  uploadSlot === 'card' || cardCoverReady
-                                    ? 'text-white'
-                                    : 'text-zinc-500 group-hover:text-white'
-                                }`}
-                                aria-hidden
-                              >
-                                <rect x="3" y="5" width="18" height="14" rx="2" />
-                                <circle cx="8.5" cy="10" r="1.2" />
-                                <path d="m21 15-6-5-4 4-3-3-5 5" />
-                              </svg>
-                              <span
-                                className={`relative z-10 transition-colors duration-200 ease-out ${
-                                  uploadSlot === 'card' || cardCoverReady ? 'text-white' : 'group-hover:text-white'
-                                }`}
-                              >
-                                Card cover image
-                              </span>
-                              {uploadSlot === 'card' ? (
-                                <svg
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth={2}
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  className="absolute right-3 h-4 w-4 shrink-0 animate-spin text-white"
-                                  aria-hidden
-                                >
-                                  <path d="M21 12a9 9 0 1 1-3.2-6.9" />
-                                </svg>
-                              ) : cardCoverReady ? (
-                                <svg
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth={2}
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  className="absolute right-3 h-4 w-4 shrink-0 text-white"
-                                  aria-hidden
-                                >
-                                  <path d="m5 12 5 5L20 7" />
-                                </svg>
-                              ) : null}
-                            </button>
-                            {cardCoverReady && uploadSlot !== 'card' ? (
-                              <button
-                                type="button"
-                                onClick={() => void removeCardCoverImage()}
-                                className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-sm transition-colors hover:bg-red-50"
-                                aria-label="Remove card cover image"
-                              >
-                                <RemoveImageIcon className="h-3 w-3" />
-                              </button>
-                            ) : null}
+                        <div
+                          className={`absolute inset-0 flex min-h-0 flex-col overflow-hidden transition-all duration-200 ease-out ${
+                            step2View === 'customize'
+                              ? 'z-10 translate-x-0 opacity-100'
+                              : 'pointer-events-none z-0 translate-x-2 opacity-0'
+                          }`}
+                        >
+                          <div className="flex min-h-0 flex-1 flex-col">
+                            <div className="min-h-0 max-h-[min(420px,52vh)] shrink-0 overflow-y-auto overflow-x-visible px-1 pb-3">
+                              <div className="flex flex-col items-center space-y-5">
+                                <div className="relative w-full max-w-lg">
+                                  <button
+                                    type="button"
+                                    onClick={() => setStep2View('main')}
+                                    className="absolute left-0 top-0.5 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-zinc-900 shadow-sm transition-transform duration-200 ease-out hover:scale-105 active:scale-95"
+                                    aria-label="Back to design"
+                                  >
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth={2}
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="h-4 w-4"
+                                      aria-hidden
+                                    >
+                                      <path d="M19 12H5M12 19l-7-7 7-7" />
+                                    </svg>
+                                  </button>
+                                  <h4 className="px-11 text-center text-2xl font-semibold tracking-tight text-zinc-900">
+                                    Mission color palette
+                                  </h4>
+                                  <p className="mt-2 text-center text-[13px] font-medium text-zinc-500">
+                                    Mission color themes are separate from table team themes.
+                                  </p>
+                                </div>
+                                <div className="relative flex w-full max-w-[760px] flex-wrap justify-center gap-4">
+                                  {MISSION_CARD_BACKGROUNDS.map((bg, i) => {
+                                    const selected = form.card_theme_index === i
+                                    return (
+                                      <button
+                                        key={i}
+                                        type="button"
+                                        aria-label={MISSION_CARD_THEME_LABELS[i]}
+                                        onClick={() => {
+                                          setStep2GradientOverride(null)
+                                          setMissionGradStops(tripleStopsFromGradientCss(bg))
+                                          setForm((s) => ({ ...s, card_theme_index: i }))
+                                        }}
+                                        className={`flex h-[4.5rem] w-[4.5rem] shrink-0 flex-col items-center justify-end rounded-2xl p-1.5 text-[10px] font-semibold text-white/95 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)] transition-[transform,box-shadow] duration-200 ease-out ${
+                                          selected
+                                            ? 'scale-[1.03] ring-2 ring-zinc-900 ring-offset-2'
+                                            : 'ring-1 ring-zinc-200/90 hover:scale-[1.04] hover:brightness-105'
+                                        }`}
+                                        style={{ background: bg }}
+                                      >
+                                        <span className="line-clamp-2 text-center leading-tight drop-shadow-sm">
+                                          {MISSION_CARD_THEME_LABELS[i]}
+                                        </span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                                <div className="relative w-full max-w-lg space-y-3 rounded-2xl border border-zinc-100/90 bg-zinc-50/50 p-3">
+                                  <p className="text-center text-xs font-semibold text-zinc-600">Card gradient stops</p>
+                                  <div className="flex flex-wrap items-center justify-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-semibold text-zinc-600">Top</span>
+                                      <button
+                                        type="button"
+                                        data-mission-color-dot="true"
+                                        onClick={(e) => openMissionColorPicker('gradTop', e.currentTarget)}
+                                        className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
+                                        style={{ backgroundColor: missionGradStops.top }}
+                                        aria-label="Gradient top color"
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-semibold text-zinc-600">Middle</span>
+                                      <button
+                                        type="button"
+                                        data-mission-color-dot="true"
+                                        onClick={(e) => openMissionColorPicker('gradMid', e.currentTarget)}
+                                        className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
+                                        style={{ backgroundColor: missionGradStops.mid }}
+                                        aria-label="Gradient middle color"
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-semibold text-zinc-600">Bottom</span>
+                                      <button
+                                        type="button"
+                                        data-mission-color-dot="true"
+                                        onClick={(e) => openMissionColorPicker('gradBottom', e.currentTarget)}
+                                        className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
+                                        style={{ backgroundColor: missionGradStops.bottom }}
+                                        aria-label="Gradient bottom color"
+                                      />
+                                    </div>
+                                  </div>
+                                  <AdminBuilderColorPickerPortal
+                                    open={Boolean(openMissionColorKey && missionColorPopoverPos)}
+                                    position={missionColorPopoverPos}
+                                    pickerRef={missionColorPickerRef}
+                                    svPanelRef={missionSvPanelRef}
+                                    pickerHsv={pickerHsv}
+                                    pickerHex={pickerHex}
+                                    onHueChange={(h) =>
+                                      updateMissionPickerColor({
+                                        h,
+                                        s: pickerHsv.s,
+                                        v: pickerHsv.v,
+                                      })
+                                    }
+                                    onSvPanelMouseDown={(e) => {
+                                      e.preventDefault()
+                                      draggingMissionSvRef.current = true
+                                      updateMissionSvFromPointer(e.clientX, e.clientY)
+                                    }}
+                                    onHexInputChange={(raw) => {
+                                      setPickerHex(raw)
+                                      const normalized = normalizeHex(raw)
+                                      if (!normalized || !openMissionColorKey) return
+                                      setPickerHsv(hexToHsv(normalized))
+                                      setMissionGradStops((prev) => {
+                                        const n = { ...prev }
+                                        if (openMissionColorKey === 'gradTop') n.top = normalized
+                                        else if (openMissionColorKey === 'gradMid') n.mid = normalized
+                                        else n.bottom = normalized
+                                        queueMicrotask(() => {
+                                          setStep2GradientOverride(missionGradientCssFromTriple(n.top, n.mid, n.bottom))
+                                          setForm((s) => ({ ...s, card_theme_index: nearestMissionThemeIndexFromHex(n.top) }))
+                                        })
+                                        return n
+                                      })
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex min-h-0 flex-1 flex-col px-1 pt-1">
+                              <p className="mb-2 shrink-0 text-center text-[11px] font-medium uppercase tracking-wide text-zinc-400">
+                                Live preview
+                              </p>
+                              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                                <MissionOverlaySplitPreviews builderFlush form={missionStep2PreviewInput} />
+                              </div>
+                            </div>
                           </div>
-                          <div className="relative">
-                            <button
-                              type="button"
-                              onClick={() => headerImageInputRef.current?.click()}
-                              disabled={uploadSlot === 'overlay'}
-                              className={`group relative flex h-12 w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl border border-zinc-200/80 text-sm font-medium transition-all duration-200 ease-out disabled:opacity-60 ${
-                                uploadSlot === 'overlay' || headerImageReady
-                                  ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white'
-                                  : `bg-zinc-50/90 text-zinc-800 ${MISSION_STEP2_UPLOAD_HOVER}`
-                              }`}
-                            >
-                              <svg
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth={1.7}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className={`relative z-10 h-4 w-4 shrink-0 transition-colors duration-200 ease-out ${
-                                  uploadSlot === 'overlay' || headerImageReady
-                                    ? 'text-white'
-                                    : 'text-zinc-500 group-hover:text-white'
-                                }`}
-                                aria-hidden
-                              >
-                                <path d="M12 2 9.8 7.2 4.5 9.5l5.3 2.3L12 17l2.2-5.2 5.3-2.3-5.3-2.3L12 2Z" />
-                              </svg>
-                              <span
-                                className={`relative z-10 transition-colors duration-200 ease-out ${
-                                  uploadSlot === 'overlay' || headerImageReady ? 'text-white' : 'group-hover:text-white'
-                                }`}
-                              >
-                                Header image
-                              </span>
-                              {uploadSlot === 'overlay' ? (
-                                <svg
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth={2}
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  className="absolute right-3 h-4 w-4 shrink-0 animate-spin text-white"
-                                  aria-hidden
-                                >
-                                  <path d="M21 12a9 9 0 1 1-3.2-6.9" />
-                                </svg>
-                              ) : headerImageReady ? (
-                                <svg
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth={2}
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  className="absolute right-3 h-4 w-4 shrink-0 text-white"
-                                  aria-hidden
-                                >
-                                  <path d="m5 12 5 5L20 7" />
-                                </svg>
-                              ) : null}
-                            </button>
-                            {headerImageReady && uploadSlot !== 'overlay' ? (
-                              <button
-                                type="button"
-                                onClick={() => void removeHeaderMissionImage()}
-                                className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-sm transition-colors hover:bg-red-50"
-                                aria-label="Remove header image"
-                              >
-                                <RemoveImageIcon className="h-3 w-3" />
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="flex w-full max-w-[760px] flex-wrap items-center justify-center gap-3">
-                          {MISSION_CARD_BACKGROUNDS.map((bg, i) => {
-                            const selected = form.card_theme_index === i
-                            return (
-                              <button
-                                key={i}
-                                type="button"
-                                aria-label={MISSION_CARD_THEME_LABELS[i]}
-                                onClick={() => {
-                                  setStep2GradientOverride(null)
-                                  setMissionGradStops(tripleStopsFromGradientCss(bg))
-                                  setForm((s) => ({ ...s, card_theme_index: i }))
-                                }}
-                                className={`h-10 w-10 cursor-pointer rounded-full transition-[transform,box-shadow,filter] duration-200 ease-out hover:scale-[1.05] hover:brightness-105 ${
-                                  selected
-                                    ? 'scale-[1.02] ring-2 ring-zinc-900/50 ring-offset-2'
-                                    : 'ring-1 ring-zinc-200/90'
-                                }`}
-                                style={{ background: bg }}
-                              />
-                            )
-                          })}
-                          <button
-                            type="button"
-                            onClick={() => setStep2View('customize')}
-                            className={`group ${MISSION_STEP2_SECONDARY_BTN} text-zinc-600 ${MISSION_BUILDER_GRADIENT_HOVER}`}
-                          >
-                            <svg
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth={1.8}
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              className="h-4 w-4 shrink-0 self-center text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white"
-                              aria-hidden
-                            >
-                              <path d="M12 2 9.8 7.2 4.5 9.5l5.3 2.3L12 17l2.2-5.2 5.3-2.3-5.3-2.3L12 2Z" />
-                            </svg>
-                            Customize
-                          </button>
-                        </div>
-                        </div>
-                        <div className="w-full max-w-[760px] shrink-0">
-                          <p className="mb-2 text-center text-[11px] font-medium uppercase tracking-wide text-zinc-400">
-                            Live preview
-                          </p>
-                          <MissionOverlaySplitPreviews form={missionStep2PreviewInput} />
                         </div>
                       </div>
                     ) : null}

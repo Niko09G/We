@@ -69,7 +69,7 @@ export function MissionOverlaySplitPreviews({
 
   if (builderFlush) {
     return (
-      <div className="flex min-h-[220px] w-full max-w-[760px] flex-1 flex-row gap-4 overflow-hidden px-1">
+      <div className="flex h-full min-h-[220px] w-full max-w-[760px] flex-1 flex-row gap-4 overflow-hidden px-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <p className="mb-2 shrink-0 text-center text-[11px] font-medium text-zinc-500">Card</p>
           <div className="flex min-h-0 flex-1 flex-col">
