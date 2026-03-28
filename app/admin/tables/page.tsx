@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import {
   archiveTable,
   createTable,
@@ -16,6 +15,16 @@ import {
 } from '@/lib/team-page-config'
 import { compressAvatarSquareImage, compressImage, isAcceptedImageFile } from '@/lib/image-compress'
 import { removeTeamHeroImageByPublicUrl, uploadTeamHeroImage } from '@/lib/team-hero-image-assets'
+import { clamp, normalizeHex, hexToHsv, hsvToHex } from '@/lib/admin-color-picker'
+import {
+  AdminBuilderColorPickerPortal,
+  computePickerAnchorPosition,
+} from '@/app/admin/_components/AdminBuilderColorPickerPortal'
+import {
+  AdminBuilderShellHeader,
+  BUILDER_PROGRESS_ACTIVE_CLASS,
+  BUILDER_PROGRESS_INACTIVE_CLASS,
+} from '@/app/admin/_components/AdminBuilderShellHeader'
 
 type EditorMode = 'create' | 'edit'
 type OverlayStep = 1 | 2 | 3
@@ -130,83 +139,6 @@ const GRADIENT_CTA =
 
 const FOOTER_BTN_SECONDARY =
   'inline-flex h-10 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 transition-all duration-200 ease-out hover:bg-zinc-50'
-
-function clamp(n: number, min: number, max: number): number {
-  return Math.min(Math.max(n, min), max)
-}
-
-function normalizeHex(input: string): string | null {
-  const raw = input.trim().replace('#', '')
-  if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(raw)) return null
-  const full = raw.length === 3 ? raw.split('').map((c) => `${c}${c}`).join('') : raw
-  return `#${full.toLowerCase()}`
-}
-
-function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
-  const n = normalizeHex(hex)
-  if (!n) return null
-  const raw = n.slice(1)
-  return {
-    r: Number.parseInt(raw.slice(0, 2), 16),
-    g: Number.parseInt(raw.slice(2, 4), 16),
-    b: Number.parseInt(raw.slice(4, 6), 16),
-  }
-}
-
-function rgbToHex(r: number, g: number, b: number): string {
-  const toHex = (v: number) => Math.round(clamp(v, 0, 255)).toString(16).padStart(2, '0')
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
-}
-
-function rgbToHsv(r: number, g: number, b: number): { h: number; s: number; v: number } {
-  const rn = r / 255
-  const gn = g / 255
-  const bn = b / 255
-  const max = Math.max(rn, gn, bn)
-  const min = Math.min(rn, gn, bn)
-  const d = max - min
-  let h = 0
-  if (d !== 0) {
-    if (max === rn) h = ((gn - bn) / d) % 6
-    else if (max === gn) h = (bn - rn) / d + 2
-    else h = (rn - gn) / d + 4
-  }
-  h = Math.round((h * 60 + 360) % 360)
-  const s = max === 0 ? 0 : d / max
-  const v = max
-  return { h, s, v }
-}
-
-function hexToHsv(hex: string): { h: number; s: number; v: number } {
-  const rgb = hexToRgb(hex)
-  if (!rgb) return { h: 0, s: 0, v: 0 }
-  return rgbToHsv(rgb.r, rgb.g, rgb.b)
-}
-
-function hsvToRgb(h: number, s: number, v: number): { r: number; g: number; b: number } {
-  const c = v * s
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
-  const m = v - c
-  let rp = 0
-  let gp = 0
-  let bp = 0
-  if (h < 60) [rp, gp, bp] = [c, x, 0]
-  else if (h < 120) [rp, gp, bp] = [x, c, 0]
-  else if (h < 180) [rp, gp, bp] = [0, c, x]
-  else if (h < 240) [rp, gp, bp] = [0, x, c]
-  else if (h < 300) [rp, gp, bp] = [x, 0, c]
-  else [rp, gp, bp] = [c, 0, x]
-  return {
-    r: (rp + m) * 255,
-    g: (gp + m) * 255,
-    b: (bp + m) * 255,
-  }
-}
-
-function hsvToHex(h: number, s: number, v: number): string {
-  const { r, g, b } = hsvToRgb(h, s, v)
-  return rgbToHex(r, g, b)
-}
 
 function initialsFromName(name: string): string {
   const t = name.trim()
@@ -626,19 +558,11 @@ export default function TablesAdminPage() {
   }, [openColorField, updateSvFromPointer])
 
   const openColorPicker = useCallback((key: ThemeColorKey, el: HTMLButtonElement) => {
-    const rect = el.getBoundingClientRect()
-    const popoverWidth = 208
-    const edgePadding = 12
-    const left = Math.min(
-      Math.max(rect.left + rect.width / 2, edgePadding + popoverWidth / 2),
-      window.innerWidth - edgePadding - popoverWidth / 2
-    )
-    const top = Math.min(Math.max(rect.bottom + 10, edgePadding), window.innerHeight - 260)
     const currentHex = normalizeHex(formTheme[key]) ?? '#6d28ff'
     setPickerHex(currentHex)
     setPickerHsv(hexToHsv(currentHex))
     setOpenColorField(key)
-    setColorPopoverPos({ left, top })
+    setColorPopoverPos(computePickerAnchorPosition(el))
   }, [formTheme])
 
   const advanceFromStep1 = useCallback(() => {
@@ -1163,44 +1087,24 @@ export default function TablesAdminPage() {
                 aria-hidden
               />
             ) : null}
-            <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3">
-              <div>
-                <h3 className="text-lg font-semibold text-zinc-900">
-                  {mode === 'create' ? 'Create new table' : 'Edit table'}
-                </h3>
-                <div className="mt-1 inline-flex items-center gap-1.5">
+            <AdminBuilderShellHeader
+              title={mode === 'create' ? 'Create new table' : 'Edit table'}
+              onClose={closeOverlay}
+              center={
+                <div className="inline-flex items-center gap-1.5">
                   <span
                     className={`h-1.5 w-8 rounded-full transition-colors duration-200 ${
-                      overlayStep === 1 ? 'bg-zinc-900' : 'bg-zinc-200'
+                      overlayStep >= 1 ? BUILDER_PROGRESS_ACTIVE_CLASS : BUILDER_PROGRESS_INACTIVE_CLASS
                     }`}
                   />
                   <span
                     className={`h-1.5 w-8 rounded-full transition-colors duration-200 ${
-                      overlayStep >= 2 ? 'bg-zinc-900' : 'bg-zinc-200'
+                      overlayStep >= 2 ? BUILDER_PROGRESS_ACTIVE_CLASS : BUILDER_PROGRESS_INACTIVE_CLASS
                     }`}
                   />
                 </div>
-              </div>
-              <button
-                type="button"
-                onClick={closeOverlay}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black text-white"
-                aria-label="Close editor"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-4 w-4"
-                  aria-hidden
-                >
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+              }
+            />
 
             {overlayError ? (
               <div className="border-b border-zinc-200/80 bg-zinc-50/90 px-5 py-2.5 text-sm text-zinc-700">
@@ -1628,74 +1532,33 @@ export default function TablesAdminPage() {
                                 />
                               </div>
                             </div>
-                            {openColorField && colorPopoverPos && typeof window !== 'undefined'
-                              ? createPortal(
-                                  <div
-                                    ref={colorPickerRef}
-                                    className="fixed z-[80] w-52 -translate-x-1/2 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-md"
-                                    style={{ left: colorPopoverPos.left, top: colorPopoverPos.top }}
-                                  >
-                                    <div
-                                      ref={svPanelRef}
-                                      className="relative h-36 w-full cursor-crosshair"
-                                      style={{ backgroundColor: `hsl(${pickerHsv.h} 100% 50%)` }}
-                                      onMouseDown={(e) => {
-                                        e.preventDefault()
-                                        draggingSvRef.current = true
-                                        updateSvFromPointer(e.clientX, e.clientY)
-                                      }}
-                                    >
-                                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-white to-transparent" />
-                                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black to-transparent" />
-                                      <span
-                                        className="pointer-events-none absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.25)]"
-                                        style={{
-                                          left: `${pickerHsv.s * 100}%`,
-                                          top: `${(1 - pickerHsv.v) * 100}%`,
-                                        }}
-                                      />
-                                    </div>
-                                    <div className="space-y-2 border-t border-zinc-100 p-3">
-                                      <input
-                                        type="range"
-                                        min={0}
-                                        max={360}
-                                        value={pickerHsv.h}
-                                        onChange={(e) =>
-                                          updatePickerColor({
-                                            h: Number(e.target.value),
-                                            s: pickerHsv.s,
-                                            v: pickerHsv.v,
-                                          })
-                                        }
-                                        className="h-2 w-full cursor-pointer accent-violet-600"
-                                        aria-label="Hue"
-                                      />
-                                      <div className="flex items-center gap-2">
-                                        <span
-                                          className="h-6 w-6 shrink-0 rounded-md border border-zinc-200"
-                                          style={{ backgroundColor: pickerHex }}
-                                          aria-hidden
-                                        />
-                                        <input
-                                          value={pickerHex}
-                                          onChange={(e) => {
-                                            const next = e.target.value
-                                            setPickerHex(next)
-                                            const normalized = normalizeHex(next)
-                                            if (!normalized || !openColorField) return
-                                            setColorField(openColorField, normalized)
-                                            setPickerHsv(hexToHsv(normalized))
-                                          }}
-                                          className="w-full rounded-lg border border-zinc-200 px-2.5 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-700"
-                                          aria-label="Hex color"
-                                        />
-                                      </div>
-                                    </div>
-                                  </div>,
-                                  document.body
-                                )
-                              : null}
+                            <AdminBuilderColorPickerPortal
+                              open={Boolean(openColorField && colorPopoverPos)}
+                              position={colorPopoverPos}
+                              pickerRef={colorPickerRef}
+                              svPanelRef={svPanelRef}
+                              pickerHsv={pickerHsv}
+                              pickerHex={pickerHex}
+                              onHueChange={(h) =>
+                                updatePickerColor({
+                                  h,
+                                  s: pickerHsv.s,
+                                  v: pickerHsv.v,
+                                })
+                              }
+                              onSvPanelMouseDown={(e) => {
+                                e.preventDefault()
+                                draggingSvRef.current = true
+                                updateSvFromPointer(e.clientX, e.clientY)
+                              }}
+                              onHexInputChange={(raw) => {
+                                setPickerHex(raw)
+                                const normalized = normalizeHex(raw)
+                                if (!normalized || !openColorField) return
+                                setColorField(openColorField, normalized)
+                                setPickerHsv(hexToHsv(normalized))
+                              }}
+                            />
                           </div>
                         </div>
                       </div>

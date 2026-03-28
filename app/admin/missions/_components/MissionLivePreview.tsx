@@ -44,7 +44,14 @@ export function previewGradientForMissionForm(form: MissionPreviewInput): string
 }
 
 /** Side-by-side compact card + overlay previews for the Missions overlay builder (Step 2). */
-export function MissionOverlaySplitPreviews({ form }: { form: MissionPreviewInput }) {
+export function MissionOverlaySplitPreviews({
+  form,
+  builderFlush,
+}: {
+  form: MissionPreviewInput
+  /** Tall flush-bottom previews (no bottom radius) for the Step 2 builder column. */
+  builderFlush?: boolean
+}) {
   const surface = useMemo(() => previewGradientForMissionForm(form), [form])
   const title = form.title.trim() || 'Mission title'
   const pts = Math.max(0, Math.floor(form.points))
@@ -59,6 +66,50 @@ export function MissionOverlaySplitPreviews({ form }: { form: MissionPreviewInpu
     typeof form.header_image_url === 'string' && form.header_image_url.trim().length > 0
       ? form.header_image_url.trim()
       : null
+
+  if (builderFlush) {
+    return (
+      <div className="flex min-h-0 w-full max-w-[760px] flex-1 flex-row gap-4 overflow-hidden px-1">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <p className="mb-2 shrink-0 text-center text-[11px] font-medium text-zinc-500">Card</p>
+          <div className="flex min-h-0 flex-1 flex-col">
+            <PreviewCard
+              mode="card"
+              compact
+              builderFlush
+              surface={surface}
+              cover={cover}
+              title={title}
+              points={pts}
+              typeIcon={typeIcon}
+              beatcoin={form.validation_type === 'beatcoin'}
+              pending={form.cardPending && !form.cardCompleted}
+              completed={form.cardCompleted}
+              ctaLabel={ctaLabel}
+              completedLabel={completedLabel}
+            />
+          </div>
+        </div>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <p className="mb-2 shrink-0 text-center text-[11px] font-medium text-zinc-500">Overlay</p>
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            <PreviewCard
+              mode="overlay"
+              compact
+              builderFlush
+              surface={surface}
+              title={title}
+              overlayImg={overlayImg}
+              overlayBodyText={(form.description ?? '').trim()}
+              beatcoin={form.validation_type === 'beatcoin'}
+              ctaLabel={ctaLabel}
+              completedLabel={completedLabel}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex w-full max-w-[760px] flex-row flex-wrap items-start justify-center gap-4">
@@ -253,6 +304,7 @@ function PreviewCard({
   ctaLabel,
   completedLabel,
   compact = false,
+  builderFlush = false,
 }: {
   mode: 'card' | 'overlay' | 'done'
   surface: string
@@ -269,18 +321,24 @@ function PreviewCard({
   ctaLabel: string
   completedLabel: string
   compact?: boolean
+  builderFlush?: boolean
 }) {
   if (mode === 'overlay') {
     const bodyCopy = (overlayBodyText ?? '').trim()
+    const shellRadius = builderFlush ? 'rounded-t-2xl rounded-b-none' : 'rounded-2xl'
+    const innerRadius = builderFlush ? 'rounded-t-xl rounded-b-none' : 'rounded-xl'
+    const outerFlex = builderFlush ? 'flex min-h-0 flex-1 flex-col' : ''
     return (
       <div
-        className={`overflow-hidden rounded-2xl ring-1 ring-zinc-200/80 dark:ring-zinc-700 ${
+        className={`overflow-hidden ${shellRadius} ring-1 ring-zinc-200/80 dark:ring-zinc-700 ${
           compact ? 'shadow-none' : 'shadow-lg'
-        }`}
+        } ${outerFlex}`}
         style={{ background: surface }}
       >
         <div
-          className={`mx-2 flex items-center justify-between ${compact ? 'mt-1.5 mb-0.5 px-1.5 py-1' : 'mt-2 mb-1 px-2 py-1.5'}`}
+          className={`mx-2 flex shrink-0 items-center justify-between ${
+            compact ? 'mt-1.5 mb-0.5 px-1.5 py-1' : 'mt-2 mb-1 px-2 py-1.5'
+          }`}
         >
           <span className={`truncate font-semibold text-white ${compact ? 'text-[10px]' : 'text-xs'}`}>{title}</span>
           {!compact ? (
@@ -288,11 +346,11 @@ function PreviewCard({
           ) : null}
         </div>
         <div
-          className={`mx-2 mb-2 rounded-xl bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-zinc-100 ${
-            compact ? 'px-2.5 py-2.5' : 'px-4 py-4'
-          }`}
+          className={`mx-2 flex flex-col bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-zinc-100 ${
+            builderFlush ? 'mb-0 min-h-0 flex-1' : 'mb-2'
+          } ${innerRadius} ${compact ? 'px-2.5 py-2.5' : 'px-4 py-4'}`}
         >
-          <div className="flex flex-col items-center">
+          <div className={`flex flex-col items-center ${builderFlush ? 'min-h-0 flex-1' : ''}`}>
             <div
               className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 ${
                 compact ? 'h-12 w-12 text-lg' : 'h-16 w-16 text-xl'
@@ -318,13 +376,13 @@ function PreviewCard({
                 <span className="text-zinc-400 italic">Guest content</span>
               )}
             </p>
-          </div>
-          <div
-            className={`rounded-lg bg-zinc-100 py-1.5 text-center font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 ${
-              compact ? 'mt-2 text-[10px]' : 'mt-4 text-xs'
-            }`}
-          >
-            Start mission
+            <div
+              className={`w-full rounded-lg bg-zinc-100 py-1.5 text-center font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 ${
+                builderFlush ? 'mt-auto' : ''
+              } ${compact ? 'mt-2 text-[10px]' : 'mt-4 text-xs'}`}
+            >
+              Start mission
+            </div>
           </div>
         </div>
       </div>
@@ -334,11 +392,16 @@ function PreviewCard({
   const showCover = Boolean(cover)
   const doneState = mode === 'done' || completed
 
+  const cardShellRadius = builderFlush ? 'rounded-t-2xl rounded-b-none' : 'rounded-2xl'
+  const cardSizing = builderFlush
+    ? 'min-h-0 flex-1 p-3 shadow-none'
+    : compact
+      ? 'h-[200px] p-3 shadow-none'
+      : 'h-[220px] p-4 shadow-lg'
+
   return (
     <div
-      className={`relative flex flex-col overflow-hidden rounded-2xl text-left ring-1 ring-zinc-200/60 dark:ring-zinc-700 ${
-        compact ? 'h-[200px] p-3 shadow-none' : 'h-[220px] p-4 shadow-lg'
-      }`}
+      className={`relative flex flex-col overflow-hidden ${cardShellRadius} text-left ring-1 ring-zinc-200/60 dark:ring-zinc-700 ${cardSizing}`}
       style={
         showCover
           ? undefined

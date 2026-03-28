@@ -31,10 +31,26 @@ import {
   uploadMissionImageAsset,
 } from '@/lib/mission-image-assets'
 import { MAX_IMAGE_UPLOAD_BYTES, prettyMb } from '@/lib/upload-constraints'
+import { clamp, normalizeHex, hexToHsv, hsvToHex } from '@/lib/admin-color-picker'
+import {
+  missionGradientCssFromTriple,
+  tripleStopsFromGradientCss,
+} from '@/lib/mission-gradient-stops'
+import {
+  AdminBuilderColorPickerPortal,
+  computePickerAnchorPosition,
+} from '@/app/admin/_components/AdminBuilderColorPickerPortal'
+import {
+  AdminBuilderShellHeader,
+  BUILDER_PROGRESS_ACTIVE_CLASS,
+  BUILDER_PROGRESS_INACTIVE_CLASS,
+} from '@/app/admin/_components/AdminBuilderShellHeader'
 
 type MissionView = 'cards' | 'list'
 type MissionStatusFilter = 'all' | 'active' | 'inactive' | 'archived'
 type MissionStep = 1 | 2 | 3 | 4
+
+type MissionGradDotKey = 'gradTop' | 'gradMid' | 'gradBottom'
 
 type MissionForm = {
   title: string
@@ -109,58 +125,8 @@ function nearestMissionThemeIndexFromHex(hexInput: string): number {
   return bestI
 }
 
-function missionGradientFromAccentHex(hexInput: string): string {
-  const raw = hexInput.trim()
-  const withHash = raw.startsWith('#') ? raw : `#${raw}`
-  const base = parseHexRgb(withHash)
-  if (!base) return MISSION_CARD_BACKGROUNDS[0]!
-  const t = 0.42
-  const r2 = Math.round(base.r + (255 - base.r) * t)
-  const g2 = Math.round(base.g + (255 - base.g) * t)
-  const b2 = Math.round(base.b + (255 - base.b) * t)
-  const to = `#${r2.toString(16).padStart(2, '0')}${g2.toString(16).padStart(2, '0')}${b2.toString(16).padStart(2, '0')}`
-  return `linear-gradient(to bottom, ${withHash}, ${to})`
-}
-
 const MISSION_STEP2_SECONDARY_BTN =
   'inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 transition-all duration-200 ease-out hover:bg-zinc-50'
-
-function MissionAccentPickerPopover({
-  open,
-  draftHex,
-  onDraftHex,
-  onApply,
-}: {
-  open: boolean
-  draftHex: string
-  onDraftHex: (hex: string) => void
-  onApply: () => void
-}) {
-  if (!open) return null
-  return (
-    <div
-      className="absolute left-1/2 top-full z-[45] mt-2 w-56 -translate-x-1/2 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg"
-      role="dialog"
-      aria-label="Custom accent color"
-    >
-      <p className="mb-2 text-center text-[11px] font-medium text-zinc-500">Pick an accent — preview updates instantly</p>
-      <input
-        type="color"
-        value={draftHex}
-        onChange={(e) => onDraftHex(e.target.value)}
-        className="h-10 w-full cursor-pointer overflow-hidden rounded-lg border border-zinc-200 bg-white"
-        aria-label="Accent color"
-      />
-      <button
-        type="button"
-        onClick={onApply}
-        className="mt-3 w-full rounded-lg bg-zinc-900 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
-      >
-        Apply
-      </button>
-    </div>
-  )
-}
 
 function RemoveImageIcon({ className }: { className?: string }) {
   return (
@@ -283,8 +249,21 @@ export default function MissionsLibraryPage() {
   const [step1Hint, setStep1Hint] = useState<string | null>(null)
   const [step2View, setStep2View] = useState<'main' | 'customize'>('main')
   const [step2GradientOverride, setStep2GradientOverride] = useState<string | null>(null)
-  const [missionCustomColorOpen, setMissionCustomColorOpen] = useState(false)
-  const [missionAccentDraftHex, setMissionAccentDraftHex] = useState('#6366f1')
+  const [missionGradStops, setMissionGradStops] = useState<{
+    top: string
+    mid: string
+    bottom: string
+  }>(() => tripleStopsFromGradientCss(MISSION_CARD_BACKGROUNDS[0]!))
+  const [openMissionColorKey, setOpenMissionColorKey] = useState<MissionGradDotKey | null>(null)
+  const [missionColorPopoverPos, setMissionColorPopoverPos] = useState<{ left: number; top: number } | null>(
+    null
+  )
+  const [pickerHsv, setPickerHsv] = useState<{ h: number; s: number; v: number }>({
+    h: 260,
+    s: 0.74,
+    v: 0.98,
+  })
+  const [pickerHex, setPickerHex] = useState('#6d28ff')
   const [uploadSlot, setUploadSlot] = useState<'card' | 'overlay' | null>(null)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<MissionForm>(emptyForm)
@@ -292,7 +271,10 @@ export default function MissionsLibraryPage() {
   const missionDescInputRef = useRef<HTMLInputElement | null>(null)
   const cardCoverInputRef = useRef<HTMLInputElement | null>(null)
   const headerImageInputRef = useRef<HTMLInputElement | null>(null)
-  const missionAccentWrapRef = useRef<HTMLDivElement | null>(null)
+  const missionColorPickerRef = useRef<HTMLDivElement | null>(null)
+  const missionSvPanelRef = useRef<HTMLDivElement | null>(null)
+  const draggingMissionSvRef = useRef(false)
+  const customizePanelWasOpenRef = useRef(false)
 
   const showToast = useCallback((message: string, kind: 'success' | 'error') => {
     setToast({ kind, message })
@@ -346,8 +328,9 @@ export default function MissionsLibraryPage() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       e.preventDefault()
-      if (missionCustomColorOpen) {
-        setMissionCustomColorOpen(false)
+      if (openMissionColorKey) {
+        setOpenMissionColorKey(null)
+        setMissionColorPopoverPos(null)
         return
       }
       if (step === 2 && step2View === 'customize') {
@@ -358,22 +341,32 @@ export default function MissionsLibraryPage() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [editorOpen, missionCustomColorOpen, step, step2View])
+  }, [editorOpen, openMissionColorKey, step, step2View])
 
   useEffect(() => {
-    if (!missionCustomColorOpen) return
-    const onMouseDown = (e: MouseEvent) => {
-      const el = missionAccentWrapRef.current
-      if (!el || el.contains(e.target as Node)) return
-      setMissionCustomColorOpen(false)
+    if (!editorOpen) return
+    const handleOutsidePointer = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null
+      if (!target) return
+      if (target.closest('[data-mission-color-dot="true"]')) return
+      if (missionColorPickerRef.current?.contains(target)) return
+      setOpenMissionColorKey(null)
+      setMissionColorPopoverPos(null)
     }
-    window.addEventListener('mousedown', onMouseDown)
-    return () => window.removeEventListener('mousedown', onMouseDown)
-  }, [missionCustomColorOpen])
+    window.addEventListener('mousedown', handleOutsidePointer)
+    return () => window.removeEventListener('mousedown', handleOutsidePointer)
+  }, [editorOpen])
 
   useEffect(() => {
     if (step !== 2) setStep2View('main')
   }, [step])
+
+  useEffect(() => {
+    if (step2View === 'main') {
+      setOpenMissionColorKey(null)
+      setMissionColorPopoverPos(null)
+    }
+  }, [step2View])
 
   const missionStep2PreviewInput = useMemo<MissionPreviewInput>(
     () => ({
@@ -395,6 +388,15 @@ export default function MissionsLibraryPage() {
 
   const cardCoverReady = form.card_cover_image_url.trim().length > 0
   const headerImageReady = form.header_image_url.trim().length > 0
+
+  useEffect(() => {
+    const on = step === 2 && step2View === 'customize'
+    if (on && !customizePanelWasOpenRef.current) {
+      const css = previewGradientForMissionForm(missionStep2PreviewInput)
+      setMissionGradStops(tripleStopsFromGradientCss(css))
+    }
+    customizePanelWasOpenRef.current = on
+  }, [step, step2View, missionStep2PreviewInput])
 
   const statusCounts = useMemo(() => {
     const active = missions.filter((m) => m.is_active).length
@@ -432,7 +434,9 @@ export default function MissionsLibraryPage() {
     setStep1Hint(null)
     setStep2View('main')
     setStep2GradientOverride(null)
-    setMissionCustomColorOpen(false)
+    setOpenMissionColorKey(null)
+    setMissionColorPopoverPos(null)
+    customizePanelWasOpenRef.current = false
     setForm(emptyForm())
     setEditorOpen(true)
   }
@@ -444,7 +448,9 @@ export default function MissionsLibraryPage() {
     setStep1Hint(null)
     setStep2View('main')
     setStep2GradientOverride(null)
-    setMissionCustomColorOpen(false)
+    setOpenMissionColorKey(null)
+    setMissionColorPopoverPos(null)
+    customizePanelWasOpenRef.current = false
     setForm(formFromMission(mission))
     setEditorOpen(true)
   }
@@ -507,21 +513,68 @@ export default function MissionsLibraryPage() {
     }
   }
 
-  function openMissionCustomAccentPicker() {
-    const g = previewGradientForMissionForm(missionStep2PreviewInput)
-    setMissionAccentDraftHex(firstStopColorFromMissionGradient(g))
-    setMissionCustomColorOpen(true)
-  }
+  const updateMissionPickerColor = useCallback(
+    (next: { h: number; s: number; v: number }) => {
+      if (!openMissionColorKey) return
+      const bounded = {
+        h: clamp(next.h, 0, 360),
+        s: clamp(next.s, 0, 1),
+        v: clamp(next.v, 0, 1),
+      }
+      const hex = hsvToHex(bounded.h, bounded.s, bounded.v)
+      setPickerHsv(bounded)
+      setPickerHex(hex)
+      setMissionGradStops((prev) => {
+        const n = { ...prev }
+        if (openMissionColorKey === 'gradTop') n.top = hex
+        else if (openMissionColorKey === 'gradMid') n.mid = hex
+        else n.bottom = hex
+        queueMicrotask(() => {
+          setStep2GradientOverride(missionGradientCssFromTriple(n.top, n.mid, n.bottom))
+          setForm((s) => ({ ...s, card_theme_index: nearestMissionThemeIndexFromHex(n.top) }))
+        })
+        return n
+      })
+    },
+    [openMissionColorKey]
+  )
 
-  function applyMissionCustomAccent() {
-    const g = missionGradientFromAccentHex(missionAccentDraftHex)
-    setStep2GradientOverride(g)
-    setForm((s) => ({
-      ...s,
-      card_theme_index: nearestMissionThemeIndexFromHex(missionAccentDraftHex),
-    }))
-    setMissionCustomColorOpen(false)
-  }
+  const updateMissionSvFromPointer = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!missionSvPanelRef.current) return
+      const rect = missionSvPanelRef.current.getBoundingClientRect()
+      const s = clamp((clientX - rect.left) / rect.width, 0, 1)
+      const v = clamp(1 - (clientY - rect.top) / rect.height, 0, 1)
+      updateMissionPickerColor({ h: pickerHsv.h, s, v })
+    },
+    [pickerHsv.h, updateMissionPickerColor]
+  )
+
+  const openMissionColorPicker = useCallback((key: MissionGradDotKey, el: HTMLButtonElement) => {
+    const rawHex = key === 'gradTop' ? missionGradStops.top : key === 'gradMid' ? missionGradStops.mid : missionGradStops.bottom
+    const currentHex = normalizeHex(rawHex) ?? '#6d28ff'
+    setPickerHex(currentHex)
+    setPickerHsv(hexToHsv(currentHex))
+    setOpenMissionColorKey(key)
+    setMissionColorPopoverPos(computePickerAnchorPosition(el))
+  }, [missionGradStops.bottom, missionGradStops.mid, missionGradStops.top])
+
+  useEffect(() => {
+    if (!openMissionColorKey) return
+    const handleMove = (e: MouseEvent) => {
+      if (!draggingMissionSvRef.current) return
+      updateMissionSvFromPointer(e.clientX, e.clientY)
+    }
+    const handleUp = () => {
+      draggingMissionSvRef.current = false
+    }
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+  }, [openMissionColorKey, updateMissionSvFromPointer])
 
   function advanceFromStep1() {
     if (!form.title.trim()) {
@@ -920,45 +973,25 @@ export default function MissionsLibraryPage() {
                         className="admin-font relative z-10 flex h-[90vh] max-h-[900px] min-h-0 w-full max-w-[1080px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm"
                         onMouseDown={(e) => e.stopPropagation()}
                       >
-                <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-zinc-900">
-                      {editorMode === 'create' ? 'New mission' : 'Edit mission'}
-                    </h3>
-                    <div className="mt-1 inline-flex items-center gap-1.5">
+                <AdminBuilderShellHeader
+                  title={editorMode === 'create' ? 'New mission' : 'Edit mission'}
+                  onClose={() => setEditorOpen(false)}
+                  center={
+                    <div className="inline-flex items-center gap-1.5">
                       {[1, 2, 3, 4].map((n) => (
                         <button
                           key={n}
                           type="button"
                           onClick={() => setStep(n as MissionStep)}
                           className={`h-1.5 w-10 rounded-full transition-colors duration-150 ${
-                            step >= n ? 'bg-zinc-900' : 'bg-zinc-200'
+                            step >= n ? BUILDER_PROGRESS_ACTIVE_CLASS : BUILDER_PROGRESS_INACTIVE_CLASS
                           }`}
                           aria-label={`Step ${n}`}
                         />
                       ))}
                     </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setEditorOpen(false)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black text-white"
-                    aria-label="Close editor"
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-4 w-4"
-                      aria-hidden
-                    >
-                      <path d="M18 6 6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
+                  }
+                />
 
                         <div className="relative flex h-full min-h-0 flex-1 flex-col items-center justify-start overflow-hidden [&_button]:cursor-pointer">
                           <input
@@ -984,7 +1017,7 @@ export default function MissionsLibraryPage() {
                             }}
                           />
                           <div className="flex h-full min-h-0 w-full max-w-full flex-1 flex-col items-center justify-start overflow-y-auto overflow-x-visible px-5 py-4 pb-32 [&_input]:!text-[14px] [&_select]:!text-[14px]">
-                            <div className="relative min-h-full w-full overflow-x-visible">
+                            <div className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-x-visible">
                               <div
                                 className={`absolute inset-0 transition-all duration-200 ease-out ${
                                   step === 1 ? 'translate-x-0 opacity-100' : '-translate-x-3 pointer-events-none opacity-0'
@@ -1090,11 +1123,11 @@ export default function MissionsLibraryPage() {
                               </div>
 
                               <div
-                                className={`absolute inset-0 transition-all duration-200 ease-out ${
+                                className={`absolute inset-0 flex min-h-0 flex-col transition-all duration-200 ease-out ${
                                   step >= 2 ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-3 opacity-0'
                                 }`}
                               >
-                                <div className="mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col overflow-visible py-3 pb-28">
+                                <div className="mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col overflow-visible py-3 pb-24">
                     {step === 2 && step2View === 'customize' ? (
                       <div className="flex min-h-full flex-col items-center space-y-5 px-1 pb-32">
                         <div className="relative w-full max-w-lg">
@@ -1124,10 +1157,7 @@ export default function MissionsLibraryPage() {
                             Mission color themes are separate from table team themes.
                           </p>
                         </div>
-                        <div
-                          ref={missionAccentWrapRef}
-                          className="relative flex w-full max-w-[760px] flex-wrap justify-center gap-4"
-                        >
+                        <div className="relative flex w-full max-w-[760px] flex-wrap justify-center gap-4">
                           {MISSION_CARD_BACKGROUNDS.map((bg, i) => {
                             const selected = form.card_theme_index === i
                             return (
@@ -1137,6 +1167,7 @@ export default function MissionsLibraryPage() {
                                 aria-label={MISSION_CARD_THEME_LABELS[i]}
                                 onClick={() => {
                                   setStep2GradientOverride(null)
+                                  setMissionGradStops(tripleStopsFromGradientCss(bg))
                                   setForm((s) => ({ ...s, card_theme_index: i }))
                                 }}
                                 className={`flex h-[4.5rem] w-[4.5rem] shrink-0 flex-col items-center justify-end rounded-2xl p-1.5 text-[10px] font-semibold text-white/95 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)] transition-[transform,box-shadow] duration-200 ease-out ${
@@ -1152,26 +1183,88 @@ export default function MissionsLibraryPage() {
                               </button>
                             )
                           })}
-                          <button
-                            type="button"
-                            onClick={openMissionCustomAccentPicker}
-                            aria-label="Custom accent color"
-                            className={`flex h-[4.5rem] w-[4.5rem] shrink-0 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-300 bg-zinc-50 text-[11px] font-semibold text-zinc-600 ring-1 ring-zinc-200/80 transition-[transform,background-color] duration-200 ease-out hover:border-zinc-400 hover:bg-white hover:text-zinc-900`}
-                          >
-                            Custom
-                          </button>
-                          <MissionAccentPickerPopover
-                            open={missionCustomColorOpen}
-                            draftHex={missionAccentDraftHex}
-                            onDraftHex={setMissionAccentDraftHex}
-                            onApply={applyMissionCustomAccent}
+                        </div>
+                        <div className="relative w-full max-w-lg space-y-3 rounded-2xl border border-zinc-100/90 bg-zinc-50/50 p-3">
+                          <p className="text-center text-xs font-semibold text-zinc-600">Card gradient stops</p>
+                          <div className="flex flex-wrap items-center justify-center gap-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold text-zinc-600">Top</span>
+                              <button
+                                type="button"
+                                data-mission-color-dot="true"
+                                onClick={(e) => openMissionColorPicker('gradTop', e.currentTarget)}
+                                className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
+                                style={{ backgroundColor: missionGradStops.top }}
+                                aria-label="Gradient top color"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold text-zinc-600">Middle</span>
+                              <button
+                                type="button"
+                                data-mission-color-dot="true"
+                                onClick={(e) => openMissionColorPicker('gradMid', e.currentTarget)}
+                                className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
+                                style={{ backgroundColor: missionGradStops.mid }}
+                                aria-label="Gradient middle color"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold text-zinc-600">Bottom</span>
+                              <button
+                                type="button"
+                                data-mission-color-dot="true"
+                                onClick={(e) => openMissionColorPicker('gradBottom', e.currentTarget)}
+                                className="h-9 w-9 rounded-full border border-white/80 shadow-sm ring-1 ring-zinc-200/80"
+                                style={{ backgroundColor: missionGradStops.bottom }}
+                                aria-label="Gradient bottom color"
+                              />
+                            </div>
+                          </div>
+                          <AdminBuilderColorPickerPortal
+                            open={Boolean(openMissionColorKey && missionColorPopoverPos)}
+                            position={missionColorPopoverPos}
+                            pickerRef={missionColorPickerRef}
+                            svPanelRef={missionSvPanelRef}
+                            pickerHsv={pickerHsv}
+                            pickerHex={pickerHex}
+                            onHueChange={(h) =>
+                              updateMissionPickerColor({
+                                h,
+                                s: pickerHsv.s,
+                                v: pickerHsv.v,
+                              })
+                            }
+                            onSvPanelMouseDown={(e) => {
+                              e.preventDefault()
+                              draggingMissionSvRef.current = true
+                              updateMissionSvFromPointer(e.clientX, e.clientY)
+                            }}
+                            onHexInputChange={(raw) => {
+                              setPickerHex(raw)
+                              const normalized = normalizeHex(raw)
+                              if (!normalized || !openMissionColorKey) return
+                              setPickerHsv(hexToHsv(normalized))
+                              setMissionGradStops((prev) => {
+                                const n = { ...prev }
+                                if (openMissionColorKey === 'gradTop') n.top = normalized
+                                else if (openMissionColorKey === 'gradMid') n.mid = normalized
+                                else n.bottom = normalized
+                                queueMicrotask(() => {
+                                  setStep2GradientOverride(missionGradientCssFromTriple(n.top, n.mid, n.bottom))
+                                  setForm((s) => ({ ...s, card_theme_index: nearestMissionThemeIndexFromHex(n.top) }))
+                                })
+                                return n
+                              })
+                            }}
                           />
                         </div>
                       </div>
                     ) : null}
 
                     {step === 2 && step2View === 'main' ? (
-                      <div className="flex min-h-full flex-col items-center space-y-5 px-1 pb-32">
+                      <div className="flex min-h-0 flex-1 flex-col px-1 pb-28">
+                        <div className="flex shrink-0 flex-col items-center space-y-5">
                         <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
                           Card cover, overlay copy &amp; images
                         </h4>
@@ -1297,7 +1390,7 @@ export default function MissionsLibraryPage() {
                                   uploadSlot === 'overlay' || headerImageReady ? 'text-white' : 'group-hover:text-white'
                                 }`}
                               >
-                                Overlay header image
+                                Header image
                               </span>
                               {uploadSlot === 'overlay' ? (
                                 <svg
@@ -1332,17 +1425,14 @@ export default function MissionsLibraryPage() {
                                 type="button"
                                 onClick={() => void removeHeaderMissionImage()}
                                 className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-sm transition-colors hover:bg-red-50"
-                                aria-label="Remove overlay header image"
+                                aria-label="Remove header image"
                               >
                                 <RemoveImageIcon className="h-3 w-3" />
                               </button>
                             ) : null}
                           </div>
                         </div>
-                        <div
-                          ref={missionAccentWrapRef}
-                          className="relative flex w-full max-w-[760px] flex-wrap items-center justify-center gap-3"
-                        >
+                        <div className="flex w-full max-w-[760px] flex-wrap items-center justify-center gap-3">
                           {MISSION_CARD_BACKGROUNDS.map((bg, i) => {
                             const selected = form.card_theme_index === i
                             return (
@@ -1352,6 +1442,7 @@ export default function MissionsLibraryPage() {
                                 aria-label={MISSION_CARD_THEME_LABELS[i]}
                                 onClick={() => {
                                   setStep2GradientOverride(null)
+                                  setMissionGradStops(tripleStopsFromGradientCss(bg))
                                   setForm((s) => ({ ...s, card_theme_index: i }))
                                 }}
                                 className={`h-10 w-10 cursor-pointer rounded-full transition-[transform,box-shadow,filter] duration-200 ease-out hover:scale-[1.05] hover:brightness-105 ${
@@ -1363,14 +1454,6 @@ export default function MissionsLibraryPage() {
                               />
                             )
                           })}
-                          <button
-                            type="button"
-                            onClick={openMissionCustomAccentPicker}
-                            aria-label="Custom theme accent"
-                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-zinc-300 bg-zinc-50 text-sm font-semibold text-zinc-500 ring-1 ring-zinc-200/90 transition-colors hover:border-zinc-400 hover:bg-white hover:text-zinc-800"
-                          >
-                            +
-                          </button>
                           <button
                             type="button"
                             onClick={() => setStep2View('customize')}
@@ -1390,14 +1473,11 @@ export default function MissionsLibraryPage() {
                             </svg>
                             Customize
                           </button>
-                          <MissionAccentPickerPopover
-                            open={missionCustomColorOpen}
-                            draftHex={missionAccentDraftHex}
-                            onDraftHex={setMissionAccentDraftHex}
-                            onApply={applyMissionCustomAccent}
-                          />
                         </div>
-                        <MissionOverlaySplitPreviews form={missionStep2PreviewInput} />
+                        </div>
+                        <div className="flex min-h-0 w-full max-w-[760px] flex-1 flex-col pt-2">
+                          <MissionOverlaySplitPreviews form={missionStep2PreviewInput} builderFlush />
+                        </div>
                       </div>
                     ) : null}
 
