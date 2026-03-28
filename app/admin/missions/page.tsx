@@ -344,18 +344,19 @@ export default function MissionsLibraryPage() {
   }, [editorOpen, openMissionColorKey, step, step2View])
 
   useEffect(() => {
-    if (!editorOpen) return
-    const handleOutsidePointer = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null
-      if (!target) return
-      if (target.closest('[data-mission-color-dot="true"]')) return
-      if (missionColorPickerRef.current?.contains(target)) return
+    if (!openMissionColorKey) return
+    const handlePointerDownCapture = (e: PointerEvent) => {
+      const el = e.target
+      if (!(el instanceof Element)) return
+      if (el.closest('[data-mission-color-dot="true"]')) return
+      if (el.closest('[data-admin-color-picker-root="true"]')) return
+      if (missionColorPickerRef.current?.contains(el)) return
       setOpenMissionColorKey(null)
       setMissionColorPopoverPos(null)
     }
-    window.addEventListener('mousedown', handleOutsidePointer)
-    return () => window.removeEventListener('mousedown', handleOutsidePointer)
-  }, [editorOpen])
+    document.addEventListener('pointerdown', handlePointerDownCapture, true)
+    return () => document.removeEventListener('pointerdown', handlePointerDownCapture, true)
+  }, [openMissionColorKey])
 
   useEffect(() => {
     if (step !== 2) setStep2View('main')
@@ -1127,7 +1128,7 @@ export default function MissionsLibraryPage() {
                                   step >= 2 ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-3 opacity-0'
                                 }`}
                               >
-                                <div className="mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col overflow-visible py-3 pb-24">
+                                <div className="mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col overflow-y-auto overflow-x-visible py-3 pb-24">
                     {step === 2 && step2View === 'customize' ? (
                       <div className="flex min-h-full flex-col items-center space-y-5 px-1 pb-32">
                         <div className="relative w-full max-w-lg">
@@ -1259,11 +1260,17 @@ export default function MissionsLibraryPage() {
                             }}
                           />
                         </div>
+                        <div className="mt-6 w-full max-w-[760px] shrink-0 px-1">
+                          <p className="mb-2 text-center text-[11px] font-medium uppercase tracking-wide text-zinc-400">
+                            Live preview
+                          </p>
+                          <MissionOverlaySplitPreviews form={missionStep2PreviewInput} />
+                        </div>
                       </div>
                     ) : null}
 
                     {step === 2 && step2View === 'main' ? (
-                      <div className="flex min-h-0 flex-1 flex-col px-1 pb-28">
+                      <div className="flex w-full flex-col gap-6 px-1 pb-28">
                         <div className="flex shrink-0 flex-col items-center space-y-5">
                         <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
                           Card cover, overlay copy &amp; images
@@ -1475,8 +1482,11 @@ export default function MissionsLibraryPage() {
                           </button>
                         </div>
                         </div>
-                        <div className="flex min-h-0 w-full max-w-[760px] flex-1 flex-col pt-2">
-                          <MissionOverlaySplitPreviews form={missionStep2PreviewInput} builderFlush />
+                        <div className="w-full max-w-[760px] shrink-0">
+                          <p className="mb-2 text-center text-[11px] font-medium uppercase tracking-wide text-zinc-400">
+                            Live preview
+                          </p>
+                          <MissionOverlaySplitPreviews form={missionStep2PreviewInput} />
                         </div>
                       </div>
                     ) : null}

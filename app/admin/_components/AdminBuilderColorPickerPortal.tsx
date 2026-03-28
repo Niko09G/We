@@ -37,6 +37,7 @@ export function AdminBuilderColorPickerPortal({
   return createPortal(
     <div
       ref={pickerRef}
+      data-admin-color-picker-root="true"
       className="fixed z-[80] w-52 -translate-x-1/2 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-md"
       style={{ left: position.left, top: position.top }}
     >

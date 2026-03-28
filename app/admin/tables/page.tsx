@@ -387,20 +387,19 @@ export default function TablesAdminPage() {
   }, [overlayStep])
 
   useEffect(() => {
-    if (!editorOpen) return
-    const handleOutsidePointer = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null
-      if (!target) return
+    if (!editorOpen || !openColorField) return
+    const handleOutsidePointer = (e: PointerEvent) => {
+      const target = e.target
+      if (!(target instanceof Element)) return
       if (target.closest('[data-color-dot="true"]')) return
+      if (target.closest('[data-admin-color-picker-root="true"]')) return
       if (colorPickerRef.current?.contains(target)) return
       setOpenColorField(null)
       setColorPopoverPos(null)
     }
-    window.addEventListener('mousedown', handleOutsidePointer)
-    return () => {
-      window.removeEventListener('mousedown', handleOutsidePointer)
-    }
-  }, [editorOpen])
+    document.addEventListener('pointerdown', handleOutsidePointer, true)
+    return () => document.removeEventListener('pointerdown', handleOutsidePointer, true)
+  }, [editorOpen, openColorField])
 
   const visibleRows = useMemo(() => {
     const search = tableSearch.trim().toLowerCase()
