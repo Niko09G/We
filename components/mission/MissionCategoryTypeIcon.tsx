@@ -10,6 +10,13 @@ const RASTER_SRC: Record<Exclude<MissionValidationType, 'beatcoin'>, string> = {
   text: '/mission-category/ResponseC.svg',
 }
 
+const RASTER_WHITE_SRC: Record<Exclude<MissionValidationType, 'beatcoin'>, string> = {
+  photo: '/mission-category/PhotoW.svg',
+  video: '/mission-category/VideoW.svg',
+  signature: '/mission-category/SignatureW.svg',
+  text: '/mission-category/ResponseW.svg',
+}
+
 export type MissionCategoryTypeIconProps = {
   /** DB / form value: photo | video | signature | text | beatcoin */
   type: string
@@ -18,6 +25,8 @@ export type MissionCategoryTypeIconProps = {
   className?: string
   /** Use white glyph on gradient / dark (CSS invert on raster assets) */
   onGradient?: boolean
+  /** Colored category art vs white SVGs (non-beatcoin). Beatcoin always uses event currency image. */
+  rasterVariant?: 'color' | 'white'
   /** RewardUnitIcon display variant when type is beatcoin */
   beatcoinDisplayVariant?: 'default' | 'onDark'
 }
@@ -31,6 +40,7 @@ export function MissionCategoryTypeIcon({
   size = 20,
   className = '',
   onGradient = false,
+  rasterVariant = 'color',
   beatcoinDisplayVariant = 'default',
 }: MissionCategoryTypeIconProps) {
   const t = String(type ?? '').toLowerCase() as MissionValidationType | string
@@ -45,7 +55,8 @@ export function MissionCategoryTypeIcon({
     )
   }
   if (t === 'photo' || t === 'video' || t === 'signature' || t === 'text') {
-    const src = RASTER_SRC[t]
+    const src = rasterVariant === 'white' ? RASTER_WHITE_SRC[t] : RASTER_SRC[t]
+    const useInvert = onGradient && rasterVariant === 'color'
     return (
       // eslint-disable-next-line @next/next/no-img-element -- static category art from /public
       <img
@@ -53,7 +64,7 @@ export function MissionCategoryTypeIcon({
         alt=""
         width={size}
         height={size}
-        className={`object-contain ${onGradient ? 'brightness-0 invert' : ''} ${className}`.trim()}
+        className={`object-contain ${useInvert ? 'brightness-0 invert' : ''} ${className}`.trim()}
         aria-hidden
       />
     )

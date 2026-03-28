@@ -1046,7 +1046,7 @@ export default function MissionsLibraryPage() {
                                     <p className="text-center text-[15px] font-semibold leading-snug text-zinc-900">
                                       Select mission category
                                     </p>
-                                    <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                                    <div className="mx-auto grid w-full max-w-4xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                       {VALIDATION_TYPES.map((v) => {
                                         const selected = form.validation_type === v
                                         return (
@@ -1054,38 +1054,69 @@ export default function MissionsLibraryPage() {
                                             key={v}
                                             type="button"
                                             onClick={() => setForm((s) => ({ ...s, validation_type: v }))}
-                                            className={`group flex w-full cursor-pointer flex-col rounded-xl border px-3.5 py-3.5 text-left transition-colors duration-200 ease-out ${
+                                            className={`group relative flex min-h-[108px] w-full cursor-pointer overflow-hidden rounded-2xl text-left transition-all duration-200 ease-out ${
                                               selected
-                                                ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white'
-                                                : `border border-zinc-200 bg-white text-zinc-800 ${MISSION_BUILDER_GRADIENT_HOVER}`
+                                                ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white shadow-md ring-0'
+                                                : 'border border-zinc-200/90 bg-white text-zinc-900 shadow-sm hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white hover:shadow-md'
                                             }`}
                                           >
-                                            <span className="inline-flex items-center gap-2">
-                                              <span
-                                                className={
-                                                  selected
-                                                    ? 'text-white'
-                                                    : 'text-zinc-500 transition-colors duration-200 ease-out group-hover:text-white'
-                                                }
+                                            <div className="pointer-events-none absolute inset-y-0 left-0 w-[min(48%,11.5rem)] overflow-hidden">
+                                              <div
+                                                className="absolute left-[-18%] top-1/2 flex h-[152px] w-[152px] -translate-y-1/2 items-center justify-center sm:h-[168px] sm:w-[168px]"
+                                                style={{
+                                                  WebkitMaskImage:
+                                                    'linear-gradient(90deg, #000 0%, #000 40%, rgba(0,0,0,0.5) 68%, transparent 100%)',
+                                                  maskImage:
+                                                    'linear-gradient(90deg, #000 0%, #000 40%, rgba(0,0,0,0.5) 68%, transparent 100%)',
+                                                }}
                                               >
-                                                <MissionCategoryTypeIcon
-                                                  type={v}
-                                                  size={16}
-                                                  className={`h-4 w-4 shrink-0 ${selected ? '' : 'group-hover:brightness-0 group-hover:invert'}`}
-                                                  onGradient={selected}
-                                                />
-                                              </span>
-                                              <span className="text-[14px] font-semibold leading-tight">
+                                                {v === 'beatcoin' ? (
+                                                  <MissionCategoryTypeIcon
+                                                    type={v}
+                                                    size={120}
+                                                    className="h-[7.25rem] w-[7.25rem] max-w-none object-contain opacity-95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.12)] transition-[filter] duration-200 group-hover:drop-shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
+                                                    beatcoinDisplayVariant={selected ? 'onDark' : 'default'}
+                                                  />
+                                                ) : (
+                                                  <span className="relative flex h-full w-full items-center justify-center">
+                                                    <MissionCategoryTypeIcon
+                                                      type={v}
+                                                      rasterVariant="color"
+                                                      size={120}
+                                                      className={`pointer-events-none absolute max-h-[95%] max-w-[95%] object-contain transition-opacity duration-200 ${
+                                                        selected ? 'opacity-0' : 'opacity-100 group-hover:opacity-0'
+                                                      }`}
+                                                    />
+                                                    <MissionCategoryTypeIcon
+                                                      type={v}
+                                                      rasterVariant="white"
+                                                      size={120}
+                                                      className={`pointer-events-none absolute max-h-[95%] max-w-[95%] object-contain transition-opacity duration-200 ${
+                                                        selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                                      }`}
+                                                    />
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <div className="relative z-10 flex min-h-[108px] min-w-0 flex-1 flex-col justify-center py-5 pl-[min(52%,12.75rem)] pr-4 sm:min-h-[112px] sm:pr-6">
+                                              <span
+                                                className={`text-[16px] font-semibold leading-snug tracking-tight sm:text-[17px] ${
+                                                  selected ? 'text-white' : 'text-zinc-900 group-hover:text-white'
+                                                }`}
+                                              >
                                                 {adminValidationTypeLabel(v)}
                                               </span>
-                                            </span>
-                                            <span
-                                              className={`mt-1.5 text-[11px] font-medium leading-snug ${
-                                                selected ? 'text-white/85' : 'text-zinc-500 group-hover:text-white/90'
-                                              }`}
-                                            >
-                                              {CATEGORY_DESCRIPTIONS[v]}
-                                            </span>
+                                              <span
+                                                className={`mt-1.5 text-[13px] font-medium leading-snug sm:text-[14px] ${
+                                                  selected
+                                                    ? 'text-white/90'
+                                                    : 'text-zinc-500 group-hover:text-white/90'
+                                                }`}
+                                              >
+                                                {CATEGORY_DESCRIPTIONS[v]}
+                                              </span>
+                                            </div>
                                           </button>
                                         )
                                       })}

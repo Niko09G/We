@@ -991,7 +991,7 @@ export default function TablesAdminPage() {
                     className="absolute inset-0 z-0 cursor-pointer rounded-2xl"
                     aria-label={`Edit ${row.name}`}
                   />
-                  <div className="pointer-events-none absolute left-0 right-0 top-3 z-20 flex justify-center gap-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+                  <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center gap-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
                     <a
                       href={`/missions/${row.id}`}
                       target="_blank"
