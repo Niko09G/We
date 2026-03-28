@@ -7,12 +7,16 @@ import {
   APPROVAL_MODES,
   createMission,
   listMissions,
+  maxSubmissionsDisplayValue,
   updateMission,
   VALIDATION_TYPES,
   type MissionRecord,
   type ValidationType,
 } from '@/lib/admin-missions'
-import { listActiveMissionAssignmentsForAdmin } from '@/lib/admin-mission-assignments'
+import {
+  listActiveMissionAssignmentsForAdmin,
+  setMissionAssignmentsForMission,
+} from '@/lib/admin-mission-assignments'
 import { MissionCategoryTypeIcon } from '@/app/admin/missions/_components/mission-admin-shared'
 import {
   MissionOverlaySplitPreviews,
@@ -20,6 +24,10 @@ import {
   type MissionPreviewInput,
 } from '@/app/admin/missions/_components/MissionLivePreview'
 import { listTablesForAdmin, type AdminTableRow } from '@/lib/admin-tables'
+import { teamPageAdminFormDefaults } from '@/lib/team-page-config'
+import { rewardUnitCompactLabel } from '@/lib/reward-unit'
+import { useRewardUnit } from '@/components/reward/RewardUnitProvider'
+import { RewardUnitIcon } from '@/components/reward/RewardUnitIcon'
 import {
   MISSION_CARD_BACKGROUNDS,
   MISSION_CARD_THEME_LABELS,
@@ -65,6 +73,8 @@ type MissionForm = {
   message_required: boolean
   submission_hint: string
   is_active: boolean
+  /** Empty string = unlimited repeatability (per table). */
+  max_submissions_per_table: string
 }
 
 const CATEGORY_DESCRIPTIONS: Record<ValidationType, string> = {
@@ -72,7 +82,7 @@ const CATEGORY_DESCRIPTIONS: Record<ValidationType, string> = {
   video: 'Record a video',
   text: 'Submit a response',
   signature: 'Get someone to confirm',
-  beatcoin: 'Event currency (BeatCoin)',
+  beatcoin: 'Find and scan the hidden QR codes',
 }
 
 const MISSION_BUILDER_GRADIENT_HOVER =
@@ -158,6 +168,7 @@ function emptyForm(): MissionForm {
     message_required: false,
     submission_hint: '',
     is_active: true,
+    max_submissions_per_table: '',
   }
 }
 
@@ -181,7 +192,25 @@ function formFromMission(m: MissionRecord): MissionForm {
     message_required: m.message_required ?? false,
     submission_hint: m.submission_hint ?? '',
     is_active: m.is_active ?? true,
+    max_submissions_per_table: maxSubmissionsDisplayValue(m),
   }
+}
+
+function tableThumbInitials(name: string): string {
+  const t = name.trim()
+  if (!t) return 'T'
+  return t
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() ?? '')
+    .join('')
+}
+
+function tableThumbAvatarBg(seed: string): string {
+  const colors = ['#f59e0b', '#3b82f6', '#8b5cf6', '#14b8a6', '#ef4444', '#22c55e']
+  let n = 0
+  for (let i = 0; i < seed.length; i += 1) n += seed.charCodeAt(i)
+  return colors[n % colors.length] ?? '#71717a'
 }
 
 function missionStatusBadge(isActive: boolean): { label: string; className: string } {
@@ -189,7 +218,11 @@ function missionStatusBadge(isActive: boolean): { label: string; className: stri
   return { label: 'Inactive', className: 'bg-zinc-100 text-zinc-600' }
 }
 
+const MISSION_BUILDER_NEXT_GRADIENT =
+  'rounded-full bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] px-5 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-95'
+
 export default function MissionsLibraryPage() {
+  const { config: rewardUnit } = useRewardUnit()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
@@ -226,6 +259,10 @@ export default function MissionsLibraryPage() {
   const [uploadSlot, setUploadSlot] = useState<'card' | 'overlay' | null>(null)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<MissionForm>(emptyForm)
+  const [missionAssignAllTables, setMissionAssignAllTables] = useState(true)
+  const [missionSelectedTableIds, setMissionSelectedTableIds] = useState<Set<string>>(new Set())
+  const [currencyMenuOpen, setCurrencyMenuOpen] = useState(false)
+  const currencyMenuRef = useRef<HTMLDivElement | null>(null)
   const missionTitleInputRef = useRef<HTMLInputElement | null>(null)
   const missionDescInputRef = useRef<HTMLInputElement | null>(null)
   const cardCoverInputRef = useRef<HTMLInputElement | null>(null)
@@ -369,6 +406,11 @@ export default function MissionsLibraryPage() {
     }
   }, [missions])
 
+  const activeTableRows = useMemo(
+    () => tables.filter((t) => !t.is_archived),
+    [tables]
+  )
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return missions.filter((m) => {
@@ -387,6 +429,50 @@ export default function MissionsLibraryPage() {
     })
   }, [missions, search, statusFilter, tableFilterId, assignmentsByMission])
 
+  const syncMissionAssignmentStateForCreate = useCallback(() => {
+    const ids = activeTableRows.map((t) => t.id)
+    setMissionAssignAllTables(true)
+    setMissionSelectedTableIds(new Set(ids))
+  }, [activeTableRows])
+
+  const syncMissionAssignmentStateForEdit = useCallback(
+    (missionId: string) => {
+      const activeIds = activeTableRows.map((t) => t.id)
+      const assigned = assignmentsByMission[missionId] ?? []
+      if (assigned.length === 0) {
+        setMissionAssignAllTables(true)
+        setMissionSelectedTableIds(new Set(activeIds))
+        return
+      }
+      const allAssigned =
+        activeIds.length > 0 &&
+        assigned.length === activeIds.length &&
+        activeIds.every((id) => assigned.includes(id))
+      setMissionAssignAllTables(allAssigned)
+      setMissionSelectedTableIds(new Set(assigned.filter((id) => activeIds.includes(id))))
+    },
+    [activeTableRows, assignmentsByMission]
+  )
+
+  useEffect(() => {
+    if (!currencyMenuOpen) return
+    const onDown = (e: MouseEvent) => {
+      const el = currencyMenuRef.current
+      if (el && !el.contains(e.target as Node)) setCurrencyMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [currencyMenuOpen])
+
+  useEffect(() => {
+    if (!editorOpen || editorMode !== 'create') return
+    if (activeTableRows.length === 0) return
+    setMissionSelectedTableIds((prev) => {
+      if (prev.size > 0) return prev
+      return new Set(activeTableRows.map((t) => t.id))
+    })
+  }, [editorOpen, editorMode, activeTableRows])
+
   function openCreate() {
     setEditorMode('create')
     setEditingId(null)
@@ -398,6 +484,7 @@ export default function MissionsLibraryPage() {
     setMissionColorPopoverPos(null)
     customizePanelWasOpenRef.current = false
     setForm(emptyForm())
+    syncMissionAssignmentStateForCreate()
     setEditorOpen(true)
   }
 
@@ -412,6 +499,7 @@ export default function MissionsLibraryPage() {
     setMissionColorPopoverPos(null)
     customizePanelWasOpenRef.current = false
     setForm(formFromMission(mission))
+    syncMissionAssignmentStateForEdit(mission.id)
     setEditorOpen(true)
   }
 
@@ -550,6 +638,15 @@ export default function MissionsLibraryPage() {
       showToast('Add a mission title first.', 'error')
       return
     }
+    const activeIds = activeTableRows.map((t) => t.id)
+    if (!missionAssignAllTables && missionSelectedTableIds.size === 0) {
+      showToast('Select at least one table, or choose All tables.', 'error')
+      return
+    }
+    const desiredTableIds = missionAssignAllTables
+      ? activeIds
+      : [...missionSelectedTableIds].filter((id) => activeIds.includes(id))
+
     setSaving(true)
     try {
       const payload = {
@@ -564,12 +661,23 @@ export default function MissionsLibraryPage() {
         header_image_url: form.header_image_url.trim() || null,
         card_cover_image_url: form.card_cover_image_url.trim() || null,
         card_theme_index: form.card_theme_index,
+        max_submissions_per_table: form.max_submissions_per_table,
       }
       if (editorMode === 'create') {
-        await createMission(payload)
+        const newId = await createMission(payload)
+        await setMissionAssignmentsForMission({
+          missionId: newId,
+          desiredTableIds,
+          activeTableIds: activeIds,
+        })
         showToast('Mission created.', 'success')
       } else if (editingId) {
         await updateMission(editingId, payload)
+        await setMissionAssignmentsForMission({
+          missionId: editingId,
+          desiredTableIds,
+          activeTableIds: activeIds,
+        })
         showToast('Mission updated.', 'success')
       }
       setEditorOpen(false)
@@ -1054,52 +1162,42 @@ export default function MissionsLibraryPage() {
                                             key={v}
                                             type="button"
                                             onClick={() => setForm((s) => ({ ...s, validation_type: v }))}
-                                            className={`group relative flex min-h-[108px] w-full cursor-pointer overflow-hidden rounded-2xl text-left transition-all duration-200 ease-out ${
+                                            className={`group relative flex h-[120px] w-full cursor-pointer overflow-hidden rounded-2xl text-left transition-all duration-200 ease-out ${
                                               selected
-                                                ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white shadow-md ring-0'
+                                                ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white shadow-md'
                                                 : 'border border-zinc-200/90 bg-white text-zinc-900 shadow-sm hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white hover:shadow-md'
                                             }`}
                                           >
-                                            <div className="pointer-events-none absolute inset-y-0 left-0 w-[min(48%,11.5rem)] overflow-hidden">
-                                              <div
-                                                className="absolute left-[-18%] top-1/2 flex h-[152px] w-[152px] -translate-y-1/2 items-center justify-center sm:h-[168px] sm:w-[168px]"
-                                                style={{
-                                                  WebkitMaskImage:
-                                                    'linear-gradient(90deg, #000 0%, #000 40%, rgba(0,0,0,0.5) 68%, transparent 100%)',
-                                                  maskImage:
-                                                    'linear-gradient(90deg, #000 0%, #000 40%, rgba(0,0,0,0.5) 68%, transparent 100%)',
-                                                }}
-                                              >
-                                                {v === 'beatcoin' ? (
+                                            <div className="pointer-events-none absolute left-0 top-1/2 z-0 h-[112px] w-[112px] -translate-x-1/2 -translate-y-1/2 sm:h-[120px] sm:w-[120px]">
+                                              {v === 'beatcoin' ? (
+                                                <MissionCategoryTypeIcon
+                                                  type={v}
+                                                  size={120}
+                                                  className="h-full w-full rounded-none object-contain opacity-95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.12)] transition-[filter] duration-200 group-hover:drop-shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
+                                                  beatcoinDisplayVariant={selected ? 'onDark' : 'default'}
+                                                />
+                                              ) : (
+                                                <span className="relative flex h-full w-full items-center justify-center">
                                                   <MissionCategoryTypeIcon
                                                     type={v}
+                                                    rasterVariant="color"
                                                     size={120}
-                                                    className="h-[7.25rem] w-[7.25rem] max-w-none object-contain opacity-95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.12)] transition-[filter] duration-200 group-hover:drop-shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
-                                                    beatcoinDisplayVariant={selected ? 'onDark' : 'default'}
+                                                    className={`pointer-events-none absolute inset-0 m-auto max-h-full max-w-full object-contain transition-opacity duration-200 ${
+                                                      selected ? 'opacity-0' : 'opacity-100 group-hover:opacity-0'
+                                                    }`}
                                                   />
-                                                ) : (
-                                                  <span className="relative flex h-full w-full items-center justify-center">
-                                                    <MissionCategoryTypeIcon
-                                                      type={v}
-                                                      rasterVariant="color"
-                                                      size={120}
-                                                      className={`pointer-events-none absolute max-h-[95%] max-w-[95%] object-contain transition-opacity duration-200 ${
-                                                        selected ? 'opacity-0' : 'opacity-100 group-hover:opacity-0'
-                                                      }`}
-                                                    />
-                                                    <MissionCategoryTypeIcon
-                                                      type={v}
-                                                      rasterVariant="white"
-                                                      size={120}
-                                                      className={`pointer-events-none absolute max-h-[95%] max-w-[95%] object-contain transition-opacity duration-200 ${
-                                                        selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                                                      }`}
-                                                    />
-                                                  </span>
-                                                )}
-                                              </div>
+                                                  <MissionCategoryTypeIcon
+                                                    type={v}
+                                                    rasterVariant="white"
+                                                    size={120}
+                                                    className={`pointer-events-none absolute inset-0 m-auto max-h-full max-w-full object-contain transition-opacity duration-200 ${
+                                                      selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                                    }`}
+                                                  />
+                                                </span>
+                                              )}
                                             </div>
-                                            <div className="relative z-10 flex min-h-[108px] min-w-0 flex-1 flex-col justify-center py-5 pl-[min(52%,12.75rem)] pr-4 sm:min-h-[112px] sm:pr-6">
+                                            <div className="relative z-10 flex h-full min-w-0 flex-1 flex-col justify-center py-4 pl-[calc(50%+0.875rem)] pr-4 sm:min-h-[120px] sm:pr-6">
                                               <span
                                                 className={`text-[16px] font-semibold leading-snug tracking-tight sm:text-[17px] ${
                                                   selected ? 'text-white' : 'text-zinc-900 group-hover:text-white'
@@ -1513,100 +1611,324 @@ export default function MissionsLibraryPage() {
                     ) : null}
 
                     {step === 3 ? (
-                      <div className="space-y-4 px-1 pb-8">
-                        <h4 className="text-sm font-semibold text-zinc-900">Step 3 · Rewards & submission</h4>
-                        <label className="block text-xs">
-                          <span className="font-medium text-zinc-600">BeatCoin reward (points)</span>
-                          <input
-                            type="number"
-                            min={0}
-                            value={form.points}
-                            onChange={(e) => setForm((s) => ({ ...s, points: e.target.value }))}
-                            className="mt-1 h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-[14px]"
-                          />
-                        </label>
-                        <p className="text-xs text-zinc-500">Shown on cards and in the mission overlay.</p>
-                        <label className="block text-xs">
-                          <span className="font-medium text-zinc-600">Submission type</span>
-                          <select
-                            value={form.validation_type}
-                            onChange={(e) =>
-                              setForm((s) => ({ ...s, validation_type: e.target.value as ValidationType }))
-                            }
-                            className="mt-1 h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-[14px]"
-                          >
-                            {VALIDATION_TYPES.map((v) => (
-                              <option key={v} value={v}>
-                                {adminValidationTypeLabel(v)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="block text-xs">
-                          <span className="font-medium text-zinc-600">Review mode</span>
-                          <select
-                            value={form.approval_mode}
-                            onChange={(e) =>
-                              setForm((s) => ({ ...s, approval_mode: e.target.value as 'auto' | 'manual' }))
-                            }
-                            className="mt-1 h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-[14px]"
-                          >
-                            <option value="auto">Automatic completion</option>
-                            <option value="manual">Manual review</option>
-                          </select>
-                        </label>
-                        <label className="flex items-center gap-2 text-xs text-zinc-700">
-                          <input
-                            type="checkbox"
-                            checked={form.message_required}
-                            onChange={(e) => setForm((s) => ({ ...s, message_required: e.target.checked }))}
-                          />
-                          Require message with submission
-                        </label>
-                        <label className="block text-xs">
-                          <span className="font-medium text-zinc-600">Submission hint</span>
-                          <input
-                            value={form.submission_hint}
-                            onChange={(e) => setForm((s) => ({ ...s, submission_hint: e.target.value }))}
-                            className="mt-1 h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-[14px]"
-                            placeholder="e.g. Keep the whole table in frame"
-                          />
-                        </label>
+                      <div className="flex min-h-0 flex-1 flex-col px-2 pb-8 pt-1">
+                        <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
+                          What are the mechanics?
+                        </h4>
+
+                        <div className="mx-auto mt-8 w-full max-w-[760px] space-y-8">
+                          <section className="space-y-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                              Rewards
+                            </p>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <div ref={currencyMenuRef} className="relative min-w-[min(100%,220px)] flex-1 sm:min-w-[200px]">
+                                <button
+                                  type="button"
+                                  onClick={() => setCurrencyMenuOpen((o) => !o)}
+                                  className="flex h-11 w-full items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-4 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300"
+                                >
+                                  <span className="inline-flex min-w-0 flex-1 items-center gap-2">
+                                    <RewardUnitIcon size={22} className="shrink-0" />
+                                    <span className="truncate">{rewardUnitCompactLabel(rewardUnit)}</span>
+                                  </span>
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${currencyMenuOpen ? 'rotate-180' : ''}`}
+                                    aria-hidden
+                                  >
+                                    <path d="m6 9 6 6 6-6" />
+                                  </svg>
+                                </button>
+                                {currencyMenuOpen ? (
+                                  <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-2xl border border-[#ebebeb] bg-white py-1 shadow-lg">
+                                    <button
+                                      type="button"
+                                      onClick={() => setCurrencyMenuOpen(false)}
+                                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[14px] font-medium text-[#171717] hover:bg-zinc-50"
+                                    >
+                                      <RewardUnitIcon size={22} className="shrink-0" />
+                                      <span className="truncate">{rewardUnitCompactLabel(rewardUnit)}</span>
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
+                              <input
+                                type="number"
+                                min={0}
+                                value={form.points}
+                                onChange={(e) => setForm((s) => ({ ...s, points: e.target.value }))}
+                                className="h-11 w-[min(100%,140px)] min-w-[7rem] rounded-full border border-[#ebebeb] bg-white px-4 text-[14px] font-medium text-[#171717] outline-none transition-colors focus:border-zinc-400"
+                                aria-label="Reward amount"
+                              />
+                              <div className="flex flex-1 flex-wrap items-center justify-end gap-2 sm:min-w-[9rem]">
+                                <span className="text-[13px] font-medium text-zinc-600">Active</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setForm((s) => ({ ...s, is_active: !s.is_active }))}
+                                  className={`inline-flex h-7 w-12 shrink-0 items-center rounded-full p-1 transition-colors ${
+                                    form.is_active ? 'bg-zinc-900' : 'bg-zinc-300'
+                                  }`}
+                                  aria-label="Toggle mission active"
+                                >
+                                  <span
+                                    className={`h-5 w-5 rounded-full bg-white transition-transform ${
+                                      form.is_active ? 'translate-x-5' : 'translate-x-0'
+                                    }`}
+                                  />
+                                </button>
+                              </div>
+                            </div>
+                            <p className="text-[12px] text-zinc-500">Shown on cards and in the mission overlay.</p>
+                          </section>
+
+                          <section className="space-y-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                              Repeatability
+                            </p>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <div className="inline-flex h-10 items-stretch overflow-hidden rounded-full border border-[#ebebeb] bg-white">
+                                <button
+                                  type="button"
+                                  onClick={() => setForm((s) => ({ ...s, max_submissions_per_table: '' }))}
+                                  className={`px-4 text-[14px] font-medium transition-colors ${
+                                    form.max_submissions_per_table.trim() === ''
+                                      ? 'bg-black text-white'
+                                      : 'text-[#4d4d4d] hover:text-[#171717]'
+                                  }`}
+                                >
+                                  Repeatable
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setForm((s) => ({
+                                      ...s,
+                                      max_submissions_per_table:
+                                        s.max_submissions_per_table.trim() || '1',
+                                    }))
+                                  }
+                                  className={`px-4 text-[14px] font-medium transition-colors ${
+                                    form.max_submissions_per_table.trim() !== ''
+                                      ? 'bg-black text-white'
+                                      : 'text-[#4d4d4d] hover:text-[#171717]'
+                                  }`}
+                                >
+                                  Limit
+                                </button>
+                              </div>
+                              {form.max_submissions_per_table.trim() !== '' ? (
+                                <label className="inline-flex flex-wrap items-center gap-2 text-[13px] text-zinc-700">
+                                  <span className="font-medium">Max attempts</span>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={form.max_submissions_per_table}
+                                    onChange={(e) =>
+                                      setForm((s) => ({
+                                        ...s,
+                                        max_submissions_per_table: e.target.value,
+                                      }))
+                                    }
+                                    className="h-10 w-20 rounded-full border border-[#ebebeb] bg-white px-3 text-center text-[14px] font-medium outline-none focus:border-zinc-400"
+                                  />
+                                </label>
+                              ) : null}
+                            </div>
+                          </section>
+
+                          <section className="space-y-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                              Approval
+                            </p>
+                            <div className="inline-flex h-10 items-stretch overflow-hidden rounded-full border border-[#ebebeb] bg-white">
+                              <button
+                                type="button"
+                                onClick={() => setForm((s) => ({ ...s, approval_mode: 'manual' }))}
+                                className={`px-4 text-[14px] font-medium transition-colors ${
+                                  form.approval_mode === 'manual'
+                                    ? 'bg-black text-white'
+                                    : 'text-[#4d4d4d] hover:text-[#171717]'
+                                }`}
+                              >
+                                Manual
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setForm((s) => ({ ...s, approval_mode: 'auto' }))}
+                                className={`px-4 text-[14px] font-medium transition-colors ${
+                                  form.approval_mode === 'auto'
+                                    ? 'bg-black text-white'
+                                    : 'text-[#4d4d4d] hover:text-[#171717]'
+                                }`}
+                              >
+                                Automatic
+                              </button>
+                            </div>
+                          </section>
+
+                          <section className="space-y-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                              Table assignment
+                            </p>
+                            <div className="inline-flex h-9 w-full max-w-md items-stretch overflow-hidden rounded-full border border-[#ebebeb] bg-white">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMissionAssignAllTables(true)
+                                  setMissionSelectedTableIds(new Set(activeTableRows.map((t) => t.id)))
+                                }}
+                                className={`flex-1 px-3 text-[13px] font-medium transition-colors ${
+                                  missionAssignAllTables
+                                    ? 'bg-black text-white'
+                                    : 'text-[#4d4d4d] hover:text-[#171717]'
+                                }`}
+                              >
+                                All tables
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMissionAssignAllTables(false)
+                                  setMissionSelectedTableIds((prev) => {
+                                    if (prev.size > 0) return prev
+                                    return new Set(activeTableRows.map((t) => t.id))
+                                  })
+                                }}
+                                className={`flex-1 px-3 text-[13px] font-medium transition-colors ${
+                                  !missionAssignAllTables
+                                    ? 'bg-black text-white'
+                                    : 'text-[#4d4d4d] hover:text-[#171717]'
+                                }`}
+                              >
+                                Pick tables
+                              </button>
+                            </div>
+                            {activeTableRows.length === 0 ? (
+                              <p className="text-[13px] text-zinc-500">No active tables yet.</p>
+                            ) : (
+                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                {activeTableRows.map((t) => {
+                                  const resolved = teamPageAdminFormDefaults(t.page_config, {
+                                    tableColor: t.color,
+                                    tableName: t.name,
+                                  })
+                                  const avatarUrl = resolved.avatarImageUrl.trim()
+                                  const selected =
+                                    missionAssignAllTables || missionSelectedTableIds.has(t.id)
+                                  return (
+                                    <button
+                                      key={t.id}
+                                      type="button"
+                                      onClick={() => {
+                                        if (missionAssignAllTables) {
+                                          setMissionAssignAllTables(false)
+                                          const all = new Set(activeTableRows.map((r) => r.id))
+                                          all.delete(t.id)
+                                          setMissionSelectedTableIds(all)
+                                          return
+                                        }
+                                        setMissionSelectedTableIds((prev) => {
+                                          const next = new Set(prev)
+                                          if (next.has(t.id)) next.delete(t.id)
+                                          else next.add(t.id)
+                                          return next
+                                        })
+                                      }}
+                                      className={`flex min-h-[72px] w-full flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-center transition-all ${
+                                        selected
+                                          ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white shadow-sm'
+                                          : 'border border-[#ebebeb] bg-white text-zinc-800 hover:border-zinc-300'
+                                      }`}
+                                    >
+                                      <span
+                                        className={`flex h-9 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md ${
+                                          selected ? 'bg-white/20 ring-1 ring-white/40' : 'bg-zinc-100 ring-1 ring-zinc-200/80'
+                                        }`}
+                                      >
+                                        {avatarUrl ? (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img
+                                            src={avatarUrl}
+                                            alt=""
+                                            className="h-full w-full object-cover"
+                                          />
+                                        ) : (
+                                          <span
+                                            className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-white"
+                                            style={
+                                              selected
+                                                ? { backgroundColor: 'rgba(255,255,255,0.22)' }
+                                                : { backgroundColor: tableThumbAvatarBg(t.name) }
+                                            }
+                                          >
+                                            {tableThumbInitials(t.name)}
+                                          </span>
+                                        )}
+                                      </span>
+                                      <span
+                                        className={`line-clamp-2 w-full text-[11px] font-semibold leading-tight ${
+                                          selected ? 'text-white' : 'text-zinc-800'
+                                        }`}
+                                      >
+                                        {t.name}
+                                      </span>
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </section>
+
+                          <section className="space-y-3 rounded-2xl border border-[#ebebeb] bg-zinc-50/50 p-4">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                              Submission details
+                            </p>
+                            <label className="flex cursor-pointer items-center gap-2 text-[13px] font-medium text-zinc-800">
+                              <input
+                                type="checkbox"
+                                checked={form.message_required}
+                                onChange={(e) =>
+                                  setForm((s) => ({ ...s, message_required: e.target.checked }))
+                                }
+                                className="rounded border-zinc-300"
+                              />
+                              Require message with submission
+                            </label>
+                            <label className="block text-[13px]">
+                              <span className="font-medium text-zinc-700">Submission hint</span>
+                              <input
+                                value={form.submission_hint}
+                                onChange={(e) =>
+                                  setForm((s) => ({ ...s, submission_hint: e.target.value }))
+                                }
+                                className="mt-1.5 h-11 w-full rounded-full border border-[#ebebeb] bg-white px-4 text-[14px] outline-none focus:border-zinc-400"
+                                placeholder="e.g. Keep the whole table in frame"
+                              />
+                            </label>
+                          </section>
+                        </div>
                       </div>
                     ) : null}
 
                     {step === 4 ? (
-                      <div className="space-y-4 px-1 pb-8">
-                        <h4 className="text-sm font-semibold text-zinc-900">Step 4 · Publish</h4>
-                        <div className="rounded-xl border border-zinc-200 p-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-medium text-zinc-900">Mission active</p>
-                              <p className="text-xs text-zinc-500">Controls visibility in live mission feed.</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setForm((s) => ({ ...s, is_active: !s.is_active }))}
-                              className={`inline-flex h-7 w-12 items-center rounded-full p-1 transition-colors ${
-                                form.is_active ? 'bg-zinc-900' : 'bg-zinc-300'
-                              }`}
-                              aria-label="Toggle active"
-                            >
-                              <span
-                                className={`h-5 w-5 rounded-full bg-white transition-transform ${
-                                  form.is_active ? 'translate-x-5' : 'translate-x-0'
-                                }`}
-                              />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="rounded-xl border border-zinc-200 p-3 text-xs text-zinc-600">
+                      <div className="space-y-5 px-2 pb-8 pt-1">
+                        <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
+                          Ready to publish
+                        </h4>
+                        <div className="mx-auto w-full max-w-[760px] rounded-2xl border border-[#ebebeb] bg-white p-5 text-[14px] text-zinc-700 shadow-sm">
                           <p>
-                            <strong>Preview:</strong> {form.title || 'Untitled mission'}
+                            <span className="font-semibold text-zinc-900">Mission:</span>{' '}
+                            {form.title || 'Untitled mission'}
                           </p>
-                          <p className="mt-1">
-                            {adminValidationTypeLabel(form.validation_type)} · {form.points || 0} points ·{' '}
-                            {form.approval_mode === 'manual' ? 'Manual review' : 'Auto approve'}
+                          <p className="mt-2 text-[13px] leading-relaxed text-zinc-600">
+                            {adminValidationTypeLabel(form.validation_type)} · {form.points || 0}{' '}
+                            {rewardUnitCompactLabel(rewardUnit)} ·{' '}
+                            {form.approval_mode === 'manual' ? 'Manual review' : 'Automatic approval'} ·{' '}
+                            {form.is_active ? 'Active' : 'Inactive'}
                           </p>
                         </div>
                       </div>
@@ -1644,7 +1966,11 @@ export default function MissionsLibraryPage() {
                             <button
                               type="button"
                               onClick={() => setStep((s) => Math.min(4, s + 1) as MissionStep)}
-                              className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
+                              className={
+                                step === 3
+                                  ? MISSION_BUILDER_NEXT_GRADIENT
+                                  : 'rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-800'
+                              }
                             >
                               Next
                             </button>
@@ -1653,7 +1979,7 @@ export default function MissionsLibraryPage() {
                       type="button"
                       disabled={saving}
                       onClick={() => void onSaveMission()}
-                      className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      className={`${MISSION_BUILDER_NEXT_GRADIENT} disabled:opacity-60`}
                     >
                       {saving ? 'Saving…' : editorMode === 'create' ? 'Publish mission' : 'Save mission'}
                     </button>
