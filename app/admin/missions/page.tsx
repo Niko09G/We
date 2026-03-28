@@ -39,6 +39,7 @@ import {
   uploadMissionImageAsset,
 } from '@/lib/mission-image-assets'
 import { MAX_IMAGE_UPLOAD_BYTES, prettyMb } from '@/lib/upload-constraints'
+import { effectiveMaxSubmissionsPerTable } from '@/lib/mission-limits'
 import { clamp, normalizeHex, hexToHsv, hsvToHex } from '@/lib/admin-color-picker'
 import {
   missionGradientCssFromTriple,
@@ -48,7 +49,7 @@ import {
   AdminBuilderColorPickerPortal,
   computePickerAnchorPosition,
 } from '@/app/admin/_components/AdminBuilderColorPickerPortal'
-import { AdminDropdown } from '@/app/admin/_components/AdminDropdown'
+import { AdminSelectDropdown } from '@/app/admin/_components/AdminSelectDropdown'
 import { AdminSegmentedControl } from '@/app/admin/_components/AdminSegmentedControl'
 import {
   AdminBuilderShellHeader,
@@ -219,9 +220,106 @@ function tableThumbAvatarBg(seed: string): string {
   return colors[n % colors.length] ?? '#71717a'
 }
 
+const MISSION_LIST_GRID =
+  'grid min-h-[52px] grid-cols-[minmax(0,1.25fr)_minmax(0,0.95fr)_minmax(0,0.7fr)_minmax(0,0.52fr)_minmax(0,0.62fr)_minmax(0,0.42fr)_minmax(0,0.95fr)] items-center gap-x-2 gap-y-1 sm:gap-x-3'
+
+const MISSION_SIGNATURE_NUM =
+  'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] bg-clip-text font-semibold text-transparent'
+
+function AdminTableAvatarChip({ row, className = '' }: { row: AdminTableRow; className?: string }) {
+  const d = teamPageAdminFormDefaults(row.page_config, {
+    tableColor: row.color,
+    tableName: row.name,
+  })
+  const url = d.avatarImageUrl.trim()
+  return (
+    <span
+      className={`inline-flex h-7 w-7 shrink-0 overflow-hidden rounded-full border border-[#ebebeb] bg-zinc-100 ${className}`.trim()}
+    >
+      {url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span
+          className="flex h-full w-full items-center justify-center text-[9px] font-semibold text-white"
+          style={{ backgroundColor: tableThumbAvatarBg(row.name) }}
+        >
+          {tableThumbInitials(row.name)}
+        </span>
+      )}
+    </span>
+  )
+}
+
 function missionStatusBadge(isActive: boolean): { label: string; className: string } {
-  if (isActive) return { label: 'Active', className: 'bg-emerald-50 text-emerald-700' }
-  return { label: 'Inactive', className: 'bg-zinc-100 text-zinc-600' }
+  if (isActive) {
+    return {
+      label: 'Active',
+      className:
+        'inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700',
+    }
+  }
+  return {
+    label: 'Inactive',
+    className:
+      'inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-600',
+  }
+}
+
+function AutoApprovalGlyph({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+    </svg>
+  )
+}
+
+function ManualApprovalGlyph({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <path d="m9 14 2 2 4-4" />
+    </svg>
+  )
+}
+
+function ApprovalModeInline({
+  mode,
+  className = 'text-[12px] text-zinc-700',
+}: {
+  mode: 'auto' | 'manual'
+  className?: string
+}) {
+  const manual = mode === 'manual'
+  return (
+    <span className={`inline-flex min-w-0 items-center gap-1.5 ${className}`.trim()}>
+      {manual ? (
+        <ManualApprovalGlyph className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+      ) : (
+        <AutoApprovalGlyph className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+      )}
+      <span className="truncate">{manual ? 'Manual approval' : 'Auto approval'}</span>
+    </span>
+  )
 }
 
 const MISSION_BUILDER_NEXT_GRADIENT =
@@ -771,57 +869,57 @@ export default function MissionsLibraryPage() {
                   </button>
                 </div>
 
-                <div className="relative">
-                  <select
-                    value={tableFilterId}
-                    onChange={(e) => setTableFilterId(e.target.value)}
-                    className="h-10 min-w-[170px] appearance-none rounded-full border border-[#ebebeb] bg-white px-[12px] pr-9 text-[14px] font-medium text-[#171717] outline-none transition-colors duration-150 ease-out focus:border-zinc-400"
-                  >
-                    <option value="all">All tables</option>
-                    {tables.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
-                    aria-hidden
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                </div>
+                <AdminSelectDropdown
+                  value={tableFilterId}
+                  onChange={(v) => setTableFilterId(v)}
+                  className="min-w-0"
+                  buttonClassName="inline-flex h-10 min-w-[200px] max-w-[260px] shrink-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 pr-2.5 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors duration-150 ease-out hover:border-zinc-300"
+                  options={[
+                    { value: 'all', label: 'All tables' },
+                    ...tables.map((t) => ({
+                      value: t.id,
+                      label: (
+                        <span className="flex min-w-0 items-center gap-2">
+                          <AdminTableAvatarChip row={t} />
+                          <span className="truncate">{t.name}</span>
+                        </span>
+                      ),
+                    })),
+                  ]}
+                  renderValue={(opt) => {
+                    if (!opt || opt.value === 'all') {
+                      return (
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#ebebeb] bg-zinc-100 text-[10px] font-semibold text-zinc-500">
+                            All
+                          </span>
+                          <span className="truncate">All tables</span>
+                        </span>
+                      )
+                    }
+                    const row = tables.find((t) => t.id === opt.value)
+                    if (!row) return opt.label
+                    return (
+                      <span className="flex min-w-0 items-center gap-2">
+                        <AdminTableAvatarChip row={row} />
+                        <span className="truncate">{row.name}</span>
+                      </span>
+                    )
+                  }}
+                />
 
-                <div className="relative">
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as MissionStatusFilter)}
-                    className="h-10 min-w-[170px] appearance-none rounded-full border border-[#ebebeb] bg-white px-[12px] pr-9 text-[14px] font-medium text-[#171717] outline-none transition-colors duration-150 ease-out focus:border-zinc-400"
-                  >
-                    <option value="all">All missions ({statusCounts.all})</option>
-                    <option value="active">Active ({statusCounts.active})</option>
-                    <option value="inactive">Inactive ({statusCounts.inactive})</option>
-                    <option value="archived">Archived ({statusCounts.archived})</option>
-                  </select>
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
-                    aria-hidden
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                </div>
+                <AdminSelectDropdown
+                  value={statusFilter}
+                  onChange={(v) => setStatusFilter(v as MissionStatusFilter)}
+                  className="min-w-0"
+                  buttonClassName="inline-flex h-10 min-w-[200px] max-w-[280px] shrink-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 pr-2.5 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors duration-150 ease-out hover:border-zinc-300"
+                  options={[
+                    { value: 'all', label: `All missions (${statusCounts.all})` },
+                    { value: 'active', label: `Active (${statusCounts.active})` },
+                    { value: 'inactive', label: `Inactive (${statusCounts.inactive})` },
+                    { value: 'archived', label: `Archived (${statusCounts.archived})` },
+                  ]}
+                />
               </div>
 
               <button
@@ -850,26 +948,26 @@ export default function MissionsLibraryPage() {
             <div className="admin-scroll-area h-full overflow-y-auto px-4 pb-4 pt-4">
               {view === 'list' ? (
                 <div className="admin-content-in space-y-1">
-                  <div className="grid grid-cols-[1.5fr_0.8fr_0.7fr_0.9fr_1fr] gap-x-3 border-b border-[#ebebeb] px-3 pb-2 pt-[10px] text-[14px] font-medium text-[#18181b]">
+                  <div
+                    className={`${MISSION_LIST_GRID} border-b border-[#ebebeb] px-3 pb-2 pt-[10px] text-[14px] font-medium text-[#18181b]`}
+                  >
                     <span>Mission</span>
                     <span>Type</span>
                     <span>Reward</span>
                     <span>Status</span>
-                    <span>Submission / Review</span>
+                    <span>Attempts</span>
+                    <span>Tables</span>
+                    <span>Review</span>
                   </div>
                   {[0, 1, 2, 3, 4].map((i) => (
-                    <div
-                      key={i}
-                      className="grid min-h-[52px] grid-cols-[1.5fr_0.8fr_0.7fr_0.9fr_1fr] items-center gap-x-3 rounded-lg px-3 py-1.5"
-                    >
-                      <div className="inline-flex items-center gap-3">
-                        <span className="admin-skeleton h-8 w-8 shrink-0 rounded-lg" />
-                        <span className="admin-skeleton h-3.5 w-28 rounded-md" />
-                      </div>
-                      <span className="admin-skeleton h-3.5 w-16 rounded-md" />
-                      <span className="admin-skeleton h-3.5 w-12 rounded-md" />
-                      <span className="admin-skeleton h-6 w-16 rounded-full" />
+                    <div key={i} className={`${MISSION_LIST_GRID} rounded-lg px-3 py-1.5`}>
+                      <span className="admin-skeleton h-3.5 min-w-0 rounded-md" />
                       <span className="admin-skeleton h-3.5 w-20 rounded-md" />
+                      <span className="admin-skeleton h-3.5 w-14 rounded-md" />
+                      <span className="admin-skeleton h-6 w-16 rounded-full" />
+                      <span className="admin-skeleton h-3.5 w-14 rounded-md" />
+                      <span className="admin-skeleton h-3.5 w-8 rounded-md" />
+                      <span className="admin-skeleton h-3.5 w-24 rounded-md" />
                     </div>
                   ))}
                 </div>
@@ -893,12 +991,16 @@ export default function MissionsLibraryPage() {
             </div>
           ) : view === 'list' ? (
             <div className="admin-scroll-area admin-content-in h-full overflow-y-auto px-4 pb-4">
-              <div className="sticky top-0 z-10 grid grid-cols-[1.5fr_0.8fr_0.7fr_0.9fr_1fr] gap-x-3 border-b border-[#ebebeb] bg-white px-3 pb-2 pt-[10px] text-[14px] font-medium text-[#18181b]">
+              <div
+                className={`sticky top-0 z-10 ${MISSION_LIST_GRID} border-b border-[#ebebeb] bg-white px-3 pb-2 pt-[10px] text-[14px] font-medium text-[#18181b]`}
+              >
                 <span>Mission</span>
                 <span>Type</span>
                 <span>Reward</span>
                 <span>Status</span>
-                <span>Submission / Review</span>
+                <span>Attempts</span>
+                <span>Tables</span>
+                <span>Review</span>
               </div>
               {filtered.length === 0 ? (
                 <div className="rounded-lg bg-white px-4 py-6 text-[14px] text-zinc-500">
@@ -915,24 +1017,37 @@ export default function MissionsLibraryPage() {
                         key={m.id}
                         type="button"
                         onClick={() => openEdit(m)}
-                        className={`grid w-full min-h-[52px] cursor-pointer grid-cols-[1.5fr_0.8fr_0.7fr_0.9fr_1fr] items-center gap-x-3 rounded-lg px-3 py-1.5 text-left transition-colors ${rowBg}`}
+                        className={`${MISSION_LIST_GRID} w-full cursor-pointer rounded-lg px-3 py-1.5 text-left transition-colors ${rowBg}`}
                       >
-                        <span className="inline-flex items-center gap-3">
-                          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100" aria-hidden>
-                            <MissionCategoryTypeIcon type={m.validation_type} size={20} className="h-5 w-5" />
+                        <span className="min-w-0 truncate text-[14px] font-medium text-zinc-900">{m.title}</span>
+                        <span className="inline-flex min-w-0 items-center gap-2 text-[14px] text-zinc-700">
+                          <MissionCategoryTypeIcon
+                            type={m.validation_type}
+                            size={18}
+                            className="h-4 w-4 shrink-0"
+                          />
+                          <span className="truncate">
+                            {adminValidationTypeLabel(m.validation_type as ValidationType)}
                           </span>
-                          <span className="truncate text-[14px] font-medium text-zinc-900">{m.title}</span>
                         </span>
-                        <span className="text-[14px] text-zinc-700">
-                          {adminValidationTypeLabel(m.validation_type as ValidationType)}
+                        <span className="inline-flex min-w-0 items-center gap-1 text-[14px] font-medium text-zinc-700 tabular-nums">
+                          <RewardUnitIcon size={16} className="shrink-0" />
+                          <span className="truncate">{m.points}</span>
                         </span>
-                        <span className="text-[14px] font-medium text-zinc-700 tabular-nums">{m.points}</span>
-                        <span className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[12px] font-medium ${status.className}`}>
-                          {status.label}
+                        <span className={`w-fit ${status.className}`}>{status.label}</span>
+                        <span className="text-[14px] tabular-nums text-zinc-700">
+                          {(() => {
+                            const cap = effectiveMaxSubmissionsPerTable(m)
+                            return cap === null ? 'Unlimited' : cap
+                          })()}
                         </span>
-                        <span className="text-[14px] text-zinc-600">
-                          {m.approval_mode === 'manual' ? 'Manual review' : 'Auto approve'}
+                        <span className="text-[14px] tabular-nums text-zinc-700">
+                          {(assignmentsByMission[m.id] ?? []).length}
                         </span>
+                        <ApprovalModeInline
+                          mode={m.approval_mode === 'manual' ? 'manual' : 'auto'}
+                          className="text-[13px] text-zinc-600"
+                        />
                       </button>
                     )
                   })}
@@ -945,7 +1060,7 @@ export default function MissionsLibraryPage() {
                 <button
                   type="button"
                   onClick={openCreate}
-                  className="group relative flex h-[250px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-white text-center transition-all duration-150 ease-out hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm"
+                  className="group relative flex h-[320px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-white text-center transition-all duration-200 ease-out hover:-translate-y-1 hover:border-zinc-300 hover:shadow-md"
                 >
                   <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 text-zinc-800 transition-colors group-hover:bg-zinc-900 group-hover:text-white">
                     <svg
@@ -968,6 +1083,7 @@ export default function MissionsLibraryPage() {
                 {filtered.map((m) => {
                   const status = missionStatusBadge(m.is_active)
                   const assignedCount = (assignmentsByMission[m.id] ?? []).length
+                  const cap = effectiveMaxSubmissionsPerTable(m)
                   const coverImage = m.card_cover_image_url?.trim() || m.header_image_url?.trim() || ''
                   const themeBg =
                     m.card_theme_index != null && MISSION_CARD_BACKGROUNDS[m.card_theme_index]
@@ -978,42 +1094,42 @@ export default function MissionsLibraryPage() {
                       key={m.id}
                       type="button"
                       onClick={() => openEdit(m)}
-                      className="group relative h-[320px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 text-left transition-all duration-150 ease-out hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm"
+                      className="group relative h-[320px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 text-left transition-all duration-200 ease-out hover:-translate-y-1 hover:border-zinc-300 hover:shadow-lg"
                       style={{ background: themeBg }}
                     >
                       {coverImage ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={coverImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
                       ) : null}
-                      <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/20 to-black/70" />
-                      <div className="relative flex h-full flex-col justify-between p-3 text-white">
-                        <div>
-                          <div className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/25 backdrop-blur-sm">
-                            <MissionCategoryTypeIcon
-                              type={m.validation_type}
-                              size={20}
-                              className="h-5 w-5"
-                              beatcoinDisplayVariant="onDark"
-                            />
-                          </div>
-                          <p className="mt-3 line-clamp-2 text-[16px] font-semibold leading-snug">{m.title}</p>
-                          <p className="mt-2 inline-flex items-center gap-1 text-[13px] font-medium text-white/95">
-                            <span aria-hidden>🪙</span>
-                            <span>{m.points} BeatCoin</span>
+                      <span className={`absolute right-3 top-3 z-20 ${status.className}`}>{status.label}</span>
+                      <div className="relative z-10 flex h-full min-h-0 flex-col p-3">
+                        <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/40 bg-white/90 shadow-sm backdrop-blur-sm">
+                          <MissionCategoryTypeIcon type={m.validation_type} size={20} className="h-5 w-5" />
+                        </div>
+                        <div className="mt-3 rounded-xl border border-white/60 bg-white/[0.92] px-3 py-2 shadow-sm backdrop-blur-sm">
+                          <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-zinc-900">{m.title}</p>
+                          <p className="mt-1.5 inline-flex items-center gap-1.5 text-[13px] font-medium text-zinc-800">
+                            <RewardUnitIcon size={16} className="shrink-0" />
+                            <span className="tabular-nums">{m.points}</span>
                           </p>
                         </div>
-                        <div className="rounded-xl bg-black/35 px-3 py-2 backdrop-blur-sm">
-                          <div className="flex items-center justify-between gap-2 text-[12px]">
-                            <span className="inline-flex rounded-full bg-white/20 px-2 py-0.5 font-medium text-white">
-                              {status.label}
-                            </span>
-                            <span className="text-white/90">
-                              {m.approval_mode === 'manual' ? 'Manual review' : 'Auto approve'}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-[11px] text-white/80">
-                            {assignedCount} tables assigned ·{' '}
-                            {adminValidationTypeLabel(m.validation_type as ValidationType)}
+                        <div className="min-h-0 flex-1" aria-hidden />
+                        <div className="mt-auto rounded-xl border border-zinc-100/90 bg-white/95 px-3 py-2.5 shadow-sm backdrop-blur-sm">
+                          <ApprovalModeInline
+                            mode={m.approval_mode === 'manual' ? 'manual' : 'auto'}
+                            className="text-[12px] text-zinc-800"
+                          />
+                          <p className="mt-1.5 text-[11px] font-medium text-zinc-600">
+                            {assignedCount} {assignedCount === 1 ? 'table' : 'tables'}
+                          </p>
+                          <p className="mt-0.5 text-[11px] font-medium text-zinc-600">
+                            {cap === null ? (
+                              'Unlimited'
+                            ) : (
+                              <>
+                                Limited <span className={MISSION_SIGNATURE_NUM}>{cap}</span>
+                              </>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -1161,13 +1277,13 @@ export default function MissionsLibraryPage() {
                                             key={v}
                                             type="button"
                                             onClick={() => setForm((s) => ({ ...s, validation_type: v }))}
-                                            className={`group relative flex h-[120px] w-full cursor-pointer overflow-hidden rounded-2xl border text-left transition-all duration-200 ease-out ${
+                                            className={`group relative flex h-[124px] w-full cursor-pointer overflow-visible rounded-2xl border border-transparent text-left shadow-sm transition-all duration-200 ease-out ${
                                               selected
-                                                ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white shadow-md'
-                                                : 'border-zinc-200/90 bg-white text-zinc-900 shadow-sm hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white hover:shadow-md'
+                                                ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white shadow-md'
+                                                : 'bg-white text-zinc-900 hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white hover:shadow-md'
                                             }`}
                                           >
-                                            <div className="pointer-events-none absolute left-0 top-1/2 z-0 h-[112px] w-[112px] -translate-x-1/2 -translate-y-1/2 sm:h-[120px] sm:w-[120px]">
+                                            <div className="pointer-events-none absolute left-0 top-1/2 z-0 h-[120px] w-[120px] -translate-x-1/2 -translate-y-1/2 overflow-visible">
                                               {v === 'beatcoin' ? (
                                                 <MissionCategoryTypeIcon
                                                   type={v}
@@ -1196,7 +1312,7 @@ export default function MissionsLibraryPage() {
                                                 </span>
                                               )}
                                             </div>
-                                            <div className="relative z-10 flex h-full min-w-0 flex-1 flex-col justify-center py-4 pl-[calc(38%+0.625rem)] pr-4 sm:min-h-[120px] sm:pr-6">
+                                            <div className="relative z-10 flex h-full min-w-0 flex-1 flex-col justify-center py-3 pl-[30%] pr-4 sm:pl-[28%] sm:pr-5">
                                               <span
                                                 className={`text-[16px] font-semibold leading-snug tracking-tight sm:text-[17px] ${
                                                   selected ? 'text-white' : 'text-zinc-900 group-hover:text-white'
@@ -1615,63 +1731,56 @@ export default function MissionsLibraryPage() {
                                     className={`absolute inset-0 flex min-h-0 flex-col overflow-hidden px-2 pb-4 pt-1 transition-all duration-200 ease-out ${
                                       step === 3
                                         ? 'z-10 translate-x-0 opacity-100'
-                                        : 'pointer-events-none z-0 -translate-x-3 opacity-0'
+                                        : 'pointer-events-none z-0 translate-x-3 opacity-0'
                                     }`}
                                   >
                         <h4 className="text-center text-3xl font-semibold tracking-tight text-zinc-900">
                           What are the mechanics?
                         </h4>
 
-                        <div className="mx-auto mt-5 w-full max-w-[760px] flex-1 space-y-4 overflow-y-auto overflow-x-hidden pb-2">
-                          <div className="space-y-3 rounded-2xl border border-zinc-100/90 bg-zinc-50/50 p-3">
+                        <div className="mx-auto mt-5 flex w-full max-w-[760px] flex-1 flex-col gap-3 overflow-hidden pb-1">
+                          <div className="space-y-3 rounded-2xl bg-zinc-50/50 p-3">
                             <p className="text-center text-xs font-semibold text-zinc-600">Rewards &amp; feed</p>
-                            <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
-                              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                <span className="text-xs font-semibold text-zinc-600">Currency</span>
-                                <AdminDropdown
-                                  className="w-auto shrink-0"
-                                  buttonClassName="inline-flex h-10 w-auto max-w-[200px] shrink-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 pr-2.5 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300"
-                                  trigger={
-                                    <>
-                                      <span className="inline-flex min-w-0 items-center gap-2">
-                                        <RewardUnitIcon size={20} className="shrink-0" />
-                                        <span className="truncate">{rewardUnitCompactLabel(rewardUnit)}</span>
-                                      </span>
-                                      <svg
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                        className="h-4 w-4 shrink-0 text-zinc-400"
-                                        aria-hidden
-                                      >
-                                        <path d="m6 9 6 6 6-6" />
-                                      </svg>
-                                    </>
-                                  }
-                                >
-                                  <button
-                                    type="button"
-                                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[14px] font-medium text-[#171717] hover:bg-zinc-50"
-                                  >
-                                    <RewardUnitIcon size={20} className="shrink-0" />
-                                    <span className="truncate">{rewardUnitCompactLabel(rewardUnit)}</span>
-                                  </button>
-                                </AdminDropdown>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={form.points}
-                                  onChange={(e) => setForm((s) => ({ ...s, points: e.target.value }))}
-                                  className="h-10 w-[5.5rem] shrink-0 rounded-full border border-[#ebebeb] bg-white px-3 text-center text-[14px] font-medium text-[#171717] outline-none focus:border-zinc-400"
-                                  aria-label="Reward amount"
-                                />
+                            <div className="flex flex-wrap items-end gap-x-3 gap-y-3">
+                              <div className="flex min-w-0 flex-wrap items-end gap-2">
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-xs font-semibold text-zinc-600">Currency</span>
+                                  <AdminSelectDropdown
+                                    value="__reward_unit__"
+                                    onChange={() => {}}
+                                    className="w-auto shrink-0"
+                                    buttonClassName="inline-flex h-10 w-auto max-w-[180px] shrink-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 pr-2.5 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300"
+                                    options={[
+                                      {
+                                        value: '__reward_unit__',
+                                        label: (
+                                          <span className="flex min-w-0 items-center gap-2">
+                                            <RewardUnitIcon size={20} className="shrink-0" />
+                                            <span className="truncate">{rewardUnitCompactLabel(rewardUnit)}</span>
+                                          </span>
+                                        ),
+                                      },
+                                    ]}
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-xs font-semibold text-zinc-600">Amount</span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={form.points}
+                                    onChange={(e) => setForm((s) => ({ ...s, points: e.target.value }))}
+                                    className="h-10 w-[4.75rem] shrink-0 rounded-full border border-[#ebebeb] bg-white px-2 text-center text-[14px] font-medium text-[#171717] outline-none focus:border-zinc-400"
+                                    aria-label="Reward amount"
+                                  />
+                                </div>
                               </div>
-                              {(form.validation_type === 'photo' || form.validation_type === 'text') ? (
-                                <div className="flex min-w-[11rem] flex-1 flex-col gap-1 sm:max-w-[14rem]">
+                              {form.validation_type === 'photo' || form.validation_type === 'text' ? (
+                                <div className="flex w-auto max-w-[10rem] flex-col gap-1">
                                   <span className="text-xs font-semibold text-zinc-600">Live feed</span>
                                   <AdminSegmentedControl
                                     size="sm"
+                                    className="!w-auto max-w-[10rem]"
                                     ariaLabel="Live feed"
                                     options={[
                                       { value: 'on' as const, label: 'On' },
@@ -1684,10 +1793,11 @@ export default function MissionsLibraryPage() {
                                   />
                                 </div>
                               ) : null}
-                              <div className="flex min-w-[12rem] flex-1 flex-col gap-1 sm:max-w-[16rem]">
+                              <div className="flex w-auto max-w-[10rem] flex-col gap-1">
                                 <span className="text-xs font-semibold text-zinc-600">Require message</span>
                                 <AdminSegmentedControl
                                   size="sm"
+                                  className="!w-auto max-w-[10rem]"
                                   ariaLabel="Require message"
                                   options={[
                                     { value: 'yes' as const, label: 'Yes' },
@@ -1702,13 +1812,13 @@ export default function MissionsLibraryPage() {
                             </div>
                           </div>
 
-                          <div className="space-y-3 rounded-2xl border border-zinc-100/90 bg-zinc-50/50 p-3">
-                            <p className="text-center text-xs font-semibold text-zinc-600">Row 2</p>
-                            <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
-                              <div className="flex min-w-[12rem] max-w-[20rem] flex-1 flex-col gap-1">
+                          <div className="space-y-3 rounded-2xl bg-zinc-50/50 p-3">
+                            <div className="flex flex-wrap items-end gap-x-3 gap-y-3">
+                              <div className="flex w-auto max-w-[12rem] flex-col gap-1">
                                 <span className="text-xs font-semibold text-zinc-600">Repeatability</span>
                                 <AdminSegmentedControl
                                   size="sm"
+                                  className="!w-auto max-w-[12rem]"
                                   ariaLabel="Repeatability"
                                   options={[
                                     { value: 'repeat' as const, label: 'Repeatable' },
@@ -1739,15 +1849,16 @@ export default function MissionsLibraryPage() {
                                           max_submissions_per_table: e.target.value,
                                         }))
                                       }
-                                      className="h-8 w-14 rounded-full border border-[#ebebeb] bg-white px-2 text-center text-[13px] font-medium outline-none focus:border-zinc-400"
+                                      className="h-8 w-12 rounded-full border border-[#ebebeb] bg-white px-1.5 text-center text-[13px] font-medium outline-none focus:border-zinc-400"
                                     />
                                   </label>
                                 ) : null}
                               </div>
-                              <div className="flex min-w-[12rem] max-w-[18rem] flex-1 flex-col gap-1">
+                              <div className="flex w-auto max-w-[12rem] flex-col gap-1">
                                 <span className="text-xs font-semibold text-zinc-600">Approval</span>
                                 <AdminSegmentedControl
                                   size="sm"
+                                  className="!w-auto max-w-[12rem]"
                                   ariaLabel="Approval mode"
                                   options={[
                                     { value: 'manual' as const, label: 'Manual' },
@@ -1759,12 +1870,12 @@ export default function MissionsLibraryPage() {
                                   }
                                 />
                               </div>
-                              <div className="flex flex-col gap-1.5">
+                              <div className="flex flex-col gap-1">
                                 <span className="text-xs font-semibold text-zinc-600">Active</span>
                                 <button
                                   type="button"
                                   onClick={() => setForm((s) => ({ ...s, is_active: !s.is_active }))}
-                                  className={`relative inline-flex h-8 w-[3.25rem] shrink-0 items-center rounded-full p-1 transition-colors ${
+                                  className={`relative inline-flex h-8 w-[2.85rem] shrink-0 items-center rounded-full p-1 transition-colors ${
                                     form.is_active
                                       ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]'
                                       : 'bg-zinc-300'
@@ -1773,7 +1884,7 @@ export default function MissionsLibraryPage() {
                                 >
                                   <span
                                     className={`h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ease-out ${
-                                      form.is_active ? 'translate-x-[1.35rem]' : 'translate-x-0'
+                                      form.is_active ? 'translate-x-[0.85rem]' : 'translate-x-0'
                                     }`}
                                   />
                                 </button>
@@ -1781,11 +1892,11 @@ export default function MissionsLibraryPage() {
                             </div>
                           </div>
 
-                          <div className="space-y-3 rounded-2xl border border-zinc-100/90 bg-zinc-50/50 p-3">
+                          <div className="space-y-3 rounded-2xl bg-zinc-50/50 p-3">
                             <p className="text-center text-xs font-semibold text-zinc-600">Table assignment</p>
                             <AdminSegmentedControl
                               size="sm"
-                              className="max-w-md"
+                              className="!w-auto max-w-[14rem]"
                               ariaLabel="Table assignment mode"
                               options={[
                                 { value: 'all' as const, label: 'All tables' },
@@ -1831,14 +1942,14 @@ export default function MissionsLibraryPage() {
                                           return next
                                         })
                                       }}
-                                      className={`flex min-h-[68px] w-full flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-center transition-all ${
+                                      className={`flex w-full flex-row items-center gap-2 rounded-xl border px-2 py-2 text-left transition-all ${
                                         selected
                                           ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white shadow-sm'
                                           : 'border border-[#ebebeb] bg-white text-zinc-800 hover:border-zinc-300'
                                       }`}
                                     >
                                       <span
-                                        className={`flex h-9 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md ${
+                                        className={`relative flex h-11 w-[4.25rem] shrink-0 items-center justify-center overflow-hidden rounded-lg ${
                                           selected ? 'bg-white/20 ring-1 ring-white/40' : 'bg-zinc-100 ring-1 ring-zinc-200/80'
                                         }`}
                                       >
@@ -1863,7 +1974,7 @@ export default function MissionsLibraryPage() {
                                         )}
                                       </span>
                                       <span
-                                        className={`line-clamp-2 w-full text-[11px] font-semibold leading-tight ${
+                                        className={`line-clamp-2 min-w-0 flex-1 text-[11px] font-semibold leading-tight ${
                                           selected ? 'text-white' : 'text-zinc-800'
                                         }`}
                                       >

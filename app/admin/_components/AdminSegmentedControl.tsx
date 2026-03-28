@@ -2,7 +2,8 @@
 
 import type { ReactNode } from 'react'
 
-const GRADIENT = 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]'
+const SIGNATURE_GRADIENT = 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]'
+const FILTER_SOLID = 'bg-zinc-900'
 
 export type AdminSegmentedOption<T extends string> = { value: T; label: ReactNode }
 
@@ -13,10 +14,12 @@ type Props<T extends string> = {
   size?: 'sm' | 'md'
   className?: string
   ariaLabel?: string
+  /** `filter` = black pill (Missions/Tables filter row). `signature` = brand gradient. */
+  variant?: 'filter' | 'signature'
 }
 
 /**
- * Pill segmented control with sliding signature-gradient indicator (admin standard).
+ * Pill segmented control with sliding indicator — filter (black) or signature gradient.
  */
 export function AdminSegmentedControl<T extends string>({
   options,
@@ -25,6 +28,7 @@ export function AdminSegmentedControl<T extends string>({
   size = 'md',
   className = '',
   ariaLabel,
+  variant = 'filter',
 }: Props<T>) {
   const n = options.length
   const idx = Math.max(0, options.findIndex((o) => o.value === value))
@@ -42,6 +46,8 @@ export function AdminSegmentedControl<T extends string>({
         : `calc(50% + 2px)`
       : `calc(${idx * (100 / n)}% + ${p}px + ${idx * 2}px)`
 
+  const indicatorClass = variant === 'signature' ? SIGNATURE_GRADIENT : FILTER_SOLID
+
   return (
     <div
       className={`relative inline-flex w-full max-w-full rounded-full border border-[#ebebeb] bg-white p-1 ${h} ${className}`.trim()}
@@ -49,7 +55,7 @@ export function AdminSegmentedControl<T extends string>({
       aria-label={ariaLabel}
     >
       <span
-        className={`pointer-events-none absolute bottom-1 top-1 rounded-full ${GRADIENT} transition-[left,width] duration-200 ease-out`}
+        className={`pointer-events-none absolute bottom-1 top-1 rounded-full ${indicatorClass} transition-[left,width] duration-200 ease-out`}
         style={{
           width: indicatorWidth,
           left: leftPos,
