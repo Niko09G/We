@@ -1019,7 +1019,7 @@ export default function MissionsLibraryPage() {
                           />
                           <div
                             className={`flex h-full min-h-0 w-full max-w-full flex-1 flex-col items-center justify-start overflow-x-visible px-5 py-4 [&_input]:!text-[14px] [&_select]:!text-[14px] ${
-                              step === 2 ? 'overflow-hidden pb-3' : 'overflow-y-auto pb-32'
+                              step === 2 ? 'overflow-hidden pb-1' : 'overflow-y-auto pb-32'
                             }`}
                           >
                             <div className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-x-visible">
@@ -1139,6 +1139,7 @@ export default function MissionsLibraryPage() {
                                 >
                     {step === 2 ? (
                       <div className="relative flex min-h-0 flex-1 flex-col">
+                        <div className="relative min-h-0 flex-1 overflow-hidden">
                         <div
                           className={`absolute inset-0 flex min-h-0 flex-col overflow-hidden transition-all duration-200 ease-out ${
                             step2View === 'main'
@@ -1146,8 +1147,7 @@ export default function MissionsLibraryPage() {
                               : 'pointer-events-none z-0 -translate-x-2 opacity-0'
                           }`}
                         >
-                          <div className="flex min-h-0 flex-1 flex-col">
-                            <div className="min-h-0 max-h-[min(380px,48vh)] shrink-0 overflow-y-auto overflow-x-visible px-1 pb-3">
+                          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-visible px-1 pb-2 pt-1">
                               <div className="flex flex-col items-center space-y-5">
                                 <h4 className="text-center text-2xl font-semibold tracking-tight text-zinc-900">
                                   Card cover, overlay copy &amp; images
@@ -1360,15 +1360,6 @@ export default function MissionsLibraryPage() {
                                 </div>
                               </div>
                             </div>
-                            <div className="flex min-h-0 flex-1 flex-col px-1 pt-1">
-                              <p className="mb-2 shrink-0 text-center text-[11px] font-medium uppercase tracking-wide text-zinc-400">
-                                Live preview
-                              </p>
-                              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                                <MissionOverlaySplitPreviews builderFlush form={missionStep2PreviewInput} />
-                              </div>
-                            </div>
-                          </div>
                         </div>
 
                         <div
@@ -1378,8 +1369,7 @@ export default function MissionsLibraryPage() {
                               : 'pointer-events-none z-0 translate-x-2 opacity-0'
                           }`}
                         >
-                          <div className="flex min-h-0 flex-1 flex-col">
-                            <div className="min-h-0 max-h-[min(420px,52vh)] shrink-0 overflow-y-auto overflow-x-visible px-1 pb-3">
+                          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-visible px-1 pb-2 pt-1">
                               <div className="flex flex-col items-center space-y-5">
                                 <div className="relative w-full max-w-lg">
                                   <button
@@ -1512,13 +1502,16 @@ export default function MissionsLibraryPage() {
                                 </div>
                               </div>
                             </div>
-                            <div className="flex min-h-0 flex-1 flex-col px-1 pt-1">
-                              <p className="mb-2 shrink-0 text-center text-[11px] font-medium uppercase tracking-wide text-zinc-400">
-                                Live preview
-                              </p>
-                              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                                <MissionOverlaySplitPreviews builderFlush form={missionStep2PreviewInput} />
-                              </div>
+                        </div>
+                        </div>
+
+                        <div className="relative z-10 mt-auto shrink-0 border-t border-zinc-100/80 bg-white pt-2">
+                          <p className="mb-2 text-center text-[11px] font-medium uppercase tracking-wide text-zinc-400">
+                            Live preview
+                          </p>
+                          <div className="mx-auto flex w-full justify-center px-1 pb-0">
+                            <div className="h-[min(300px,38vh)] min-h-[220px] w-full max-w-[480px]">
+                              <MissionOverlaySplitPreviews builderFlush form={missionStep2PreviewInput} />
                             </div>
                           </div>
                         </div>

@@ -68,10 +68,11 @@ export function MissionOverlaySplitPreviews({
       : null
 
   if (builderFlush) {
+    /** Fixed ~phone-card width: narrower than full split so proportions read closer to production. */
     return (
-      <div className="flex h-full min-h-[220px] w-full max-w-[760px] flex-1 flex-row gap-4 overflow-hidden px-1">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <p className="mb-2 shrink-0 text-center text-[11px] font-medium text-zinc-500">Card</p>
+      <div className="mx-auto flex h-full min-h-[220px] w-full max-w-[440px] flex-row items-stretch justify-center gap-3 overflow-hidden px-0">
+        <div className="flex h-full w-[200px] shrink-0 flex-col">
+          <p className="mb-1.5 shrink-0 text-center text-[10px] font-medium text-zinc-500">Card</p>
           <div className="flex min-h-0 flex-1 flex-col">
             <PreviewCard
               mode="card"
@@ -90,8 +91,8 @@ export function MissionOverlaySplitPreviews({
             />
           </div>
         </div>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <p className="mb-2 shrink-0 text-center text-[11px] font-medium text-zinc-500">Overlay</p>
+        <div className="flex h-full w-[200px] shrink-0 flex-col">
+          <p className="mb-1.5 shrink-0 text-center text-[10px] font-medium text-zinc-500">Overlay</p>
           <div className="relative flex min-h-0 flex-1 flex-col">
             <PreviewCard
               mode="overlay"
@@ -336,24 +337,38 @@ function PreviewCard({
         style={{ background: surface }}
       >
         <div
-          className={`mx-2 flex shrink-0 items-center justify-between ${
-            compact ? 'mt-1.5 mb-0.5 px-1.5 py-1' : 'mt-2 mb-1 px-2 py-1.5'
+          className={`flex shrink-0 items-center justify-between ${
+            builderFlush
+              ? 'mx-1.5 mt-1 mb-0 px-1 py-0.5'
+              : compact
+                ? 'mx-2 mt-1.5 mb-0.5 px-1.5 py-1'
+                : 'mx-2 mt-2 mb-1 px-2 py-1.5'
           }`}
         >
-          <span className={`truncate font-semibold text-white ${compact ? 'text-[10px]' : 'text-xs'}`}>{title}</span>
+          <span
+            className={`truncate font-semibold text-white ${
+              builderFlush ? 'text-[9px]' : compact ? 'text-[10px]' : 'text-xs'
+            }`}
+          >
+            {title}
+          </span>
           {!compact ? (
             <span className="text-[10px] font-medium text-white/80">Preview</span>
           ) : null}
         </div>
         <div
-          className={`mx-2 flex flex-col bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-zinc-100 ${
-            builderFlush ? 'mb-0 min-h-0 flex-1' : 'mb-2'
-          } ${innerRadius} ${compact ? 'px-2.5 py-2.5' : 'px-4 py-4'}`}
+          className={`flex flex-col bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-zinc-100 ${innerRadius} ${
+            builderFlush
+              ? 'mx-1.5 mb-0 min-h-0 flex-1 flex-col px-2 py-2'
+              : compact
+                ? 'mx-2 mb-2 px-2.5 py-2.5'
+                : 'mx-2 mb-2 px-4 py-4'
+          }`}
         >
           <div className={`flex flex-col items-center ${builderFlush ? 'min-h-0 flex-1' : ''}`}>
             <div
               className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 ${
-                compact ? 'h-12 w-12 text-lg' : 'h-16 w-16 text-xl'
+                builderFlush ? 'h-10 w-10 text-sm' : compact ? 'h-12 w-12 text-lg' : 'h-16 w-16 text-xl'
               }`}
               style={
                 overlayImg
@@ -368,7 +383,9 @@ function PreviewCard({
               {!overlayImg ? <span aria-hidden>{beatcoin ? '🪙' : '📷'}</span> : null}
             </div>
             <p
-              className={`mt-2 line-clamp-3 text-center text-zinc-500 ${compact ? 'text-[10px]' : 'text-xs'}`}
+              className={`line-clamp-3 text-center text-zinc-500 ${
+                builderFlush ? 'mt-1.5 text-[9px] leading-snug' : compact ? 'mt-2 text-[10px]' : 'mt-2 text-xs'
+              }`}
             >
               {bodyCopy ? (
                 <span className="text-zinc-700">{bodyCopy}</span>
@@ -377,9 +394,11 @@ function PreviewCard({
               )}
             </p>
             <div
-              className={`w-full rounded-lg bg-zinc-100 py-1.5 text-center font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 ${
-                builderFlush ? 'mt-auto' : ''
-              } ${compact ? 'mt-2 text-[10px]' : 'mt-4 text-xs'}`}
+              className={`w-full rounded-lg bg-zinc-100 text-center font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 ${
+                builderFlush ? 'mt-auto py-1 text-[9px]' : ''
+              } ${!builderFlush && compact ? 'mt-2 py-1.5 text-[10px]' : ''} ${
+                !builderFlush && !compact ? 'mt-4 py-1.5 text-xs' : ''
+              }`}
             >
               Start mission
             </div>
@@ -394,7 +413,7 @@ function PreviewCard({
 
   const cardShellRadius = builderFlush ? 'rounded-t-2xl rounded-b-none' : 'rounded-2xl'
   const cardSizing = builderFlush
-    ? 'min-h-0 flex-1 p-3 shadow-none'
+    ? 'min-h-0 h-full w-full flex-1 p-2 shadow-none'
     : compact
       ? 'h-[200px] p-3 shadow-none'
       : 'h-[220px] p-4 shadow-lg'
@@ -419,51 +438,63 @@ function PreviewCard({
       ) : null}
       <span
         className={`relative z-10 flex items-center justify-center rounded-full bg-white/90 leading-none text-zinc-800 ${
-          compact ? 'h-7 w-7 text-sm' : 'h-9 w-9 text-base'
+          builderFlush ? 'h-6 w-6 text-[10px]' : compact ? 'h-7 w-7 text-sm' : 'h-9 w-9 text-base'
         }`}
         aria-hidden
       >
         {beatcoin ? '🪙' : typeIcon}
       </span>
       <h3
-        className={`relative z-10 mt-2 pr-6 font-bold leading-snug text-white ${
-          compact ? 'text-[11px]' : 'text-sm'
+        className={`relative z-10 font-bold leading-snug text-white ${
+          builderFlush ? 'mt-1.5 pr-4 text-[10px]' : compact ? 'mt-2 pr-6 text-[11px]' : 'mt-2 pr-6 text-sm'
         }`}
       >
         {title}
       </h3>
       {typeof points === 'number' ? (
         <p
-          className={`relative z-10 mt-1 font-semibold tabular-nums text-white/95 ${
-            compact ? 'text-[10px]' : 'text-xs'
+          className={`relative z-10 font-semibold tabular-nums text-white/95 ${
+            builderFlush ? 'mt-0.5 text-[9px]' : compact ? 'mt-1 text-[10px]' : 'mt-1 text-xs'
           }`}
         >
           <RewardAmount
             showPlus
             amount={points}
-            iconSize={compact ? 12 : 16}
+            iconSize={builderFlush ? 10 : compact ? 12 : 16}
             displayVariant="onDark"
             className="text-white/95"
           />
         </p>
       ) : null}
       {pending && !doneState ? (
-        <p className="relative z-10 mt-1.5 text-[10px] font-medium text-white/90">Pending review</p>
+        <p
+          className={`relative z-10 font-medium text-white/90 ${
+            builderFlush ? 'mt-1 text-[8px]' : 'mt-1.5 text-[10px]'
+          }`}
+        >
+          Pending review
+        </p>
       ) : null}
-      <div className="relative z-10 mt-auto w-full pt-2">
+      <div className={`relative z-10 mt-auto w-full ${builderFlush ? 'pt-1.5' : 'pt-2'}`}>
         {doneState ? (
           <span
             className={`flex w-full items-center justify-center gap-1 rounded-lg bg-emerald-500 text-center font-semibold text-white ${
-              compact ? 'px-2 py-1.5 text-[10px]' : 'px-3 py-2 text-xs shadow-sm'
+              builderFlush
+                ? 'px-2 py-1 text-[9px]'
+                : compact
+                  ? 'px-2 py-1.5 text-[10px]'
+                  : 'px-3 py-2 text-xs shadow-sm'
             }`}
           >
-            <CheckIcon className={`shrink-0 text-white ${compact ? 'h-3 w-3' : 'h-3.5 w-3.5'}`} />
+            <CheckIcon
+              className={`shrink-0 text-white ${builderFlush ? 'h-2.5 w-2.5' : compact ? 'h-3 w-3' : 'h-3.5 w-3.5'}`}
+            />
             {completedLabel}
           </span>
         ) : (
           <span
             className={`flex w-full items-center justify-center rounded-lg bg-white text-center font-semibold text-black ${
-              compact ? 'px-2 py-1.5 text-[10px]' : 'px-3 py-2 text-xs'
+              builderFlush ? 'px-2 py-1 text-[9px]' : compact ? 'px-2 py-1.5 text-[10px]' : 'px-3 py-2 text-xs'
             }`}
           >
             {ctaLabel}
