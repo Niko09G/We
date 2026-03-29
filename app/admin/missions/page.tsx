@@ -1981,15 +1981,20 @@ export default function MissionsLibraryPage() {
                                 </div>
                               </div>
                             </div>
-                            {step <= 2 ? (
-                              <div className="relative z-10 shrink-0 bg-white pt-1">
-                                <div className="mx-auto flex w-full justify-center px-1 pb-0">
-                                  <div className="h-[min(300px,38vh)] min-h-[220px] w-full max-w-[480px]">
-                                    <MissionOverlaySplitPreviews builderFlush form={missionStep2PreviewInput} />
+                              {(step === 1 || step === 2) ? (
+                                <div className="relative z-10 shrink-0 bg-white pt-1">
+                                  <div className="mx-auto flex w-full justify-center px-1 pb-0">
+                                    <div className="h-[min(300px,38vh)] min-h-[220px] w-full max-w-[480px]">
+                                      {step === 2 ? (
+                                        <MissionOverlaySplitPreviews builderFlush form={missionStep2PreviewInput} />
+                                      ) : (
+                                        <div className="h-full w-full" aria-hidden />
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            ) : null}
+                              ) : null}
+                            </div>
                           </div>
                           </div>
 
