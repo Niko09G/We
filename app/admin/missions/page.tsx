@@ -80,6 +80,8 @@ type MissionForm = {
   max_submissions_per_table: string
   /** Photo / response: show approved submissions in live greetings feed when applicable. */
   add_to_greetings: boolean
+  /** UI-only until a missions column exists; not persisted. */
+  message_max_chars: string
 }
 
 const CATEGORY_DESCRIPTIONS: Record<ValidationType, string> = {
@@ -175,6 +177,7 @@ function emptyForm(): MissionForm {
     is_active: true,
     max_submissions_per_table: '',
     add_to_greetings: false,
+    message_max_chars: '240',
   }
 }
 
@@ -200,6 +203,7 @@ function formFromMission(m: MissionRecord): MissionForm {
     is_active: m.is_active ?? true,
     max_submissions_per_table: maxSubmissionsDisplayValue(m),
     add_to_greetings: m.add_to_greetings ?? false,
+    message_max_chars: '240',
   }
 }
 
@@ -363,8 +367,6 @@ export default function MissionsLibraryPage() {
   const [uploadSlot, setUploadSlot] = useState<'card' | 'overlay' | null>(null)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<MissionForm>(emptyForm)
-  const [missionAssignAllTables, setMissionAssignAllTables] = useState(true)
-  const [missionSelectedTableIds, setMissionSelectedTableIds] = useState<Set<string>>(new Set())
   const missionTitleInputRef = useRef<HTMLInputElement | null>(null)
   const missionDescInputRef = useRef<HTMLInputElement | null>(null)
   const cardCoverInputRef = useRef<HTMLInputElement | null>(null)
@@ -531,40 +533,6 @@ export default function MissionsLibraryPage() {
     })
   }, [missions, search, statusFilter, tableFilterId, assignmentsByMission])
 
-  const syncMissionAssignmentStateForCreate = useCallback(() => {
-    const ids = activeTableRows.map((t) => t.id)
-    setMissionAssignAllTables(true)
-    setMissionSelectedTableIds(new Set(ids))
-  }, [activeTableRows])
-
-  const syncMissionAssignmentStateForEdit = useCallback(
-    (missionId: string) => {
-      const activeIds = activeTableRows.map((t) => t.id)
-      const assigned = assignmentsByMission[missionId] ?? []
-      if (assigned.length === 0) {
-        setMissionAssignAllTables(true)
-        setMissionSelectedTableIds(new Set(activeIds))
-        return
-      }
-      const allAssigned =
-        activeIds.length > 0 &&
-        assigned.length === activeIds.length &&
-        activeIds.every((id) => assigned.includes(id))
-      setMissionAssignAllTables(allAssigned)
-      setMissionSelectedTableIds(new Set(assigned.filter((id) => activeIds.includes(id))))
-    },
-    [activeTableRows, assignmentsByMission]
-  )
-
-  useEffect(() => {
-    if (!editorOpen || editorMode !== 'create') return
-    if (activeTableRows.length === 0) return
-    setMissionSelectedTableIds((prev) => {
-      if (prev.size > 0) return prev
-      return new Set(activeTableRows.map((t) => t.id))
-    })
-  }, [editorOpen, editorMode, activeTableRows])
-
   function openCreate() {
     setEditorMode('create')
     setEditingId(null)
@@ -576,7 +544,6 @@ export default function MissionsLibraryPage() {
     setMissionColorPopoverPos(null)
     customizePanelWasOpenRef.current = false
     setForm(emptyForm())
-    syncMissionAssignmentStateForCreate()
     setEditorOpen(true)
   }
 
@@ -591,7 +558,6 @@ export default function MissionsLibraryPage() {
     setMissionColorPopoverPos(null)
     customizePanelWasOpenRef.current = false
     setForm(formFromMission(mission))
-    syncMissionAssignmentStateForEdit(mission.id)
     setEditorOpen(true)
   }
 
@@ -731,13 +697,7 @@ export default function MissionsLibraryPage() {
       return
     }
     const activeIds = activeTableRows.map((t) => t.id)
-    if (!missionAssignAllTables && missionSelectedTableIds.size === 0) {
-      showToast('Select at least one table, or choose All tables.', 'error')
-      return
-    }
-    const desiredTableIds = missionAssignAllTables
-      ? activeIds
-      : [...missionSelectedTableIds].filter((id) => activeIds.includes(id))
+    const desiredTableIds = activeIds
 
     setSaving(true)
     try {
@@ -1211,7 +1171,7 @@ export default function MissionsLibraryPage() {
                                   step === 1 ? 'translate-x-0 opacity-100' : '-translate-x-3 pointer-events-none opacity-0'
                                 }`}
                               >
-                                <div className="flex min-h-full flex-col justify-center py-2">
+                                <div className="flex min-h-0 flex-col justify-start py-4 pb-8">
                                   <div className="mx-auto w-full max-w-[760px] space-y-5 px-1.5">
                                     <h4 className="text-center text-3xl font-semibold tracking-tight text-zinc-900">
                                       What mission are we building?
@@ -1281,7 +1241,7 @@ export default function MissionsLibraryPage() {
                                                 : 'bg-white text-zinc-900 hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white hover:shadow-md'
                                             }`}
                                           >
-                                            <div className="pointer-events-none absolute left-0 top-1/2 z-0 h-[120px] w-[120px] -translate-x-1/2 -translate-y-1/2 overflow-hidden">
+                                            <div className="pointer-events-none absolute left-0 top-1/2 z-0 h-[120px] w-[120px] -translate-x-1/2 -translate-y-1/2">
                                               {v === 'beatcoin' ? (
                                                 <MissionCategoryTypeIcon
                                                   type={v}
@@ -1310,7 +1270,7 @@ export default function MissionsLibraryPage() {
                                                 </span>
                                               )}
                                             </div>
-                                            <div className="relative z-10 flex h-full min-w-0 flex-1 flex-col justify-center py-3 pl-[30%] pr-4 sm:pl-[28%] sm:pr-5">
+                                            <div className="relative z-10 flex h-full min-w-0 flex-1 flex-col justify-center py-3 pl-[22%] pr-4 sm:pl-[20%] sm:pr-5">
                                               <span
                                                 className={`text-[16px] font-semibold leading-snug tracking-tight sm:text-[17px] ${
                                                   selected ? 'text-white' : 'text-zinc-900 group-hover:text-white'
@@ -1718,101 +1678,70 @@ export default function MissionsLibraryPage() {
                                   </div>
 
                                   <div
-                                    className={`absolute inset-0 flex min-h-0 flex-col overflow-hidden px-2 pb-4 pt-1 transition-[opacity,transform] duration-200 ease-out ${
+                                    className={`absolute inset-0 flex min-h-0 flex-col px-2 pb-4 pt-1 transition-[opacity,transform] duration-200 ease-out ${
                                       step === 3
                                         ? 'z-10 translate-x-0 opacity-100'
                                         : 'pointer-events-none z-0 translate-x-3 opacity-0'
                                     }`}
                                   >
-                        <h4 className="text-center text-3xl font-semibold tracking-tight text-zinc-900">
+                        <h4 className="shrink-0 text-center text-3xl font-semibold tracking-tight text-zinc-900">
                           What are the mechanics?
                         </h4>
 
-                        <div className="mx-auto mt-5 flex w-full max-w-[760px] flex-1 flex-col gap-3 overflow-hidden pb-1">
-                          <div className="space-y-3 rounded-2xl bg-zinc-50/50 p-3">
-                            <p className="text-center text-xs font-semibold text-zinc-600">Rewards &amp; feed</p>
-                            <div className="flex flex-wrap items-end gap-x-3 gap-y-3">
-                              <div className="flex min-w-0 flex-wrap items-end gap-2">
-                                <div className="flex flex-col gap-1">
-                                  <span className="text-xs font-semibold text-zinc-600">Currency</span>
-                                  <AdminSelectDropdown
-                                    value="__reward_unit__"
-                                    onChange={() => {}}
-                                    className="w-auto shrink-0"
-                                    buttonClassName="inline-flex h-10 w-auto max-w-[180px] shrink-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 pr-2.5 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300"
-                                    options={[
-                                      {
-                                        value: '__reward_unit__',
-                                        label: (
-                                          <span className="flex min-w-0 items-center gap-2">
-                                            <RewardUnitIcon size={20} className="shrink-0" />
-                                            <span className="truncate">{rewardUnitCompactLabel(rewardUnit)}</span>
-                                          </span>
-                                        ),
-                                      },
-                                    ]}
-                                  />
-                                </div>
-                                <div className="flex flex-col gap-1">
-                                  <span className="text-xs font-semibold text-zinc-600">Amount</span>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={form.points}
-                                    onChange={(e) => setForm((s) => ({ ...s, points: e.target.value }))}
-                                    className="h-10 w-[4.75rem] shrink-0 rounded-full border border-[#ebebeb] bg-white px-2 text-center text-[14px] font-medium text-[#171717] outline-none focus:border-zinc-400"
-                                    aria-label="Reward amount"
-                                  />
-                                </div>
+                        <div className="mx-auto mt-4 flex min-h-0 w-full max-w-[720px] flex-1 flex-col overflow-y-auto pb-1">
+                          <div className="rounded-2xl border border-[#ebebeb] bg-[#fafafa]">
+                            <div className="flex flex-col gap-3 border-b border-[#ebebeb] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[15px] font-semibold text-zinc-900">Rewards</p>
+                                <p className="mt-1 text-sm font-medium text-zinc-500">
+                                  Select event currency and points earned
+                                </p>
                               </div>
-                              {form.validation_type === 'photo' || form.validation_type === 'text' ? (
-                                <div className="flex w-auto max-w-[10rem] flex-col gap-1">
-                                  <span className="text-xs font-semibold text-zinc-600">Live feed</span>
-                                  <AdminSegmentedControl
-                                    size="sm"
-                                    className="!w-auto max-w-[10rem]"
-                                    ariaLabel="Live feed"
-                                    options={[
-                                      { value: 'on' as const, label: 'On' },
-                                      { value: 'off' as const, label: 'Off' },
-                                    ]}
-                                    value={form.add_to_greetings ? 'on' : 'off'}
-                                    onChange={(v) =>
-                                      setForm((s) => ({ ...s, add_to_greetings: v === 'on' }))
-                                    }
-                                  />
-                                </div>
-                              ) : null}
-                              <div className="flex w-auto max-w-[10rem] flex-col gap-1">
-                                <span className="text-xs font-semibold text-zinc-600">Require message</span>
-                                <AdminSegmentedControl
-                                  size="sm"
-                                  className="!w-auto max-w-[10rem]"
-                                  ariaLabel="Require message"
+                              <div className="flex flex-wrap items-center gap-2">
+                                <AdminSelectDropdown
+                                  value="__reward_unit__"
+                                  onChange={() => {}}
+                                  className="w-auto shrink-0"
+                                  buttonClassName="inline-flex h-9 w-auto max-w-[160px] shrink-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 pr-2 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300"
                                   options={[
-                                    { value: 'yes' as const, label: 'Yes' },
-                                    { value: 'no' as const, label: 'No' },
+                                    {
+                                      value: '__reward_unit__',
+                                      label: (
+                                        <span className="flex min-w-0 items-center gap-2">
+                                          <RewardUnitIcon size={18} className="shrink-0" />
+                                          <span className="truncate">{rewardUnitCompactLabel(rewardUnit)}</span>
+                                        </span>
+                                      ),
+                                    },
                                   ]}
-                                  value={form.message_required ? 'yes' : 'no'}
-                                  onChange={(v) =>
-                                    setForm((s) => ({ ...s, message_required: v === 'yes' }))
-                                  }
+                                />
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={form.points}
+                                  onChange={(e) => setForm((s) => ({ ...s, points: e.target.value }))}
+                                  className="h-9 w-[4rem] shrink-0 rounded-full border border-[#ebebeb] bg-white px-2 text-center text-[14px] font-medium text-[#171717] outline-none focus:border-zinc-400"
+                                  aria-label="Points earned"
                                 />
                               </div>
                             </div>
-                          </div>
 
-                          <div className="space-y-3 rounded-2xl bg-zinc-50/50 p-3">
-                            <div className="flex flex-wrap items-end gap-x-3 gap-y-3">
-                              <div className="flex w-auto max-w-[12rem] flex-col gap-1">
-                                <span className="text-xs font-semibold text-zinc-600">Repeatability</span>
+                            <div className="flex flex-col gap-3 border-b border-[#ebebeb] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[15px] font-semibold text-zinc-900">Repeat</p>
+                                <p className="mt-1 text-sm font-medium text-zinc-500">
+                                  Allow one or more completions
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
                                 <AdminSegmentedControl
                                   size="sm"
-                                  className="!w-auto max-w-[12rem]"
-                                  ariaLabel="Repeatability"
+                                  density="flush"
+                                  className="min-w-[11rem] max-w-[13rem]"
+                                  ariaLabel="Repeat mode"
                                   options={[
-                                    { value: 'repeat' as const, label: 'Repeatable' },
-                                    { value: 'limit' as const, label: 'Limit' },
+                                    { value: 'repeat' as const, label: 'Unlimited' },
+                                    { value: 'limit' as const, label: 'Limited' },
                                   ]}
                                   value={form.max_submissions_per_table.trim() === '' ? 'repeat' : 'limit'}
                                   onChange={(v) => {
@@ -1827,154 +1756,107 @@ export default function MissionsLibraryPage() {
                                   }}
                                 />
                                 {form.max_submissions_per_table.trim() !== '' ? (
-                                  <label className="mt-1 inline-flex items-center gap-2 text-[12px] text-zinc-600">
-                                    <span>Attempts</span>
-                                    <input
-                                      type="number"
-                                      min={1}
-                                      value={form.max_submissions_per_table}
-                                      onChange={(e) =>
-                                        setForm((s) => ({
-                                          ...s,
-                                          max_submissions_per_table: e.target.value,
-                                        }))
-                                      }
-                                      className="h-8 w-12 rounded-full border border-[#ebebeb] bg-white px-1.5 text-center text-[13px] font-medium outline-none focus:border-zinc-400"
-                                    />
-                                  </label>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={form.max_submissions_per_table}
+                                    onChange={(e) =>
+                                      setForm((s) => ({
+                                        ...s,
+                                        max_submissions_per_table: e.target.value,
+                                      }))
+                                    }
+                                    className="h-9 w-[3.25rem] shrink-0 rounded-full border border-[#ebebeb] bg-white px-1.5 text-center text-[13px] font-medium outline-none focus:border-zinc-400"
+                                    aria-label="Max attempts"
+                                  />
                                 ) : null}
                               </div>
-                              <div className="flex w-auto max-w-[12rem] flex-col gap-1">
-                                <span className="text-xs font-semibold text-zinc-600">Approval</span>
+                            </div>
+
+                            <div className="flex flex-col gap-3 border-b border-[#ebebeb] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[15px] font-semibold text-zinc-900">Require message</p>
+                                <p className="mt-1 text-sm font-medium text-zinc-500">
+                                  Require users to include a message
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
                                 <AdminSegmentedControl
                                   size="sm"
-                                  className="!w-auto max-w-[12rem]"
-                                  ariaLabel="Approval mode"
+                                  density="flush"
+                                  className="min-w-[7.5rem] max-w-[9rem]"
+                                  ariaLabel="Require message"
                                   options={[
-                                    { value: 'manual' as const, label: 'Manual' },
-                                    { value: 'auto' as const, label: 'Automatic' },
+                                    { value: 'off' as const, label: 'Off' },
+                                    { value: 'on' as const, label: 'On' },
                                   ]}
-                                  value={form.approval_mode}
+                                  value={form.message_required ? 'on' : 'off'}
                                   onChange={(v) =>
-                                    setForm((s) => ({ ...s, approval_mode: v }))
+                                    setForm((s) => ({ ...s, message_required: v === 'on' }))
                                   }
                                 />
-                              </div>
-                              <div className="flex flex-col gap-1">
-                                <span className="text-xs font-semibold text-zinc-600">Active</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setForm((s) => ({ ...s, is_active: !s.is_active }))}
-                                  className={`relative inline-flex h-8 w-[2.85rem] shrink-0 items-center rounded-full p-1 transition-colors ${
-                                    form.is_active
-                                      ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]'
-                                      : 'bg-zinc-300'
-                                  }`}
-                                  aria-label="Toggle mission active"
-                                >
-                                  <span
-                                    className={`h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ease-out ${
-                                      form.is_active ? 'translate-x-[0.85rem]' : 'translate-x-0'
-                                    }`}
+                                {form.message_required ? (
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={2000}
+                                    value={form.message_max_chars}
+                                    onChange={(e) =>
+                                      setForm((s) => ({ ...s, message_max_chars: e.target.value }))
+                                    }
+                                    className="h-9 w-[3.5rem] shrink-0 rounded-full border border-[#ebebeb] bg-white px-1.5 text-center text-[13px] font-medium outline-none focus:border-zinc-400"
+                                    aria-label="Max characters"
+                                    title="Not saved to the server yet"
                                   />
-                                </button>
+                                ) : null}
                               </div>
                             </div>
-                          </div>
 
-                          <div className="space-y-3 rounded-2xl bg-zinc-50/50 p-3">
-                            <p className="text-center text-xs font-semibold text-zinc-600">Table assignment</p>
-                            <AdminSegmentedControl
-                              size="sm"
-                              className="!w-auto max-w-[14rem]"
-                              ariaLabel="Table assignment mode"
-                              options={[
-                                { value: 'all' as const, label: 'All tables' },
-                                { value: 'pick' as const, label: 'Pick tables' },
-                              ]}
-                              value={missionAssignAllTables ? 'all' : 'pick'}
-                              onChange={(v) => {
-                                if (v === 'all') {
-                                  setMissionAssignAllTables(true)
-                                  setMissionSelectedTableIds(new Set(activeTableRows.map((t) => t.id)))
-                                } else {
-                                  setMissionAssignAllTables(false)
-                                  setMissionSelectedTableIds(new Set())
-                                }
-                              }}
-                            />
-                            {activeTableRows.length === 0 ? (
-                              <p className="text-[13px] text-zinc-500">No active tables yet.</p>
-                            ) : (
-                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                                {activeTableRows.map((t) => {
-                                  const resolved = teamPageAdminFormDefaults(t.page_config, {
-                                    tableColor: t.color,
-                                    tableName: t.name,
-                                  })
-                                  const avatarUrl = resolved.avatarImageUrl.trim()
-                                  const selected =
-                                    missionAssignAllTables || missionSelectedTableIds.has(t.id)
-                                  return (
-                                    <button
-                                      key={t.id}
-                                      type="button"
-                                      onClick={() => {
-                                        if (missionAssignAllTables) {
-                                          setMissionAssignAllTables(false)
-                                          setMissionSelectedTableIds(new Set([t.id]))
-                                          return
-                                        }
-                                        setMissionSelectedTableIds((prev) => {
-                                          const next = new Set(prev)
-                                          if (next.has(t.id)) next.delete(t.id)
-                                          else next.add(t.id)
-                                          return next
-                                        })
-                                      }}
-                                      className={`flex w-full flex-row items-center gap-2 rounded-xl border px-2 py-2 text-left transition-all ${
-                                        selected
-                                          ? 'border-transparent bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white shadow-sm'
-                                          : 'border border-[#ebebeb] bg-white text-zinc-800 hover:border-zinc-300'
-                                      }`}
-                                    >
-                                      <span
-                                        className={`relative flex h-11 w-[4.25rem] shrink-0 items-center justify-center overflow-hidden rounded-lg ${
-                                          selected ? 'bg-white/20 ring-1 ring-white/40' : 'bg-zinc-100 ring-1 ring-zinc-200/80'
-                                        }`}
-                                      >
-                                        {avatarUrl ? (
-                                          // eslint-disable-next-line @next/next/no-img-element
-                                          <img
-                                            src={avatarUrl}
-                                            alt=""
-                                            className="h-full w-full object-cover"
-                                          />
-                                        ) : (
-                                          <span
-                                            className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-white"
-                                            style={
-                                              selected
-                                                ? { backgroundColor: 'rgba(255,255,255,0.22)' }
-                                                : { backgroundColor: tableThumbAvatarBg(t.name) }
-                                            }
-                                          >
-                                            {tableThumbInitials(t.name)}
-                                          </span>
-                                        )}
-                                      </span>
-                                      <span
-                                        className={`line-clamp-2 min-w-0 flex-1 text-[11px] font-semibold leading-tight ${
-                                          selected ? 'text-white' : 'text-zinc-800'
-                                        }`}
-                                      >
-                                        {t.name}
-                                      </span>
-                                    </button>
-                                  )
-                                })}
+                            <div className="flex flex-col gap-3 border-b border-[#ebebeb] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[15px] font-semibold text-zinc-900">Approval</p>
+                                <p className="mt-1 text-sm font-medium text-zinc-500">
+                                  Choose how submissions are approved
+                                </p>
                               </div>
-                            )}
+                              <AdminSegmentedControl
+                                size="sm"
+                                density="flush"
+                                className="min-w-[12rem] max-w-[15rem]"
+                                ariaLabel="Approval mode"
+                                options={[
+                                  { value: 'manual' as const, label: 'Manual' },
+                                  { value: 'auto' as const, label: 'Automatic' },
+                                ]}
+                                value={form.approval_mode}
+                                onChange={(v) => setForm((s) => ({ ...s, approval_mode: v }))}
+                              />
+                            </div>
+
+                            <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[15px] font-semibold text-zinc-900">Active</p>
+                                <p className="mt-1 text-sm font-medium text-zinc-500">
+                                  Mission is visible and available when on
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setForm((s) => ({ ...s, is_active: !s.is_active }))}
+                                className={`relative inline-flex h-9 w-[2.85rem] shrink-0 items-center rounded-full p-1 transition-colors ${
+                                  form.is_active
+                                    ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]'
+                                    : 'bg-zinc-300'
+                                }`}
+                                aria-label="Toggle mission active"
+                              >
+                                <span
+                                  className={`h-7 w-7 rounded-full bg-white shadow transition-transform duration-200 ease-out ${
+                                    form.is_active ? 'translate-x-[0.85rem]' : 'translate-x-0'
+                                  }`}
+                                />
+                              </button>
+                            </div>
                           </div>
                         </div>
                                   </div>

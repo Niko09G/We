@@ -16,6 +16,10 @@ type Props<T extends string> = {
   ariaLabel?: string
   /** `filter` = black pill (Missions/Tables filter row). `signature` = brand gradient. */
   variant?: 'filter' | 'signature'
+  /**
+   * `default` = inset sliding pill (p-1). `flush` = Missions Cards/List style: segments fill edge-to-edge inside the border, no floating pill.
+   */
+  density?: 'default' | 'flush'
 }
 
 /**
@@ -29,6 +33,7 @@ export function AdminSegmentedControl<T extends string>({
   className = '',
   ariaLabel,
   variant = 'filter',
+  density = 'default',
 }: Props<T>) {
   const n = options.length
   const idx = Math.max(0, options.findIndex((o) => o.value === value))
@@ -47,6 +52,32 @@ export function AdminSegmentedControl<T extends string>({
       : `calc(${idx * (100 / n)}% + ${p}px + ${idx * 2}px)`
 
   const indicatorClass = variant === 'signature' ? SIGNATURE_GRADIENT : FILTER_SOLID
+
+  if (density === 'flush' && variant === 'filter') {
+    return (
+      <div
+        className={`inline-flex ${h} w-auto max-w-full shrink-0 items-stretch overflow-hidden rounded-full border border-[#ebebeb] bg-white ${className}`.trim()}
+        role="group"
+        aria-label={ariaLabel}
+      >
+        {options.map((opt) => {
+          const active = opt.value === value
+          return (
+            <button
+              key={String(opt.value)}
+              type="button"
+              onClick={() => onChange(opt.value)}
+              className={`flex min-w-0 flex-1 items-center justify-center ${pad} ${text} font-medium transition-colors duration-150 ease-out ${
+                active ? 'bg-zinc-900 text-white' : 'text-[#4d4d4d] hover:text-[#171717]'
+              }`}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
 
   return (
     <div
