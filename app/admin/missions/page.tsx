@@ -1202,23 +1202,17 @@ export default function MissionsLibraryPage() {
                               if (file) void uploadHeaderImage(file)
                             }}
                           />
-                          <div
-                            className={`flex h-full min-h-0 w-full max-w-full flex-1 flex-col items-center justify-start overflow-x-visible px-5 py-4 [&_input]:!text-[14px] [&_select]:!text-[14px] ${
-                              step === 2
-                                ? 'overflow-hidden pb-1'
-                                : step === 3
-                                  ? 'overflow-hidden pb-4'
-                                  : 'overflow-y-auto pb-4'
-                            }`}
-                          >
-                            <div className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-x-visible">
+                          <div className="flex h-full min-h-0 w-full max-w-full flex-1 flex-col items-stretch justify-start overflow-hidden px-5 py-4 pb-4 [&_input]:!text-[14px] [&_select]:!text-[14px]">
+                            <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+                              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                              <div className="relative min-h-0 flex-1 overflow-hidden">
                               <div
-                                className={`absolute inset-0 transition-all duration-200 ease-out ${
+                                className={`absolute inset-0 overflow-y-auto transition-[opacity,transform] duration-200 ease-out ${
                                   step === 1 ? 'translate-x-0 opacity-100' : '-translate-x-3 pointer-events-none opacity-0'
                                 }`}
                               >
-                                <div className="flex min-h-full items-center justify-center py-2">
-                                  <div className="w-full max-w-[760px] space-y-5 overflow-visible px-1.5">
+                                <div className="flex min-h-full flex-col justify-center py-2">
+                                  <div className="mx-auto w-full max-w-[760px] space-y-5 px-1.5">
                                     <h4 className="text-center text-3xl font-semibold tracking-tight text-zinc-900">
                                       What mission are we building?
                                     </h4>
@@ -1281,18 +1275,18 @@ export default function MissionsLibraryPage() {
                                             key={v}
                                             type="button"
                                             onClick={() => setForm((s) => ({ ...s, validation_type: v }))}
-                                            className={`group relative flex h-[124px] w-full cursor-pointer overflow-visible rounded-2xl border border-transparent text-left shadow-sm transition-all duration-200 ease-out ${
+                                            className={`group relative isolate flex h-[124px] w-full min-w-0 cursor-pointer overflow-hidden rounded-2xl border border-transparent text-left shadow-sm transition-[box-shadow,background-color,color] duration-200 ease-out ${
                                               selected
                                                 ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white shadow-md'
                                                 : 'bg-white text-zinc-900 hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white hover:shadow-md'
                                             }`}
                                           >
-                                            <div className="pointer-events-none absolute left-0 top-1/2 z-0 h-[120px] w-[120px] -translate-x-1/2 -translate-y-1/2 overflow-visible">
+                                            <div className="pointer-events-none absolute left-0 top-1/2 z-0 h-[120px] w-[120px] -translate-x-1/2 -translate-y-1/2 overflow-hidden">
                                               {v === 'beatcoin' ? (
                                                 <MissionCategoryTypeIcon
                                                   type={v}
                                                   size={120}
-                                                  className="h-full w-full rounded-none object-contain opacity-95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.12)] transition-[filter] duration-200 group-hover:drop-shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
+                                                  className="h-full w-full rounded-none object-contain"
                                                   beatcoinDisplayVariant={selected ? 'onDark' : 'default'}
                                                 />
                                               ) : (
@@ -1343,13 +1337,13 @@ export default function MissionsLibraryPage() {
                               </div>
 
                               <div
-                                className={`absolute inset-0 flex min-h-0 flex-col transition-all duration-200 ease-out ${
+                                className={`absolute inset-0 flex min-h-0 flex-col transition-[opacity,transform] duration-200 ease-out ${
                                   step >= 2 ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-3 opacity-0'
                                 }`}
                               >
-                                <div className="relative mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col overflow-x-visible py-3">
+                                <div className="relative mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col overflow-x-hidden py-3">
                                   <div
-                                    className={`absolute inset-0 flex min-h-0 flex-col transition-all duration-200 ease-out ${
+                                    className={`absolute inset-0 flex min-h-0 flex-col transition-[opacity,transform] duration-200 ease-out ${
                                       step === 2
                                         ? 'z-10 translate-x-0 opacity-100'
                                         : 'pointer-events-none z-0 translate-x-3 opacity-0'
@@ -1358,7 +1352,7 @@ export default function MissionsLibraryPage() {
                       <div className="relative flex min-h-0 flex-1 flex-col">
                         <div className="relative min-h-0 flex-1 overflow-hidden">
                         <div
-                          className={`absolute inset-0 flex min-h-0 flex-col overflow-hidden transition-all duration-200 ease-out ${
+                          className={`absolute inset-0 flex min-h-0 flex-col overflow-hidden transition-[opacity,transform] duration-200 ease-out ${
                             step2View === 'main'
                               ? 'z-10 translate-x-0 opacity-100'
                               : 'pointer-events-none z-0 -translate-x-2 opacity-0'
@@ -1579,7 +1573,7 @@ export default function MissionsLibraryPage() {
                         </div>
 
                         <div
-                          className={`absolute inset-0 flex min-h-0 flex-col overflow-hidden transition-all duration-200 ease-out ${
+                          className={`absolute inset-0 flex min-h-0 flex-col overflow-hidden transition-[opacity,transform] duration-200 ease-out ${
                             step2View === 'customize'
                               ? 'z-10 translate-x-0 opacity-100'
                               : 'pointer-events-none z-0 translate-x-2 opacity-0'
@@ -1720,19 +1714,11 @@ export default function MissionsLibraryPage() {
                             </div>
                         </div>
                         </div>
-
-                        <div className="relative z-10 mt-auto shrink-0 bg-white pt-1">
-                          <div className="mx-auto flex w-full justify-center px-1 pb-0">
-                            <div className="h-[min(300px,38vh)] min-h-[220px] w-full max-w-[480px]">
-                              <MissionOverlaySplitPreviews builderFlush form={missionStep2PreviewInput} />
-                            </div>
-                          </div>
-                        </div>
                       </div>
                                   </div>
 
                                   <div
-                                    className={`absolute inset-0 flex min-h-0 flex-col overflow-hidden px-2 pb-4 pt-1 transition-all duration-200 ease-out ${
+                                    className={`absolute inset-0 flex min-h-0 flex-col overflow-hidden px-2 pb-4 pt-1 transition-[opacity,transform] duration-200 ease-out ${
                                       step === 3
                                         ? 'z-10 translate-x-0 opacity-100'
                                         : 'pointer-events-none z-0 translate-x-3 opacity-0'
@@ -1995,6 +1981,16 @@ export default function MissionsLibraryPage() {
                                 </div>
                               </div>
                             </div>
+                            {step <= 2 ? (
+                              <div className="relative z-10 shrink-0 bg-white pt-1">
+                                <div className="mx-auto flex w-full justify-center px-1 pb-0">
+                                  <div className="h-[min(300px,38vh)] min-h-[220px] w-full max-w-[480px]">
+                                    <MissionOverlaySplitPreviews builderFlush form={missionStep2PreviewInput} />
+                                  </div>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
                           </div>
 
                         <div className="absolute bottom-6 right-6 z-20 flex flex-row gap-3">
