@@ -9,6 +9,8 @@ type AdminDropdownProps = {
   className?: string
   /** Classes for the trigger button (width, padding, border, etc.). */
   buttonClassName?: string
+  /** When false, clicking menu items does not close the panel (e.g. multi-select). */
+  closeOnMenuItemClick?: boolean
 }
 
 /**
@@ -21,6 +23,7 @@ export function AdminDropdown({
   align = 'left',
   className = '',
   buttonClassName = 'flex h-11 w-full min-w-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300',
+  closeOnMenuItemClick = true,
 }: AdminDropdownProps) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -51,6 +54,7 @@ export function AdminDropdown({
             align === 'right' ? 'right-0' : 'left-0'
           }`}
           onClick={(e) => {
+            if (!closeOnMenuItemClick) return
             if ((e.target as HTMLElement).closest('button')) setOpen(false)
           }}
         >

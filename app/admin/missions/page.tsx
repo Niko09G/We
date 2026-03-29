@@ -50,7 +50,8 @@ import {
   computePickerAnchorPosition,
 } from '@/app/admin/_components/AdminBuilderColorPickerPortal'
 import { AdminSelectDropdown } from '@/app/admin/_components/AdminSelectDropdown'
-import { AdminSegmentedControl } from '@/app/admin/_components/AdminSegmentedControl'
+import { AdminDropdown } from '@/app/admin/_components/AdminDropdown'
+import { AdminFilterRowSegmented } from '@/app/admin/_components/AdminFilterRowSegmented'
 import {
   AdminBuilderShellHeader,
   BUILDER_PROGRESS_ACTIVE_CLASS,
@@ -339,7 +340,8 @@ export default function MissionsLibraryPage() {
   const [tables, setTables] = useState<AdminTableRow[]>([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<MissionStatusFilter>('all')
-  const [tableFilterId, setTableFilterId] = useState<string>('all')
+  /** `null` = all tables (no table filter). Non-empty list = missions assigned to any selected table. */
+  const [tableFilterTableIds, setTableFilterTableIds] = useState<string[] | null>(null)
   const [view, setView] = useState<MissionView>('cards')
 
   const [editorOpen, setEditorOpen] = useState(false)
@@ -521,9 +523,9 @@ export default function MissionsLibraryPage() {
       if (statusFilter === 'active' && !m.is_active) return false
       if (statusFilter === 'inactive' && m.is_active) return false
       if (statusFilter === 'archived') return false
-      if (tableFilterId !== 'all') {
+      if (tableFilterTableIds !== null && tableFilterTableIds.length > 0) {
         const assigned = assignmentsByMission[m.id] ?? []
-        if (!assigned.includes(tableFilterId)) return false
+        if (!tableFilterTableIds.some((id) => assigned.includes(id))) return false
       }
       if (q) {
         const hay = `${m.title} ${m.description ?? ''}`.toLowerCase()
@@ -531,7 +533,7 @@ export default function MissionsLibraryPage() {
       }
       return true
     })
-  }, [missions, search, statusFilter, tableFilterId, assignmentsByMission])
+  }, [missions, search, statusFilter, tableFilterTableIds, assignmentsByMission])
 
   function openCreate() {
     setEditorMode('create')
@@ -781,92 +783,154 @@ export default function MissionsLibraryPage() {
                   />
                 </div>
 
-                <div className="inline-flex h-10 items-stretch overflow-hidden rounded-full border border-[#ebebeb] bg-white">
-                  <button
-                    type="button"
-                    onClick={() => setView('cards')}
-                    className={`inline-flex h-full items-center rounded-full px-[12px] text-[14px] font-medium transition-colors duration-150 ease-out ${
-                      view === 'cards' ? 'bg-black text-white' : 'text-[#4d4d4d] hover:text-[#171717]'
-                    }`}
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="mr-1.5 h-3.5 w-3.5"
-                      aria-hidden
-                    >
-                      <rect x="3" y="3" width="7" height="7" rx="1.2" />
-                      <rect x="14" y="3" width="7" height="7" rx="1.2" />
-                      <rect x="3" y="14" width="7" height="7" rx="1.2" />
-                      <rect x="14" y="14" width="7" height="7" rx="1.2" />
-                    </svg>
-                    Cards
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setView('list')}
-                    className={`inline-flex h-full items-center rounded-full px-[12px] text-[14px] font-medium transition-colors duration-150 ease-out ${
-                      view === 'list' ? 'bg-black text-white' : 'text-[#4d4d4d] hover:text-[#171717]'
-                    }`}
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="mr-1.5 h-3.5 w-3.5"
-                      aria-hidden
-                    >
-                      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
-                    </svg>
-                    List
-                  </button>
-                </div>
-
-                <AdminSelectDropdown
-                  value={tableFilterId}
-                  onChange={(v) => setTableFilterId(v)}
-                  className="min-w-0"
-                  buttonClassName="inline-flex h-10 min-w-[200px] max-w-[260px] shrink-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 pr-2.5 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors duration-150 ease-out hover:border-zinc-300"
+                <AdminFilterRowSegmented
+                  ariaLabel="Mission list layout"
+                  value={view}
+                  onChange={setView}
                   options={[
-                    { value: 'all', label: 'All tables' },
-                    ...tables.map((t) => ({
-                      value: t.id,
+                    {
+                      value: 'cards' as const,
                       label: (
-                        <span className="flex min-w-0 items-center gap-2">
+                        <>
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="mr-1.5 h-3.5 w-3.5"
+                            aria-hidden
+                          >
+                            <rect x="3" y="3" width="7" height="7" rx="1.2" />
+                            <rect x="14" y="3" width="7" height="7" rx="1.2" />
+                            <rect x="3" y="14" width="7" height="7" rx="1.2" />
+                            <rect x="14" y="14" width="7" height="7" rx="1.2" />
+                          </svg>
+                          Cards
+                        </>
+                      ),
+                    },
+                    {
+                      value: 'list' as const,
+                      label: (
+                        <>
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="mr-1.5 h-3.5 w-3.5"
+                            aria-hidden
+                          >
+                            <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+                          </svg>
+                          List
+                        </>
+                      ),
+                    },
+                  ]}
+                />
+
+                <AdminDropdown
+                  className="min-w-0"
+                  closeOnMenuItemClick={false}
+                  buttonClassName="inline-flex h-10 min-w-[200px] max-w-[260px] shrink-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 pr-2.5 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors duration-150 ease-out hover:border-zinc-300"
+                  trigger={
+                    <>
+                      <span className="min-w-0 flex-1 truncate">
+                        {tableFilterTableIds === null ? (
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#ebebeb] bg-zinc-100 text-[10px] font-semibold text-zinc-500">
+                              All
+                            </span>
+                            <span className="truncate">All tables</span>
+                          </span>
+                        ) : tableFilterTableIds.length === 1 ? (
+                          (() => {
+                            const row = tables.find((t) => t.id === tableFilterTableIds[0])
+                            if (!row) {
+                              return <span className="truncate">1 table</span>
+                            }
+                            return (
+                              <span className="flex min-w-0 items-center gap-2">
+                                <AdminTableAvatarChip row={row} />
+                                <span className="truncate">{row.name}</span>
+                              </span>
+                            )
+                          })()
+                        ) : (
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#ebebeb] bg-zinc-100 text-[11px] font-semibold tabular-nums text-zinc-600">
+                              {tableFilterTableIds.length}
+                            </span>
+                            <span className="truncate">
+                              {tableFilterTableIds.length} tables selected
+                            </span>
+                          </span>
+                        )}
+                      </span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        className="h-4 w-4 shrink-0 text-zinc-400"
+                        aria-hidden
+                      >
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </>
+                  }
+                >
+                  <button
+                    type="button"
+                    onClick={() => setTableFilterTableIds(null)}
+                    className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-[14px] font-medium text-[#171717] hover:bg-zinc-50"
+                  >
+                    <span className="min-w-0 flex-1 truncate">All tables</span>
+                    {tableFilterTableIds === null ? (
+                      <span className="shrink-0 text-[12px] font-semibold text-zinc-400" aria-hidden>
+                        ✓
+                      </span>
+                    ) : null}
+                  </button>
+                  {tables.map((t) => {
+                    const selected =
+                      tableFilterTableIds !== null && tableFilterTableIds.includes(t.id)
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => {
+                          setTableFilterTableIds((prev) => {
+                            if (prev === null) return [t.id]
+                            const set = new Set(prev)
+                            if (set.has(t.id)) {
+                              set.delete(t.id)
+                              return set.size === 0 ? null : [...set]
+                            }
+                            set.add(t.id)
+                            return [...set]
+                          })
+                        }}
+                        className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-[14px] font-medium text-[#171717] hover:bg-zinc-50"
+                      >
+                        <span className="flex min-w-0 flex-1 items-center gap-2">
                           <AdminTableAvatarChip row={t} />
                           <span className="truncate">{t.name}</span>
                         </span>
-                      ),
-                    })),
-                  ]}
-                  renderValue={(opt) => {
-                    if (!opt || opt.value === 'all') {
-                      return (
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#ebebeb] bg-zinc-100 text-[10px] font-semibold text-zinc-500">
-                            All
+                        {selected ? (
+                          <span className="shrink-0 text-[12px] font-semibold text-zinc-400" aria-hidden>
+                            ✓
                           </span>
-                          <span className="truncate">All tables</span>
-                        </span>
-                      )
-                    }
-                    const row = tables.find((t) => t.id === opt.value)
-                    if (!row) return opt.label
-                    return (
-                      <span className="flex min-w-0 items-center gap-2">
-                        <AdminTableAvatarChip row={row} />
-                        <span className="truncate">{row.name}</span>
-                      </span>
+                        ) : null}
+                      </button>
                     )
-                  }}
-                />
+                  })}
+                </AdminDropdown>
 
                 <AdminSelectDropdown
                   value={statusFilter}
@@ -1241,52 +1305,56 @@ export default function MissionsLibraryPage() {
                                                 : 'bg-white text-zinc-900 hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white hover:shadow-md'
                                             }`}
                                           >
-                                            <div className="pointer-events-none absolute left-0 top-1/2 z-0 h-[120px] w-[120px] -translate-x-1/2 -translate-y-1/2">
-                                              {v === 'beatcoin' ? (
-                                                <MissionCategoryTypeIcon
-                                                  type={v}
-                                                  size={120}
-                                                  className="h-full w-full rounded-none object-contain"
-                                                  beatcoinDisplayVariant={selected ? 'onDark' : 'default'}
-                                                />
-                                              ) : (
-                                                <span className="relative flex h-full w-full items-center justify-center">
-                                                  <MissionCategoryTypeIcon
-                                                    type={v}
-                                                    rasterVariant="color"
-                                                    size={120}
-                                                    className={`pointer-events-none absolute inset-0 m-auto max-h-full max-w-full object-contain transition-opacity duration-200 ${
-                                                      selected ? 'opacity-0' : 'opacity-100 group-hover:opacity-0'
-                                                    }`}
-                                                  />
-                                                  <MissionCategoryTypeIcon
-                                                    type={v}
-                                                    rasterVariant="white"
-                                                    size={120}
-                                                    className={`pointer-events-none absolute inset-0 m-auto max-h-full max-w-full object-contain transition-opacity duration-200 ${
-                                                      selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                                                    }`}
-                                                  />
+                                            <div className="pointer-events-none grid h-full min-h-0 w-full min-w-0 grid-cols-[1fr_2fr]">
+                                              <div className="relative min-h-0 min-w-0 overflow-hidden">
+                                                <div className="absolute left-0 top-1/2 z-0 h-[112px] w-[112px] -translate-x-1/2 -translate-y-1/2 sm:h-[120px] sm:w-[120px]">
+                                                  {v === 'beatcoin' ? (
+                                                    <MissionCategoryTypeIcon
+                                                      type={v}
+                                                      size={120}
+                                                      className="h-full w-full max-h-full max-w-full rounded-none object-contain"
+                                                      beatcoinDisplayVariant={selected ? 'onDark' : 'default'}
+                                                    />
+                                                  ) : (
+                                                    <span className="relative flex h-full w-full items-center justify-center">
+                                                      <MissionCategoryTypeIcon
+                                                        type={v}
+                                                        rasterVariant="color"
+                                                        size={120}
+                                                        className={`pointer-events-none absolute inset-0 m-auto max-h-full max-w-full object-contain transition-opacity duration-200 ${
+                                                          selected ? 'opacity-0' : 'opacity-100 group-hover:opacity-0'
+                                                        }`}
+                                                      />
+                                                      <MissionCategoryTypeIcon
+                                                        type={v}
+                                                        rasterVariant="white"
+                                                        size={120}
+                                                        className={`pointer-events-none absolute inset-0 m-auto max-h-full max-w-full object-contain transition-opacity duration-200 ${
+                                                          selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                                        }`}
+                                                      />
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                              <div className="relative z-10 flex min-h-0 min-w-0 flex-col justify-center py-3 pl-1 pr-3 sm:pr-4">
+                                                <span
+                                                  className={`text-[16px] font-semibold leading-snug tracking-tight sm:text-[17px] ${
+                                                    selected ? 'text-white' : 'text-zinc-900 group-hover:text-white'
+                                                  }`}
+                                                >
+                                                  {adminValidationTypeLabel(v)}
                                                 </span>
-                                              )}
-                                            </div>
-                                            <div className="relative z-10 flex h-full min-w-0 flex-1 flex-col justify-center py-3 pl-[22%] pr-4 sm:pl-[20%] sm:pr-5">
-                                              <span
-                                                className={`text-[16px] font-semibold leading-snug tracking-tight sm:text-[17px] ${
-                                                  selected ? 'text-white' : 'text-zinc-900 group-hover:text-white'
-                                                }`}
-                                              >
-                                                {adminValidationTypeLabel(v)}
-                                              </span>
-                                              <span
-                                                className={`mt-1.5 text-[13px] font-medium leading-snug sm:text-[14px] ${
-                                                  selected
-                                                    ? 'text-white/90'
-                                                    : 'text-zinc-500 group-hover:text-white/90'
-                                                }`}
-                                              >
-                                                {CATEGORY_DESCRIPTIONS[v]}
-                                              </span>
+                                                <span
+                                                  className={`mt-1.5 text-[13px] font-medium leading-snug sm:text-[14px] ${
+                                                    selected
+                                                      ? 'text-white/90'
+                                                      : 'text-zinc-500 group-hover:text-white/90'
+                                                  }`}
+                                                >
+                                                  {CATEGORY_DESCRIPTIONS[v]}
+                                                </span>
+                                              </div>
                                             </div>
                                           </button>
                                         )
@@ -1734,11 +1802,9 @@ export default function MissionsLibraryPage() {
                                 </p>
                               </div>
                               <div className="flex flex-wrap items-center gap-2">
-                                <AdminSegmentedControl
-                                  size="sm"
-                                  density="flush"
-                                  className="min-w-[11rem] max-w-[13rem]"
+                                <AdminFilterRowSegmented
                                   ariaLabel="Repeat mode"
+                                  className="shrink-0"
                                   options={[
                                     { value: 'repeat' as const, label: 'Unlimited' },
                                     { value: 'limit' as const, label: 'Limited' },
@@ -1781,11 +1847,9 @@ export default function MissionsLibraryPage() {
                                 </p>
                               </div>
                               <div className="flex flex-wrap items-center gap-2">
-                                <AdminSegmentedControl
-                                  size="sm"
-                                  density="flush"
-                                  className="min-w-[7.5rem] max-w-[9rem]"
+                                <AdminFilterRowSegmented
                                   ariaLabel="Require message"
+                                  className="shrink-0"
                                   options={[
                                     { value: 'off' as const, label: 'Off' },
                                     { value: 'on' as const, label: 'On' },
@@ -1819,11 +1883,9 @@ export default function MissionsLibraryPage() {
                                   Choose how submissions are approved
                                 </p>
                               </div>
-                              <AdminSegmentedControl
-                                size="sm"
-                                density="flush"
-                                className="min-w-[12rem] max-w-[15rem]"
+                              <AdminFilterRowSegmented
                                 ariaLabel="Approval mode"
+                                className="shrink-0"
                                 options={[
                                   { value: 'manual' as const, label: 'Manual' },
                                   { value: 'auto' as const, label: 'Automatic' },
