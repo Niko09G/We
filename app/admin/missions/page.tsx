@@ -1060,9 +1060,9 @@ export default function MissionsLibraryPage() {
                 <button
                   type="button"
                   onClick={openCreate}
-                  className="group relative flex h-[320px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-white text-center transition-all duration-200 ease-out hover:-translate-y-1 hover:border-zinc-300 hover:shadow-md"
+                  className="group relative isolate flex h-[320px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-white text-center shadow-sm transform-gpu transition-transform duration-200 ease-out hover:-translate-y-0.5"
                 >
-                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 text-zinc-800 transition-colors group-hover:bg-zinc-900 group-hover:text-white">
+                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 text-zinc-800 transition-[color,background-color] duration-200 ease-out group-hover:bg-zinc-900 group-hover:text-white">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -1094,19 +1094,23 @@ export default function MissionsLibraryPage() {
                       key={m.id}
                       type="button"
                       onClick={() => openEdit(m)}
-                      className="group relative h-[320px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 text-left transition-all duration-200 ease-out hover:-translate-y-1 hover:border-zinc-300 hover:shadow-lg"
+                      className="relative isolate h-[320px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 text-left shadow-sm transform-gpu transition-transform duration-200 ease-out hover:-translate-y-0.5"
                       style={{ background: themeBg }}
                     >
                       {coverImage ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={coverImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                        <img
+                          src={coverImage}
+                          alt=""
+                          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+                        />
                       ) : null}
                       <span className={`absolute right-3 top-3 z-20 ${status.className}`}>{status.label}</span>
                       <div className="relative z-10 flex h-full min-h-0 flex-col p-3">
-                        <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/40 bg-white/90 shadow-sm backdrop-blur-sm">
+                        <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200/60 bg-white/95 shadow-sm">
                           <MissionCategoryTypeIcon type={m.validation_type} size={20} className="h-5 w-5" />
                         </div>
-                        <div className="mt-3 rounded-xl border border-white/60 bg-white/[0.92] px-3 py-2 shadow-sm backdrop-blur-sm">
+                        <div className="mt-3 rounded-xl border border-zinc-200/70 bg-white/95 px-3 py-2 shadow-sm">
                           <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-zinc-900">{m.title}</p>
                           <p className="mt-1.5 inline-flex items-center gap-1.5 text-[13px] font-medium text-zinc-800">
                             <RewardUnitIcon size={16} className="shrink-0" />
@@ -1114,7 +1118,7 @@ export default function MissionsLibraryPage() {
                           </p>
                         </div>
                         <div className="min-h-0 flex-1" aria-hidden />
-                        <div className="mt-auto rounded-xl border border-zinc-100/90 bg-white/95 px-3 py-2.5 shadow-sm backdrop-blur-sm">
+                        <div className="mt-auto rounded-xl border border-zinc-200/80 bg-white/95 px-3 py-2.5 shadow-sm">
                           <ApprovalModeInline
                             mode={m.approval_mode === 'manual' ? 'manual' : 'auto'}
                             className="text-[12px] text-zinc-800"
