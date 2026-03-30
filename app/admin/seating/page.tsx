@@ -17,11 +17,9 @@ import {
 import { listAttendeeGroups, type AttendeeGroupRow } from '@/lib/admin-attendee-groups'
 import { listTablesForAdmin, type AdminTableRow } from '@/lib/admin-tables'
 import { AdminFilterRowSegmented } from '@/app/admin/_components/AdminFilterRowSegmented'
-import { AdminSelectDropdown } from '@/app/admin/_components/AdminSelectDropdown'
 import {
   buildSeatingParties,
   partyKeysOnTableOrdered,
-  planAssignPartyToTable,
   planDropPartyAtTablePosition,
   planReorderPartyInTable,
   planUnassignParty,
@@ -32,6 +30,7 @@ import {
   AdminTableTwinSeatMap,
   PartyAvatarCluster,
   PartyMetaLine,
+  avatarMembersForPartyStrip,
   seatRangeLabel,
 } from '@/app/admin/seating/_components/seating-planner-shared'
 
@@ -95,13 +94,34 @@ export default function AdminSeatingPage() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const [toast, setToast] = useState<{
+    kind: 'success' | 'error'
+    message: string
+  } | null>(null)
   const [search, setSearch] = useState('')
   const [dockFilter, setDockFilter] = useState<DockFilter>('all')
   const [dragPartyKey, setDragPartyKey] = useState<string | null>(null)
   const [dropFlash, setDropFlash] = useState<string | null>(null)
+  const [dragHoverTableId, setDragHoverTableId] = useState<string | null>(null)
+  const [dragInsertBeforeKey, setDragInsertBeforeKey] = useState<string | null>(null)
+  const [seatMapHoverTableId, setSeatMapHoverTableId] = useState<string | null>(null)
+  const [hoveredPartyKey, setHoveredPartyKey] = useState<string | null>(null)
+  const [selectedPartyKey, setSelectedPartyKey] = useState<string | null>(null)
   const workspaceRef = useRef<HTMLDivElement>(null)
   const laneRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  const showToast = useCallback(
+    (message: string, kind: 'success' | 'error') => {
+      setToast({ kind, message })
+    },
+    []
+  )
+
+  useEffect(() => {
+    if (!toast) return
+    const t = window.setTimeout(() => setToast(null), 2400)
+    return () => window.clearTimeout(t)
+  }, [toast])
 
   const loadAll = useCallback(async () => {
     setError(null)
@@ -219,47 +239,29 @@ export default function AdminSeatingPage() {
     build: () => { updates: SeatingUpdate[]; error?: string },
     okMessage: string
   ) {
-    setError(null)
-    setSuccess(null)
     const { updates, error: planError } = build()
     if (planError) {
-      setError(planError)
+      setError(null)
+      showToast(planError, 'error')
       return
     }
     if (updates.length === 0) {
-      setSuccess('No changes.')
+      showToast('No changes.', 'success')
       return
     }
     setBusy(true)
     try {
       await applySeatingUpdates(updates)
-      setSuccess(okMessage)
+      showToast(okMessage, 'success')
       await loadAll()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save seating.')
+      const msg = e instanceof Error ? e.message : 'Failed to save seating.'
+      setError(null)
+      showToast(msg, 'error')
       await loadAll()
     } finally {
       setBusy(false)
     }
-  }
-
-  const assignDropdownValue = (p: SeatingParty) =>
-    p.uniformTableId ?? '__choose_table'
-
-  const tablePickOptions = useMemo(
-    () =>
-      plannerTables.map((t) => ({
-        value: t.id,
-        label: t.name,
-      })),
-    [plannerTables]
-  )
-
-  function dockAssignOptionsForParty(p: SeatingParty): { value: string; label: string }[] {
-    if (!p.uniformTableId) {
-      return [{ value: '__choose_table', label: 'Assign to table…' }, ...tablePickOptions]
-    }
-    return [{ value: '__unassign', label: 'Remove from table' }, ...tablePickOptions]
   }
 
   const setLaneRef = (tableId: string) => (el: HTMLDivElement | null) => {
@@ -287,13 +289,13 @@ export default function AdminSeatingPage() {
     if (onThisTable) {
       void runPlan(
         () => planReorderPartyInTable(rows, tableId, partyKey, insertBeforePartyKey),
-        'Order updated.'
+        'Seating updated.'
       )
     } else {
       void runPlan(
         () =>
           planDropPartyAtTablePosition(rows, partyKey, tableId, cap, insertBeforePartyKey),
-        insertBeforePartyKey ? 'Party placed.' : 'Party assigned.'
+        'Seating updated.'
       )
     }
   }
@@ -314,12 +316,80 @@ export default function AdminSeatingPage() {
 
   const endPartyDrag = useCallback(() => {
     setDragPartyKey(null)
+    setDragHoverTableId(null)
+    setDragInsertBeforeKey(null)
+    setSeatMapHoverTableId(null)
+    setDropFlash(null)
   }, [])
+
+  type SeatRange = { minSeat: number; maxSeat: number }
+
+  const partyByKey = useMemo(() => new Map(parties.map((p) => [p.key, p])), [parties])
+
+  const draggedParty = dragPartyKey ? partyByKey.get(dragPartyKey) ?? null : null
+
+  const previewGhostMembers = useMemo(() => {
+    if (!draggedParty) return null
+    return avatarMembersForPartyStrip(draggedParty.members, 2)
+  }, [draggedParty])
+
+  const highlightPartyKey = hoveredPartyKey ?? selectedPartyKey ?? dragPartyKey
+
+  const computePreviewSeatRangeForDrop = useCallback(
+    (partyKey: string, tableId: string, insertBeforePartyKey: string | null): SeatRange | null => {
+      const cap = plannerTables.find((t) => t.id === tableId)?.capacity ?? 10
+      const dragged = partyByKey.get(partyKey)
+      if (!dragged) return null
+
+      const keysOnTable = partyKeysOnTableOrdered(rows, tableId)
+      const keysWithoutDragged = keysOnTable.filter((k) => k !== partyKey)
+
+      const safeInsert =
+        insertBeforePartyKey && insertBeforePartyKey !== partyKey
+          ? insertBeforePartyKey
+          : null
+
+      const nextKeys =
+        safeInsert == null
+          ? [...keysWithoutDragged, partyKey]
+          : (() => {
+              const idx = keysWithoutDragged.indexOf(safeInsert)
+              if (idx < 0) return [...keysWithoutDragged, partyKey]
+              const out = [...keysWithoutDragged]
+              out.splice(idx, 0, partyKey)
+              return out
+            })()
+
+      let seat = 1
+      let minSeat: number | null = null
+      let maxSeat: number | null = null
+      for (const k of nextKeys) {
+        const p = partyByKey.get(k)
+        if (!p) continue
+        if (k === partyKey) {
+          minSeat = seat
+          maxSeat = seat + p.members.length - 1
+          break
+        }
+        seat += p.members.length
+      }
+
+      if (minSeat == null || maxSeat == null) return null
+      if (maxSeat > cap) return null
+      return { minSeat, maxSeat }
+    },
+    [plannerTables, rows, partyByKey]
+  )
+
+  const previewSeatRange = useMemo(() => {
+    if (!dragPartyKey || !seatMapHoverTableId) return null
+    return computePreviewSeatRangeForDrop(dragPartyKey, seatMapHoverTableId, dragInsertBeforeKey)
+  }, [dragPartyKey, seatMapHoverTableId, dragInsertBeforeKey, computePreviewSeatRangeForDrop])
 
   return (
     <div className="admin-page-shell flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <p className="sr-only" aria-live="polite">
-        {error ?? ''} {success ?? ''}
+        {error ?? ''}
       </p>
 
       <header className="shrink-0">
@@ -335,15 +405,6 @@ export default function AdminSeatingPage() {
           {error}
         </p>
       ) : null}
-      {success ? (
-        <p
-          className="admin-gap-page-title-intro mt-2 shrink-0 text-sm font-medium text-emerald-700"
-          role="status"
-        >
-          {success}
-        </p>
-      ) : null}
-
       <section className="admin-gap-intro-first-section flex min-h-0 flex-1 flex-row overflow-hidden rounded-t-2xl border-x border-t border-[#ebebeb] bg-white">
         {loading ? (
           <p className="shrink-0 px-4 py-6 text-sm text-zinc-500">Loading…</p>
@@ -379,7 +440,6 @@ export default function AdminSeatingPage() {
                     {plannerTables.map((t) => {
                       const used = rowsAtTable(t.id).length
                       const cap = t.capacity
-                      const remaining = Math.max(0, cap - used)
                       const list = partiesOnTable(t.id)
                       const laneFlash = dropFlash === t.id
                       return (
@@ -390,6 +450,8 @@ export default function AdminSeatingPage() {
                           onDragOver={(e) => {
                             e.preventDefault()
                             e.dataTransfer.dropEffect = 'move'
+                          setDragHoverTableId(t.id)
+                          setDragInsertBeforeKey(null)
                           }}
                           onDrop={(e) => {
                             e.preventDefault()
@@ -402,37 +464,65 @@ export default function AdminSeatingPage() {
                               350
                             )
                           }}
-                          className={`flex w-[min(100vw-2rem,420px)] shrink-0 flex-col rounded-2xl border border-[#ebebeb] bg-white shadow-none transition-[box-shadow,ring] duration-200 ease-out hover:shadow-md ${
+                          className={`flex w-[min(100vw-2rem,500px)] shrink-0 flex-col rounded-2xl border border-[#ebebeb] bg-white shadow-none ${
                             laneFlash ? 'ring-2 ring-[#5b38f2]/35' : ''
                           }`}
                         >
                           <div className="border-b border-[#ebebeb] px-3 py-2.5">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                                <div
-                                  className="h-9 w-9 shrink-0 rounded-full border border-[#ebebeb] shadow-sm"
-                                  style={tableSwatchStyle(t.color)}
-                                  aria-hidden
-                                />
-                                <div className="min-w-0">
-                                  <h2 className="truncate text-[14px] font-semibold text-zinc-900">
-                                    {t.name}
-                                  </h2>
-                                  <p className="mt-0.5 text-[11px] font-medium tabular-nums text-zinc-500">
-                                    Cap {cap} · {used} used · {remaining} left
-                                  </p>
-                                </div>
-                              </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                              <div
+                                className="h-9 w-9 shrink-0 rounded-full border border-[#ebebeb] shadow-sm"
+                                style={tableSwatchStyle(t.color)}
+                                aria-hidden
+                              />
+                              <h2 className="truncate text-[14px] font-semibold text-zinc-900">
+                                {t.name}
+                              </h2>
                             </div>
-                            <div className="mt-3">
+                            <div className="shrink-0 text-[11px] font-medium tabular-nums text-zinc-500">
+                              {used} / {cap}
+                            </div>
+                          </div>
+                          <div className="mt-3">
+                            <div
+                              onDragOver={(e) => {
+                                if (!dragPartyKey) return
+                                e.preventDefault()
+                                e.stopPropagation()
+                                e.dataTransfer.dropEffect = 'move'
+                                setSeatMapHoverTableId(t.id)
+                                setDragHoverTableId(t.id)
+                                setDragInsertBeforeKey(null)
+                              }}
+                            >
                               <AdminTableTwinSeatMap
                                 capacity={cap}
                                 attendeesAtTable={rowsAtTable(t.id)}
+                                partiesOnTable={list}
+                                highlightPartyKey={highlightPartyKey}
+                                previewSeatRange={
+                                  seatMapHoverTableId === t.id ? previewSeatRange : null
+                                }
+                                previewGhostMembers={
+                                  seatMapHoverTableId === t.id ? previewGhostMembers : null
+                                }
                               />
                             </div>
                           </div>
+                          </div>
 
-                          <div className="flex min-h-[200px] flex-1 flex-col gap-1.5 px-2 py-2">
+                        <div
+                          className="flex min-h-[220px] flex-1 flex-col gap-1.5 px-2 py-2"
+                          onDragOver={(e) => {
+                            if (!dragPartyKey) return
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setDragHoverTableId(t.id)
+                            setDragInsertBeforeKey(null)
+                            e.dataTransfer.dropEffect = 'move'
+                          }}
+                        >
                             {list.length === 0 ? (
                               <p className="px-1 py-6 text-center text-[13px] text-zinc-500">
                                 Drag a party here, or assign from the Parties panel.
@@ -441,32 +531,44 @@ export default function AdminSeatingPage() {
                               list.map((p) => {
                                 const rowDraggable = !busy && !p.splitWarning
                                 return (
-                                  <div
-                                    key={p.key}
-                                    data-party-key={p.key}
-                                    draggable={rowDraggable}
-                                    onDragStart={(e) => startPartyDrag(e, p.key, rowDraggable)}
-                                    onDragEnd={endPartyDrag}
-                                    onDragOver={(e) => {
-                                      e.preventDefault()
-                                      e.stopPropagation()
-                                      e.dataTransfer.dropEffect = 'move'
-                                    }}
-                                    onDrop={(e) => {
-                                      e.preventDefault()
-                                      e.stopPropagation()
-                                      const key = readDragPartyKey(e)
-                                      if (!key) return
-                                      handleDropOnTable(t.id, key, p.key)
-                                    }}
-                                    className={`rounded-xl border px-2 py-2 transition-[opacity,border-color] ${
-                                      p.splitWarning
-                                        ? 'border-amber-300 bg-amber-50/80'
-                                        : 'border-[#ebebeb] bg-[#fafafa]'
-                                    } ${dragPartyKey === p.key ? 'opacity-55' : ''} ${
-                                      rowDraggable ? 'cursor-grab active:cursor-grabbing' : ''
-                                    }`}
-                                  >
+                                  <>
+                                    {dragPartyKey &&
+                                    dragHoverTableId === t.id &&
+                                    dragInsertBeforeKey === p.key ? (
+                                      <div className="mx-1 h-[3px] rounded-full bg-[#3b82f6] shadow-[0_0_0_1px_rgba(59,130,246,0.15)]" />
+                                    ) : null}
+                                    <div
+                                      key={p.key}
+                                      data-party-key={p.key}
+                                      draggable={rowDraggable}
+                                      onDragStart={(e) => startPartyDrag(e, p.key, rowDraggable)}
+                                      onDragEnd={endPartyDrag}
+                                      onDragOver={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        if (dragPartyKey) {
+                                          setDragHoverTableId(t.id)
+                                          setDragInsertBeforeKey(p.key)
+                                        }
+                                        e.dataTransfer.dropEffect = 'move'
+                                      }}
+                                      onDrop={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        const key = readDragPartyKey(e)
+                                        if (!key) return
+                                        handleDropOnTable(t.id, key, p.key)
+                                      }}
+                                      className={`rounded-xl border px-2 py-2 transition-[opacity,border-color] ${
+                                        p.splitWarning
+                                          ? 'border-amber-300 bg-amber-50/80'
+                                          : 'border-[#ebebeb] bg-[#fafafa]'
+                                      } ${dragPartyKey === p.key ? 'opacity-55' : ''} ${
+                                        rowDraggable ? 'cursor-grab active:cursor-grabbing' : ''
+                                      }`}
+                                      onMouseEnter={() => setHoveredPartyKey(p.key)}
+                                      onMouseLeave={() => setHoveredPartyKey(null)}
+                                    >
                                     <div className="flex items-center gap-2">
                                       <PartyAvatarCluster members={p.members} size="sm" />
                                       <div className="min-w-0 flex-1">
@@ -494,10 +596,16 @@ export default function AdminSeatingPage() {
                                         }
                                       />
                                     </div>
-                                  </div>
+                                    </div>
+                                  </>
                                 )
                               })
                             )}
+                            {dragPartyKey &&
+                            dragHoverTableId === t.id &&
+                            dragInsertBeforeKey === null ? (
+                              <div className="mx-1 mt-1 h-[3px] rounded-full bg-[#3b82f6] shadow-[0_0_0_1px_rgba(59,130,246,0.15)]" />
+                            ) : null}
                           </div>
                         </div>
                       )
@@ -508,7 +616,7 @@ export default function AdminSeatingPage() {
             </div>
 
             <aside
-              className="flex w-[min(100%,400px)] shrink-0 flex-col border-l border-[#ebebeb] bg-white shadow-[-8px_0_24px_-20px_rgba(0,0,0,0.12)]"
+              className="flex w-[min(100%,430px)] shrink-0 flex-col border-l border-[#ebebeb] bg-white shadow-[-8px_0_24px_-20px_rgba(0,0,0,0.12)]"
               onDragOver={(e) => {
                 e.preventDefault()
                 e.dataTransfer.dropEffect = 'move'
@@ -521,13 +629,6 @@ export default function AdminSeatingPage() {
               }}
             >
               <div className="shrink-0 space-y-3 border-b border-[#ebebeb] px-4 py-3">
-                <div>
-                  <h2 className="text-[13px] font-semibold text-zinc-900">Parties</h2>
-                  <p className="mt-1 text-[11px] leading-snug text-zinc-500">
-                    Search matches guest names; rows stay grouped as parties. Drag onto a table or use
-                    Assign. Use the dashed zone below to unseat. Unassigned sort first.
-                  </p>
-                </div>
                 <div className="relative">
                   <svg
                     viewBox="0 0 24 24"
@@ -566,10 +667,8 @@ export default function AdminSeatingPage() {
                     label: (
                       <>
                         {label}
-                        <span className="tabular-nums opacity-90">
-                          {' ('}
-                          {n}
-                          {')'}
+                        <span className="ml-2 inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-zinc-600">
+                          [{n}]
                         </span>
                       </>
                     ),
@@ -630,9 +729,13 @@ export default function AdminSeatingPage() {
                             <div className="min-w-0 flex-1">
                               <button
                                 type="button"
-                                onClick={() => focusPartyInWorkspace(p)}
-                                disabled={!p.uniformTableId}
-                                className="block w-full cursor-pointer text-left disabled:cursor-default disabled:opacity-60"
+                                onClick={() => {
+                                  setSelectedPartyKey(p.key)
+                                  focusPartyInWorkspace(p)
+                                }}
+                                onMouseEnter={() => setHoveredPartyKey(p.key)}
+                                onMouseLeave={() => setHoveredPartyKey(null)}
+                                className="block w-full cursor-pointer text-left"
                               >
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   <span className="truncate text-[13px] font-semibold text-zinc-900">
@@ -667,50 +770,6 @@ export default function AdminSeatingPage() {
                                   )}
                                 </p>
                               </button>
-                              <div className={`mt-2 ${busy ? 'pointer-events-none opacity-50' : ''}`}>
-                                {p.splitWarning ? (
-                                  <div className="flex h-9 items-center rounded-full border border-amber-200 bg-amber-50/80 px-3 text-[12px] font-semibold text-amber-900">
-                                    Fix split on Attendees first
-                                  </div>
-                                ) : (
-                                  <AdminSelectDropdown<string>
-                                    value={assignDropdownValue(p)}
-                                    onChange={(v) => {
-                                      if (v === '__choose_table') return
-                                      if (v === '__unassign') {
-                                        void runPlan(
-                                          () => planUnassignParty(rows, p.key),
-                                          'Party removed from table.'
-                                        )
-                                        return
-                                      }
-                                      void runPlan(
-                                        () =>
-                                          planAssignPartyToTable(
-                                            rows,
-                                            p.key,
-                                            v,
-                                            plannerTables.find((x) => x.id === v)?.capacity ?? 10
-                                          ),
-                                        p.uniformTableId ? 'Party moved.' : 'Party assigned.'
-                                      )
-                                    }}
-                                    className="w-full min-w-0"
-                                    buttonClassName="inline-flex h-9 w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 pr-2 text-left text-[12px] font-semibold text-zinc-800 outline-none hover:border-zinc-300"
-                                    options={dockAssignOptionsForParty(p)}
-                                    renderValue={() => {
-                                      if (p.uniformTableId) {
-                                        return (
-                                          <span className="truncate">
-                                            {tableNameById.get(p.uniformTableId) ?? 'Table'}
-                                          </span>
-                                        )
-                                      }
-                                      return <span className="text-zinc-500">Assign to table…</span>
-                                    }}
-                                  />
-                                )}
-                              </div>
                             </div>
                           </div>
                         </div>
@@ -726,6 +785,35 @@ export default function AdminSeatingPage() {
           </>
         )}
       </section>
+      {toast ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[70] flex justify-center">
+          <div
+            className={`inline-flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm font-medium shadow-sm animate-[fadeIn_180ms_ease-out] ${
+              toast.kind === 'success'
+                ? 'border-emerald-200 text-emerald-700'
+                : 'border-rose-200 text-rose-700'
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden
+            >
+              {toast.kind === 'success' ? (
+                <path d="m5 12 5 5L20 7" />
+              ) : (
+                <path d="M12 8v5m0 3h.01" />
+              )}
+            </svg>
+            <span>{toast.message}</span>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -14,7 +14,10 @@ export function seatRangeLabel(p: SeatingParty): string {
 }
 
 /** Adults first (lead / spouse) for avatar strip, then others. */
-export function avatarMembersForPartyStrip(members: AttendeeRow[], max = 2): AttendeeRow[] {
+export function avatarMembersForPartyStrip(
+  members: AttendeeRow[],
+  max = 2
+): AttendeeRow[] {
   const rank = (m: AttendeeRow) => {
     if (m.is_placeholder) return 5
     if (m.party_role === 'lead_adult' || m.party_role === 'lead') return 0
@@ -42,8 +45,9 @@ export function PartyMetaLine({ party }: { party: SeatingParty }) {
   )
 }
 
-function displayFirstName(fullName: string): string {
-  return fullName.trim().split(/\s+/).filter(Boolean)[0] ?? ''
+function initialsFromName(fullName: string): string {
+  const first = fullName.trim().split(/\s+/).filter(Boolean)[0]?.[0] ?? '?'
+  return first.toUpperCase()
 }
 
 export function PartyAvatarCluster({
@@ -70,29 +74,58 @@ export function PartyAvatarCluster({
               <img src={m.photo_url} alt="" className="h-full w-full object-cover" />
             ) : (
               <span className="flex h-full w-full items-center justify-center font-semibold text-zinc-500">
-                {(m.full_name.trim().split(/\s+/)[0]?.[0] ?? '?').toUpperCase()}
+                {initialsFromName(m.full_name)}
               </span>
             )}
           </div>
         ))}
       </div>
       {rest > 0 ? (
-        <span className="ml-1 text-[11px] font-semibold tabular-nums text-zinc-500">+{rest}</span>
+        <span className="ml-1 text-[11px] font-semibold tabular-nums text-zinc-500">
+          +{rest}
+        </span>
       ) : null}
     </div>
   )
 }
 
-/**
- * Two-sided seat map aligned with guest `SeatingMapPanel` seat pairing:
- * odd seat numbers on top, even on bottom, paired by column (1–2, 3–4, …).
- */
+type SeatRange = { minSeat: number; maxSeat: number }
+
+function computeSideCounts(capacity: number): { topCount: number; bottomStart: number } {
+  const topCount = Math.floor(capacity / 2)
+  return { topCount, bottomStart: topCount + 1 }
+}
+
+function seatSizing(capacity: number): { seatPx: number; gapPx: number } {
+  const { topCount, bottomStart } = computeSideCounts(capacity)
+  const bottomCount = capacity - (bottomStart - 1)
+  const maxSide = Math.max(topCount, bottomCount, 1)
+
+  // Keep seats circular and legible across capacities.
+  if (maxSide >= 16) return { seatPx: 14, gapPx: 4 }
+  if (maxSide >= 12) return { seatPx: 16, gapPx: 5 }
+  if (maxSide >= 8) return { seatPx: 18, gapPx: 6 }
+  return { seatPx: 22, gapPx: 7 }
+}
+
+function clamp(n: number, a: number, b: number): number {
+  return Math.max(a, Math.min(b, n))
+}
+
 export function AdminTableTwinSeatMap({
   capacity,
   attendeesAtTable,
+  partiesOnTable = [],
+  highlightPartyKey = null,
+  previewSeatRange = null,
+  previewGhostMembers = null,
 }: {
   capacity: number
   attendeesAtTable: AttendeeRow[]
+  partiesOnTable?: SeatingParty[]
+  highlightPartyKey?: string | null
+  previewSeatRange?: SeatRange | null
+  previewGhostMembers?: AttendeeRow[] | null
 }) {
   const bySeat = new Map<number, AttendeeRow>()
   for (const r of attendeesAtTable) {
@@ -103,105 +136,226 @@ export function AdminTableTwinSeatMap({
     }
   }
 
-  const perSide = Math.max(1, Math.ceil(capacity / 2))
-  const labelClass =
-    capacity > 22 ? 'text-[7px]' : capacity > 14 ? 'text-[8px]' : 'text-[9px]'
+  const { topCount, bottomStart } = computeSideCounts(capacity)
+  const bottomCount = capacity - (bottomStart - 1)
+  const { seatPx, gapPx } = seatSizing(capacity)
+  const labelClass = capacity >= 30 ? 'text-[7px]' : capacity >= 18 ? 'text-[8px]' : 'text-[9px]'
+
+  const previewGhostInitials = (previewGhostMembers ?? []).map((m) =>
+    initialsFromName(m.full_name)
+  )
+
+  const partyForSeat = (seatNum: number): SeatingParty | undefined => {
+    for (const p of partiesOnTable) {
+      if (p.minSeat == null || p.maxSeat == null) continue
+      if (seatNum >= p.minSeat && seatNum <= p.maxSeat) return p
+    }
+    return undefined
+  }
+
+  const rowWidthTop = Math.max(0, topCount) * seatPx + Math.max(0, topCount - 1) * gapPx
+  const rowWidthBottom =
+    Math.max(0, bottomCount) * seatPx + Math.max(0, bottomCount - 1) * gapPx
 
   return (
-    <div className="rounded-xl border border-[#ebebeb] bg-[#fafafa] p-2">
-      <div className="relative rounded-lg border border-zinc-200/90 bg-white px-1.5 pb-2 pt-7">
-        <div
-          className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-1 w-[85%] max-w-[calc(100%-8px)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#ebebeb]"
-          aria-hidden
-        />
-        <p className="absolute left-2 top-1.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-400">
-          Head
-        </p>
-        <div
-          className="relative z-[1] grid gap-x-1 gap-y-1.5"
-          style={{
-            gridTemplateColumns: `repeat(${perSide}, minmax(0, 1fr))`,
-          }}
-        >
-          {Array.from({ length: perSide }, (_, col) => {
-            const topSeat = col * 2 + 1
-            const bottomSeat = col * 2 + 2
-            const topGuest = bySeat.get(topSeat)
-            const bottomGuest =
-              bottomSeat <= capacity ? bySeat.get(bottomSeat) : undefined
+    <div className="rounded-xl border border-[#ebebeb] bg-white p-2.5">
+      <div className="flex justify-between px-2">
+        <span className={`font-semibold text-zinc-500 ${labelClass}`}>Side A</span>
+        <span className={`font-semibold text-zinc-500 ${labelClass}`}>Side B</span>
+      </div>
 
-            return (
-              <div key={col} className="flex min-w-0 flex-col gap-1">
-                <SeatCell seatNum={topSeat} guest={topGuest} labelClass={labelClass} />
-                {bottomSeat <= capacity ? (
-                  <SeatCell seatNum={bottomSeat} guest={bottomGuest} labelClass={labelClass} />
-                ) : (
-                  <div className="min-h-[2.25rem]" aria-hidden />
-                )}
-              </div>
-            )
-          })}
-        </div>
+      <div className="mt-2 grid gap-2">
+        {/* Side A (top row): 1 → N/2 */}
+        <SideRow
+          sideLabel="Side A"
+          sideStart={1}
+          sideEnd={topCount}
+          rowWidth={rowWidthTop}
+          seatPx={seatPx}
+          gapPx={gapPx}
+          bySeat={bySeat}
+          partiesOnTable={partiesOnTable}
+          highlightPartyKey={highlightPartyKey}
+          previewSeatRange={previewSeatRange}
+          previewGhostInitials={previewGhostInitials}
+          partyForSeat={partyForSeat}
+        />
+
+        {/* Side B (bottom row): N/2+1 → N */}
+        <SideRow
+          sideLabel="Side B"
+          sideStart={bottomStart}
+          sideEnd={capacity}
+          rowWidth={rowWidthBottom}
+          seatPx={seatPx}
+          gapPx={gapPx}
+          bySeat={bySeat}
+          partiesOnTable={partiesOnTable}
+          highlightPartyKey={highlightPartyKey}
+          previewSeatRange={previewSeatRange}
+          previewGhostInitials={previewGhostInitials}
+          partyForSeat={partyForSeat}
+        />
       </div>
     </div>
   )
 }
 
-function SeatCell({
-  seatNum,
-  guest,
-  labelClass,
+function SideRow({
+  sideLabel,
+  sideStart,
+  sideEnd,
+  rowWidth,
+  seatPx,
+  gapPx,
+  bySeat,
+  partiesOnTable,
+  highlightPartyKey,
+  previewSeatRange,
+  previewGhostInitials,
+  partyForSeat,
 }: {
-  seatNum: number
-  guest: AttendeeRow | undefined
-  labelClass: string
+  sideLabel: string
+  sideStart: number
+  sideEnd: number
+  rowWidth: number
+  seatPx: number
+  gapPx: number
+  capacity: number
+  bySeat: Map<number, AttendeeRow>
+  partiesOnTable: SeatingParty[]
+  highlightPartyKey: string | null
+  previewSeatRange: SeatRange | null
+  previewGhostInitials: string[]
+  partyForSeat: (seatNum: number) => SeatingParty | undefined
 }) {
-  const filled = Boolean(guest)
+  const count = Math.max(0, sideEnd - sideStart + 1)
+  if (count <= 0) {
+    return <div className="h-[30px]" aria-hidden />
+  }
+
+  const seatRangeOccupied = (n: number) => {
+    const filled = bySeat.has(n)
+    const inPreview =
+      previewSeatRange != null && n >= previewSeatRange.minSeat && n <= previewSeatRange.maxSeat
+    return { filled, inPreview }
+  }
+
   return (
-    <div
-      title={
-        guest
-          ? `Seat ${seatNum} · ${guest.full_name}`
-          : `Seat ${seatNum} · empty`
-      }
-      className={`flex min-h-[2.35rem] min-w-0 flex-col justify-center rounded-md border px-0.5 py-0.5 ${
-        filled
-          ? 'border-[#5b38f2]/30 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]/12'
-          : 'border-dashed border-zinc-200/90 bg-zinc-50/80'
-      }`}
-    >
-      {filled && guest ? (
-        <div className="flex min-w-0 items-center gap-1">
-          <div className="h-6 w-6 shrink-0 overflow-hidden rounded-full border border-[#ebebeb] bg-zinc-100">
-            {guest.photo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={guest.photo_url}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span className="flex h-full w-full items-center justify-center text-[9px] font-bold text-zinc-500">
-                {(displayFirstName(guest.full_name)[0] ?? '?').toUpperCase()}
-              </span>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[10px] font-semibold leading-tight text-zinc-800">
-              {displayFirstName(guest.full_name)}
-            </p>
-            <p className={`tabular-nums font-semibold leading-none text-zinc-500 ${labelClass}`}>
-              {seatNum}
-            </p>
+    <div className="relative">
+      <div
+        className="mx-auto flex items-center justify-center"
+        style={{ width: rowWidth }}
+      >
+        <div className="relative h-[54px] w-full">
+          {/* Party brackets */}
+          {partiesOnTable.map((p) => {
+            if (p.minSeat == null || p.maxSeat == null) return null
+            const overlapStart = clamp(p.minSeat, sideStart, sideEnd)
+            const overlapEnd = clamp(p.maxSeat, sideStart, sideEnd)
+            if (overlapStart > overlapEnd) return null
+
+            const localStartIdx = overlapStart - sideStart
+            const localEndIdx = overlapEnd - sideStart
+            const left = localStartIdx * (seatPx + gapPx)
+            const width =
+              (localEndIdx - localStartIdx + 1) * seatPx +
+              (localEndIdx - localStartIdx) * gapPx
+
+            const isActive = highlightPartyKey != null && p.key === highlightPartyKey
+            const isSplit = p.splitWarning
+            const colorClass = isActive
+              ? isSplit
+                ? 'border-amber-500/90'
+                : 'border-[#5b38f2]/90'
+              : isSplit
+                ? 'border-amber-300/70'
+                : 'border-zinc-300/80'
+
+            const centerSeat = (p.minSeat + p.maxSeat) / 2
+            const showLabel = centerSeat >= sideStart && centerSeat <= sideEnd
+
+            return (
+              <div
+                key={p.key}
+                className="pointer-events-none absolute"
+                style={{ left, top: 0, width }}
+              >
+                <div className={`absolute left-0 top-0 h-3 w-0 border-l-2 ${colorClass}`} />
+                <div className={`absolute right-0 top-0 h-3 w-0 border-r-2 ${colorClass}`} />
+                <div
+                  className={`absolute left-0 top-0 h-0.5 w-full border-t-2 ${colorClass}`}
+                />
+                {showLabel ? (
+                  <span
+                    className={`absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-semibold shadow-sm ${
+                      isActive
+                        ? 'bg-white text-zinc-800'
+                        : 'bg-white/70 text-zinc-500'
+                    }`}
+                  >
+                    {p.title}
+                  </span>
+                ) : null}
+              </div>
+            )
+          })}
+
+          {/* Seats */}
+          <div
+            className="absolute left-0 top-4 flex items-center justify-start"
+            style={{ gap: `${gapPx}px` }}
+          >
+            {Array.from({ length: count }, (_, i) => {
+              const seatNum = sideStart + i
+              const guest = bySeat.get(seatNum)
+              const party = partyForSeat(seatNum)
+              const { filled, inPreview } = seatRangeOccupied(seatNum)
+              const isActiveGroup = party != null && highlightPartyKey != null && party.key === highlightPartyKey
+              const ghostInitial = previewGhostInitials[(seatNum + previewGhostInitials.length) % Math.max(1, previewGhostInitials.length)] ?? '?'
+
+              const title = guest
+                ? `${sideLabel} seat ${seatNum} · ${guest.full_name}${party ? ` · ${party.title}` : ''}`
+                : inPreview
+                  ? `${sideLabel} seat ${seatNum} · preview`
+                  : `${sideLabel} seat ${seatNum} · empty`
+
+              const ringClass = isActiveGroup
+                ? 'ring-2 ring-[#5b38f2]/25'
+                : ''
+
+              const seatClass = inPreview
+                ? 'border-[#5b38f2]/60 bg-[#5b38f2]/12'
+                : filled
+                  ? 'border-[#5b38f2]/30 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]/10'
+                  : 'border-dashed border-zinc-200/80 bg-zinc-50/70'
+
+              return (
+                <div
+                  key={seatNum}
+                  title={title}
+                  className={`flex items-center justify-center rounded-full border ${seatClass} ${ringClass}`}
+                  style={{ width: seatPx, height: seatPx }}
+                >
+                  {guest ? (
+                    <span className="text-[10px] font-semibold text-zinc-900">
+                      {initialsFromName(guest.full_name)}
+                    </span>
+                  ) : inPreview ? (
+                    <span className="text-[10px] font-semibold text-zinc-700/80">
+                      {ghostInitial}
+                    </span>
+                  ) : (
+                    <span className={`text-[10px] font-semibold text-zinc-400`}>
+                      {seatNum}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-0.5">
-          <span className={`tabular-nums font-semibold text-zinc-400 ${labelClass}`}>
-            {seatNum}
-          </span>
-        </div>
-      )}
+      </div>
     </div>
   )
 }
