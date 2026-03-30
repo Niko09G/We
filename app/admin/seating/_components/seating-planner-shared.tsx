@@ -101,11 +101,11 @@ function seatSizing(capacity: number): { seatPx: number; gapPx: number } {
   const bottomCount = capacity - (bottomStart - 1)
   const maxSide = Math.max(topCount, bottomCount, 1)
 
-  // Keep seats circular and legible across capacities.
-  if (maxSide >= 16) return { seatPx: 16, gapPx: 5 }
-  if (maxSide >= 12) return { seatPx: 18, gapPx: 6 }
-  if (maxSide >= 8) return { seatPx: 20, gapPx: 7 }
-  return { seatPx: 24, gapPx: 8 }
+  // Bias larger so map uses table-card width more effectively.
+  if (maxSide >= 16) return { seatPx: 22, gapPx: 8 }
+  if (maxSide >= 12) return { seatPx: 24, gapPx: 9 }
+  if (maxSide >= 8) return { seatPx: 26, gapPx: 9 }
+  return { seatPx: 30, gapPx: 10 }
 }
 
 function clamp(n: number, a: number, b: number): number {
@@ -156,7 +156,7 @@ export function AdminTableTwinSeatMap({
     Math.max(0, bottomCount) * seatPx + Math.max(0, bottomCount - 1) * gapPx
 
   return (
-    <div className="rounded-none bg-transparent p-0">
+    <div className="w-full rounded-none bg-transparent p-0">
       <div className="grid gap-1">
         {/* Top row: 1 → N/2 */}
         <SideRow
@@ -230,12 +230,12 @@ function SideRow({
   }
 
   return (
-    <div className="relative">
+    <div className="relative w-full">
       <div
-        className="flex items-center justify-start"
+        className="flex w-full items-center justify-start"
         style={{ width: rowWidth }}
       >
-        <div className="relative h-[62px] w-full">
+        <div className="relative h-[72px] w-full">
           {/* Party brackets */}
           {partiesOnTable.map((p) => {
             if (p.minSeat == null || p.maxSeat == null) return null
@@ -276,7 +276,7 @@ function SideRow({
                 />
                 {showLabel ? (
                   <span
-                    className={`absolute -top-2 left-1/2 -translate-x-1/2 max-w-[70px] -translate-y-0 whitespace-nowrap overflow-hidden text-ellipsis rounded-full px-1 py-0.5 text-[8px] font-semibold shadow-sm ${
+                    className={`absolute -top-2 left-1/2 -translate-x-1/2 max-w-[86px] -translate-y-0 whitespace-nowrap overflow-hidden text-ellipsis rounded-full px-1.5 py-0.5 text-[9px] font-semibold shadow-sm ${
                       isActive
                         ? 'bg-white text-zinc-800'
                         : 'bg-white/70 text-zinc-500'
@@ -291,7 +291,7 @@ function SideRow({
 
           {/* Seats */}
           <div
-            className="absolute left-0 top-4 flex items-center justify-start"
+            className="absolute left-0 top-5 flex items-center justify-start"
             style={{ gap: `${gapPx}px` }}
           >
             {Array.from({ length: count }, (_, i) => {

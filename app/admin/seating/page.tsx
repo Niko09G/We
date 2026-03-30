@@ -488,7 +488,7 @@ export default function AdminSeatingPage() {
                             laneFlash ? 'ring-2 ring-[#5b38f2]/35' : ''
                           }`}
                         >
-                          <div className="px-2 pt-2 pb-1">
+                          <div className="px-1.5 pt-1.5 pb-0.5">
                             <div
                               onDragOver={(e) => {
                                 if (!dragPartyKey) return
@@ -515,7 +515,7 @@ export default function AdminSeatingPage() {
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between gap-3 px-3 py-2">
+                          <div className="flex items-center justify-between gap-3 border-y border-[#ebebeb] px-3 py-2">
                             <div className="flex min-w-0 flex-1 items-center gap-2.5">
                               <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-[#ebebeb] shadow-sm">
                                 {tableAvatarUrl ? (
@@ -658,29 +658,20 @@ export default function AdminSeatingPage() {
                 type="button"
                 onClick={() => setDockCollapsed((v) => !v)}
                 aria-label={dockCollapsed ? 'Expand party panel' : 'Collapse party panel'}
-                className={`absolute left-0 top-1/2 z-[70] -translate-y-1/2 transform rounded-r-xl border border-[#ebebeb] bg-white text-zinc-600 shadow-sm transition-[height,width] duration-200 ${
-                  dockCollapsed ? 'h-24 w-12' : 'h-10 w-8'
-                }`}
+                className="absolute -left-4 top-3 z-[70] inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black text-white shadow-sm transition-transform duration-200 hover:scale-[1.04]"
               >
-                <div className="flex h-full w-full flex-col items-center justify-center">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={`h-4 w-4 transition-transform ${dockCollapsed ? 'rotate-180' : ''}`}
-                    aria-hidden
-                  >
-                    <path d="m15 18-6-6 6-6" />
-                  </svg>
-                  {dockCollapsed ? (
-                    <span className="mt-2 rotate-[-90deg] whitespace-nowrap text-[11px] font-semibold text-zinc-600">
-                      Party panel
-                    </span>
-                  ) : null}
-                </div>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2.2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={`h-4 w-4 transition-transform ${dockCollapsed ? '' : 'rotate-180'}`}
+                  aria-hidden
+                >
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
               </button>
 
               {!dockCollapsed ? (
@@ -799,9 +790,7 @@ export default function AdminSeatingPage() {
                                           {p.minSeat != null && p.maxSeat != null ? (
                                             <>
                                               <span className="text-zinc-400"> · </span>
-                                              <span className="tabular-nums">
-                                                Seats {seatRangeLabel(p)}
-                                              </span>
+                                              <span className="tabular-nums">{seatRangeLabel(p)}</span>
                                             </>
                                           ) : null}
                                         </>
