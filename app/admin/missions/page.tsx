@@ -1231,7 +1231,7 @@ export default function MissionsLibraryPage() {
                               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                               <div className="relative min-h-0 flex-1 overflow-hidden">
                               <div
-                                className={`absolute inset-0 overflow-y-auto transition-[opacity,transform] duration-200 ease-out ${
+                                className={`absolute inset-0 z-20 overflow-y-auto transition-[opacity,transform] duration-200 ease-out ${
                                   step === 1 ? 'translate-x-0 opacity-100' : '-translate-x-3 pointer-events-none opacity-0'
                                 }`}
                               >
@@ -1801,7 +1801,7 @@ export default function MissionsLibraryPage() {
                                   Allow one or more completions
                                 </p>
                               </div>
-                              <div className="flex flex-wrap items-center gap-2">
+                              <div className="flex flex-wrap items-center justify-end gap-2">
                                 <AdminFilterRowSegmented
                                   ariaLabel="Repeat mode"
                                   className="shrink-0"
@@ -1821,23 +1821,32 @@ export default function MissionsLibraryPage() {
                                     }
                                   }}
                                 />
-                                {form.max_submissions_per_table.trim() !== '' ? (
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    value={form.max_submissions_per_table}
-                                    onChange={(e) =>
-                                      setForm((s) => ({
-                                        ...s,
-                                        max_submissions_per_table: e.target.value,
-                                      }))
-                                    }
-                                    className="h-9 w-[3.25rem] shrink-0 rounded-full border border-[#ebebeb] bg-white px-1.5 text-center text-[13px] font-medium outline-none focus:border-zinc-400"
-                                    aria-label="Max attempts"
-                                  />
-                                ) : null}
                               </div>
                             </div>
+
+                            {form.max_submissions_per_table.trim() !== '' ? (
+                              <div className="flex flex-col gap-3 border-b border-[#ebebeb] bg-[#f5f5f5]/80 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[15px] font-semibold text-zinc-900">Max attempts</p>
+                                  <p className="mt-1 text-sm font-medium text-zinc-500">
+                                    Number of times this mission can be completed
+                                  </p>
+                                </div>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={form.max_submissions_per_table}
+                                  onChange={(e) =>
+                                    setForm((s) => ({
+                                      ...s,
+                                      max_submissions_per_table: e.target.value,
+                                    }))
+                                  }
+                                  className="h-9 w-[4.5rem] shrink-0 rounded-full border border-[#ebebeb] bg-white px-2 text-center text-[14px] font-medium text-[#171717] outline-none focus:border-zinc-400"
+                                  aria-label="Max attempts"
+                                />
+                              </div>
+                            ) : null}
 
                             <div className="flex flex-col gap-3 border-b border-[#ebebeb] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                               <div className="min-w-0 flex-1">
@@ -1846,7 +1855,7 @@ export default function MissionsLibraryPage() {
                                   Require users to include a message
                                 </p>
                               </div>
-                              <div className="flex flex-wrap items-center gap-2">
+                              <div className="flex flex-wrap items-center justify-end gap-2">
                                 <AdminFilterRowSegmented
                                   ariaLabel="Require message"
                                   className="shrink-0"
@@ -1859,7 +1868,18 @@ export default function MissionsLibraryPage() {
                                     setForm((s) => ({ ...s, message_required: v === 'on' }))
                                   }
                                 />
-                                {form.message_required ? (
+                              </div>
+                            </div>
+
+                            {form.message_required ? (
+                              <div className="flex flex-col gap-3 border-b border-[#ebebeb] bg-[#f5f5f5]/80 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[15px] font-semibold text-zinc-900">Set character limit</p>
+                                  <p className="mt-1 text-sm font-medium text-zinc-500">
+                                    Standard is max 140 characters
+                                  </p>
+                                </div>
+                                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                                   <input
                                     type="number"
                                     min={1}
@@ -1868,13 +1888,14 @@ export default function MissionsLibraryPage() {
                                     onChange={(e) =>
                                       setForm((s) => ({ ...s, message_max_chars: e.target.value }))
                                     }
-                                    className="h-9 w-[3.5rem] shrink-0 rounded-full border border-[#ebebeb] bg-white px-1.5 text-center text-[13px] font-medium outline-none focus:border-zinc-400"
+                                    className="h-9 w-[4.5rem] rounded-full border border-[#ebebeb] bg-white px-2 text-center text-[14px] font-medium tabular-nums text-[#171717] outline-none focus:border-zinc-400"
                                     aria-label="Max characters"
                                     title="Not saved to the server yet"
                                   />
-                                ) : null}
+                                  <span className="text-sm font-medium text-zinc-500">characters</span>
+                                </div>
                               </div>
-                            </div>
+                            ) : null}
 
                             <div className="flex flex-col gap-3 border-b border-[#ebebeb] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                               <div className="min-w-0 flex-1">
@@ -1894,46 +1915,17 @@ export default function MissionsLibraryPage() {
                                 onChange={(v) => setForm((s) => ({ ...s, approval_mode: v }))}
                               />
                             </div>
-
-                            <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-                              <div className="min-w-0 flex-1">
-                                <p className="text-[15px] font-semibold text-zinc-900">Active</p>
-                                <p className="mt-1 text-sm font-medium text-zinc-500">
-                                  Mission is visible and available when on
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setForm((s) => ({ ...s, is_active: !s.is_active }))}
-                                className={`relative inline-flex h-9 w-[2.85rem] shrink-0 items-center rounded-full p-1 transition-colors ${
-                                  form.is_active
-                                    ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]'
-                                    : 'bg-zinc-300'
-                                }`}
-                                aria-label="Toggle mission active"
-                              >
-                                <span
-                                  className={`h-7 w-7 rounded-full bg-white shadow transition-transform duration-200 ease-out ${
-                                    form.is_active ? 'translate-x-[0.85rem]' : 'translate-x-0'
-                                  }`}
-                                />
-                              </button>
-                            </div>
                           </div>
                         </div>
                                   </div>
                                 </div>
                               </div>
                             </div>
-                              {(step === 1 || step === 2) ? (
+                              {step === 2 ? (
                                 <div className="relative z-10 shrink-0 bg-white pt-1">
                                   <div className="mx-auto flex w-full justify-center px-1 pb-0">
                                     <div className="h-[min(300px,38vh)] min-h-[220px] w-full max-w-[480px]">
-                                      {step === 2 ? (
-                                        <MissionOverlaySplitPreviews builderFlush form={missionStep2PreviewInput} />
-                                      ) : (
-                                        <div className="h-full w-full" aria-hidden />
-                                      )}
+                                      <MissionOverlaySplitPreviews builderFlush form={missionStep2PreviewInput} />
                                     </div>
                                   </div>
                                 </div>
