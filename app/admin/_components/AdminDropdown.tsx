@@ -1,6 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 
 type AdminDropdownProps = {
   trigger: ReactNode
@@ -11,6 +17,7 @@ type AdminDropdownProps = {
   buttonClassName?: string
   /** When false, clicking menu items does not close the panel (e.g. multi-select). */
   closeOnMenuItemClick?: boolean
+  onTriggerKeyDown?: (e: KeyboardEvent<HTMLButtonElement>) => void
 }
 
 /**
@@ -24,6 +31,7 @@ export function AdminDropdown({
   className = '',
   buttonClassName = 'flex h-11 w-full min-w-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300',
   closeOnMenuItemClick = true,
+  onTriggerKeyDown,
 }: AdminDropdownProps) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -43,6 +51,7 @@ export function AdminDropdown({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        onKeyDown={onTriggerKeyDown}
         className={buttonClassName}
         aria-expanded={open}
       >

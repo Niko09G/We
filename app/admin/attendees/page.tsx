@@ -1,42 +1,15 @@
 'use client'
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent,
-} from 'react'
-import {
-  createAttendee,
-  createPlaceholderAttendee,
-  archiveAttendee,
-  listAttendeesForAdmin,
-  mergeAttendeesFromCsvRows,
-  removeAttendeePhotoByPublicUrl,
-  updateAttendee,
-  updateRsvpForGroup,
-  uploadAttendeePhoto,
-  type AttendeeRow,
-} from '@/lib/admin-attendees'
-import {
-  createAttendeeGroup,
-  deleteAttendeeGroup,
-  listAttendeeGroups,
-  updateAttendeeGroup,
-  type AttendeeGroupRow,
-} from '@/lib/admin-attendee-groups'
-import { attendeeRowsFromCsv } from '@/lib/attendees-csv'
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react'
+import { archiveAttendee, listAttendeesForAdmin, type AttendeeRow } from '@/lib/admin-attendees'
+import { listAttendeeGroups, type AttendeeGroupRow } from '@/lib/admin-attendee-groups'
 import { listTablesForAdmin, type AdminTableRow } from '@/lib/admin-tables'
-import { compressAvatarImage } from '@/lib/image-compress'
-
-const RSVP_OPTIONS = [
-  { value: '', label: '—' },
-  { value: 'yes', label: 'Yes' },
-  { value: 'no', label: 'No' },
-  { value: 'pending', label: 'Pending' },
-] as const
+import { AdminFilterRowSegmented } from '@/app/admin/_components/AdminFilterRowSegmented'
+import { AdminSelectDropdown } from '@/app/admin/_components/AdminSelectDropdown'
+import {
+  AttendeeEditorOverlay,
+  type AttendeePartyBlock,
+} from '@/app/admin/attendees/_components/AttendeeEditorOverlay'
 
 type GuestListChip = 'all' | 'guests' | 'yes' | 'pending' | 'no'
 
@@ -67,10 +40,6 @@ function rowMatchesGuestListChip(r: AttendeeRow, chip: GuestListChip): boolean {
     default:
       return true
   }
-}
-
-function sortByName(a: AttendeeRow, b: AttendeeRow) {
-  return a.full_name.localeCompare(b.full_name, undefined, { sensitivity: 'base' })
 }
 
 function getInitials(fullName: string): string {
@@ -174,18 +143,6 @@ function parentMembersOf(members: AttendeeRow[]): AttendeeRow[] {
       if (!Number.isNaN(da) && !Number.isNaN(db) && da !== db) return da - db
       return a.full_name.localeCompare(b.full_name, undefined, { sensitivity: 'base' })
     })
-}
-
-/** Space/Enter on row must not steal keys from inputs, selects, or buttons. */
-function isInsideFormField(target: EventTarget | null): boolean {
-  return (
-    target instanceof Element &&
-    Boolean(
-      target.closest(
-        'input, select, textarea, button, [contenteditable="true"], option'
-      )
-    )
-  )
 }
 
 function ArchiveGuestIconButton({
@@ -324,117 +281,11 @@ export default function AdminAttendeesPage() {
   const [search, setSearch] = useState('')
   const [guestListChip, setGuestListChip] = useState<GuestListChip>('all')
   const [tableFilterId, setTableFilterId] = useState<string>('all')
-  const [listMode, setListMode] = useState<'flat' | 'grouped'>('grouped')
-  const [expandedPartyKeys, setExpandedPartyKeys] = useState<
-    Record<string, boolean>
-  >({})
-
-  /** Which party row is active (add-member actions); which attendee row shows table/seat/RSVP editors. */
-  const [selectedPartyKey, setSelectedPartyKey] = useState<string | null>(null)
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
-
-  const [csvBusy, setCsvBusy] = useState(false)
-  const [csvInfo, setCsvInfo] = useState<string | null>(null)
-  const [csvWarnings, setCsvWarnings] = useState<string[]>([])
-
-  const [newGroupName, setNewGroupName] = useState('')
-  const [newGroupNotes, setNewGroupNotes] = useState('')
-  const [groupCreating, setGroupCreating] = useState(false)
-
-  const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
-  const [groupEditName, setGroupEditName] = useState('')
-  const [groupEditNotes, setGroupEditNotes] = useState('')
-  const [groupSaveBusy, setGroupSaveBusy] = useState(false)
-  const [partyCreateBusy, setPartyCreateBusy] = useState(false)
-
-  const [placeholderTargetGroupId, setPlaceholderTargetGroupId] = useState<string | null>(
+  const [attendeeEditorOpen, setAttendeeEditorOpen] = useState(false)
+  const [attendeeEditorMode, setAttendeeEditorMode] = useState<'create' | 'edit'>('create')
+  const [attendeeEditorParty, setAttendeeEditorParty] = useState<AttendeePartyBlock | null>(
     null
   )
-  const [placeholderLabel, setPlaceholderLabel] = useState('Guest')
-  const [placeholderBusy, setPlaceholderBusy] = useState(false)
-
-  const [newGuest, setNewGuest] = useState({
-    full_name: '',
-    email: '',
-    phone: '',
-    rsvp_status: '' as string,
-    group_id: '',
-    is_placeholder: false,
-  })
-  const [createGuestBusy, setCreateGuestBusy] = useState(false)
-
-  const [quickRsvpId, setQuickRsvpId] = useState<string | null>(null)
-  const [groupRsvpSelect, setGroupRsvpSelect] = useState<Record<string, string>>({})
-  const [groupRsvpBusyId, setGroupRsvpBusyId] = useState<string | null>(null)
-
-  const [partyAddGuestGroupId, setPartyAddGuestGroupId] = useState<string | null>(
-    null
-  )
-  const [partyAddGuestBusy, setPartyAddGuestBusy] = useState(false)
-  const [partyAddGuestRole, setPartyAddGuestRole] = useState<
-    'spouse' | 'child' | 'guest' | 'placeholder'
-  >('guest')
-  const [partyAddGuestDraft, setPartyAddGuestDraft] = useState({
-    full_name: '',
-    email: '',
-    phone: '',
-    rsvp_status: '' as string,
-    is_placeholder: false,
-  })
-
-  // Party-first creation: create a new `attendee_groups` party and auto-add
-  // lead adult(s) with stable party_role so titles/order remain predictable.
-  const [createSolo, setCreateSolo] = useState({
-    full_name: '',
-    rsvp_status: '' as string,
-    email: '',
-    phone: '',
-  })
-  const [createCouple, setCreateCouple] = useState({
-    lead1: '',
-    lead2: '',
-    rsvp_status: '' as string,
-    email1: '',
-    email2: '',
-    phone1: '',
-    phone2: '',
-  })
-  const [createFamily, setCreateFamily] = useState({
-    lead1: '',
-    lead2: '',
-    rsvp_status: '' as string,
-    email1: '',
-    email2: '',
-    phone1: '',
-    phone2: '',
-  })
-
-  // Streamlined booking-style creation form.
-  const [compactCreate, setCompactCreate] = useState({
-    leadFullName: '',
-    rsvp_status: '' as string,
-    email: '',
-    phone: '',
-    addSpouse: false,
-    spouseFullName: '',
-    addKids: false,
-    childNames: [''],
-  })
-
-  const [soloAdd, setSoloAdd] = useState<{
-    attendeeId: string
-    role: 'spouse' | 'child' | 'guest'
-    full_name: string
-  } | null>(null)
-  const [soloAddBusy, setSoloAddBusy] = useState(false)
-
-  const [photoBusyId, setPhotoBusyId] = useState<string | null>(null)
-  const attendeeListRef = useRef<HTMLDivElement | null>(null)
-
-  // Inline control-center editing (fast; avoids full refresh on every change).
-  const [inlineSavingId, setInlineSavingId] = useState<string | null>(null)
-  const [nameDraftById, setNameDraftById] = useState<Record<string, string>>({})
-  const [seatDraftById, setSeatDraftById] = useState<Record<string, string>>({})
 
   /**
    * Canonical list: always from Supabase after any mutation that changes roster data.
@@ -471,21 +322,6 @@ export default function AdminAttendeesPage() {
   useEffect(() => {
     void loadAll({ showPageLoading: true })
   }, [loadAll])
-
-  /** Click outside the attendee table area clears selection. */
-  useEffect(() => {
-    function onPointerDown(ev: PointerEvent) {
-      const el = attendeeListRef.current
-      if (!el) return
-      const t = ev.target
-      if (t instanceof Node && !el.contains(t)) {
-        setSelectedPartyKey(null)
-        setSelectedMemberId(null)
-      }
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    return () => document.removeEventListener('pointerdown', onPointerDown)
-  }, [])
 
   const groupNameById = useMemo(() => {
     const m = new Map<string, string>()
@@ -534,174 +370,16 @@ export default function AdminAttendeesPage() {
     setTableFilterId('all')
   }
 
-  function updateRowLocal(
-    id: string,
-    patch: Partial<AttendeeRow>
-  ): void {
-    setRows((prev) =>
-      prev.map((r) => {
-        if (r.id !== id) return r
-        return {
-          ...r,
-          ...patch,
-          updated_at: new Date().toISOString(),
-        }
-      })
-    )
-  }
-
-  async function saveInlineFullName(
-    attendeeId: string,
-    nextValue: string,
-    previousValue: string
-  ) {
-    const trimmed = nextValue.trim()
-    if (!trimmed) {
-      setError('Full name cannot be empty.')
-      setNameDraftById((prev) => {
-        const next = { ...prev }
-        next[attendeeId] = previousValue
-        return next
-      })
-      return
-    }
-    if (trimmed === previousValue) {
-      setNameDraftById((prev) => {
-        const next = { ...prev }
-        delete next[attendeeId]
-        return next
-      })
-      return
-    }
-
-    setInlineSavingId(attendeeId)
-    setError(null)
-    try {
-      await updateAttendee(attendeeId, { full_name: trimmed })
-      updateRowLocal(attendeeId, { full_name: trimmed })
-      setSuccess('Saved.')
-      setNameDraftById((prev) => {
-        const next = { ...prev }
-        delete next[attendeeId]
-        return next
-      })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save name.')
-      await loadAll({ showPageLoading: false })
-    } finally {
-      setInlineSavingId(null)
-    }
-  }
-
-  async function saveInlineSeatNumber(
-    attendeeId: string,
-    nextRawValue: string,
-    previousValue: number | null
-  ) {
-    const raw = nextRawValue.trim()
-    let next: number | null = null
-    if (raw === '') {
-      next = null
-    } else {
-      const n = Number.parseInt(raw, 10)
-      if (Number.isNaN(n) || n <= 0) {
-        setError('Seat number must be null or greater than 0.')
-        setSeatDraftById((prev) => {
-          const nextMap = { ...prev }
-          nextMap[attendeeId] = previousValue != null ? String(previousValue) : ''
-          return nextMap
-        })
-        return
-      }
-      next = n
-    }
-
-    if (next === previousValue) {
-      setSeatDraftById((prev) => {
-        const nextMap = { ...prev }
-        delete nextMap[attendeeId]
-        return nextMap
-      })
-      return
-    }
-
-    setInlineSavingId(attendeeId)
-    setError(null)
-    try {
-      await updateAttendee(attendeeId, { seat_number: next })
-      updateRowLocal(attendeeId, { seat_number: next })
-      setSuccess('Saved.')
-      setSeatDraftById((prev) => {
-        const nextMap = { ...prev }
-        delete nextMap[attendeeId]
-        return nextMap
-      })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save seat.')
-      await loadAll({ showPageLoading: false })
-    } finally {
-      setInlineSavingId(null)
-    }
-  }
-
-  async function saveInlineGroup(attendeeId: string, nextGroupId: string | null) {
-    if ((nextGroupId ?? null) === null) {
-      // ok
-    }
-    setInlineSavingId(attendeeId)
-    setError(null)
-    try {
-      await updateAttendee(attendeeId, { group_id: nextGroupId })
-      updateRowLocal(attendeeId, { group_id: nextGroupId })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save group.')
-      await loadAll({ showPageLoading: false })
-    } finally {
-      setInlineSavingId(null)
-    }
-  }
-
-  async function saveInlineTable(attendeeId: string, nextTableId: string | null) {
-    setInlineSavingId(attendeeId)
-    setError(null)
-    try {
-      await updateAttendee(attendeeId, { table_id: nextTableId })
-      updateRowLocal(attendeeId, { table_id: nextTableId })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save table.')
-      await loadAll({ showPageLoading: false })
-    } finally {
-      setInlineSavingId(null)
-    }
-  }
-
   async function handleDeleteAttendee(attendeeId: string) {
     if (!window.confirm('Are you sure you want to delete this guest?')) return
     setError(null)
     setSuccess(null)
-    setInlineSavingId(attendeeId)
     try {
       await archiveAttendee(attendeeId)
-      if (selectedMemberId === attendeeId) {
-        setSelectedPartyKey(null)
-        setSelectedMemberId(null)
-      }
-      setNameDraftById((prev) => {
-        const next = { ...prev }
-        delete next[attendeeId]
-        return next
-      })
-      setSeatDraftById((prev) => {
-        const nextMap = { ...prev }
-        delete nextMap[attendeeId]
-        return nextMap
-      })
       setSuccess('Guest archived.')
       await loadAll({ showPageLoading: false })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to archive guest.')
-    } finally {
-      setInlineSavingId(null)
     }
   }
 
@@ -738,8 +416,6 @@ export default function AdminAttendeesPage() {
     groupNameById,
     tableNameById,
   ])
-
-  const sortedFlat = useMemo(() => [...filtered].sort(sortByName), [filtered])
 
   const groupedLayout = useMemo(() => {
     const roleRank = (m: AttendeeRow) => {
@@ -793,1873 +469,295 @@ export default function AdminAttendeesPage() {
     })
   }, [groupedLayout.blocks, groupedLayout.soloGuests])
 
-  async function onCsvSelected(file: File | null) {
-    setCsvInfo(null)
-    setCsvWarnings([])
-    setSuccess(null)
-    if (!file) return
-    setCsvBusy(true)
-    setError(null)
-    try {
-      const text = await file.text()
-      const { rows: parsed, errors: parseErrors } = attendeeRowsFromCsv(text)
-      setCsvWarnings(parseErrors)
-      if (parsed.length === 0) {
-        setCsvInfo(
-          parseErrors.length ? 'No valid rows to import.' : 'No data rows to import.'
-        )
-        return
-      }
-      const { result } = await mergeAttendeesFromCsvRows(parsed, rows)
-      setCsvInfo(
-        `Import finished: ${result.inserted} added, ${result.updated} updated` +
-          (result.failed ? `, ${result.failed} failed` : '') +
-          '. Grouping is unchanged for existing rows.'
-      )
-      if (result.failed) {
-        setError('Some rows failed (duplicate constraint or network). Check data and retry.')
-      }
-      await loadAll({ showPageLoading: false })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'CSV import failed.')
-    } finally {
-      setCsvBusy(false)
-    }
+  function openCreateAttendeeEditor() {
+    setAttendeeEditorMode('create')
+    setAttendeeEditorParty(null)
+    setAttendeeEditorOpen(true)
   }
 
-  async function onPhotoPick(attendeeId: string, file: File | null) {
-    if (!file) return
-    setPhotoBusyId(attendeeId)
-    setError(null)
-    setSuccess(null)
-    try {
-      const ok = ['image/jpeg', 'image/png', 'image/webp']
-      if (!ok.includes(file.type)) {
-        throw new Error('Use JPG, PNG, or WebP.')
-      }
-      const row = rows.find((r) => r.id === attendeeId)
-      const firstName = row?.full_name.trim().split(/\s+/).filter(Boolean)[0] ?? 'attendee'
-      const previousPhotoUrl = row?.photo_url ?? null
-      const { blob, contentType } = await compressAvatarImage(file)
-      const url = await uploadAttendeePhoto({
-        attendeeFirstName: firstName,
-        blob,
-        contentType,
+  function openEditAttendeeEditor(p: (typeof partyBlocks)[number]) {
+    setAttendeeEditorMode('edit')
+    if (p.kind === 'group') {
+      setAttendeeEditorParty({
+        key: p.key,
+        kind: 'group',
+        group: { id: p.group.id, group_name: p.group.group_name },
+        members: p.members,
       })
-      await updateAttendee(attendeeId, { photo_url: url })
-      await removeAttendeePhotoByPublicUrl(previousPhotoUrl)
-      setSuccess('Photo updated.')
-      updateRowLocal(attendeeId, { photo_url: url })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Photo upload failed.')
-      await loadAll({ showPageLoading: false })
-    } finally {
-      setPhotoBusyId(null)
+    } else {
+      setAttendeeEditorParty({
+        key: p.key,
+        kind: 'solo',
+        members: p.members,
+      })
     }
+    setAttendeeEditorOpen(true)
   }
 
-  async function clearPhoto(attendeeId: string) {
-    setPhotoBusyId(attendeeId)
-    try {
-      const previousPhotoUrl = rows.find((r) => r.id === attendeeId)?.photo_url ?? null
-      await updateAttendee(attendeeId, { photo_url: null })
-      await removeAttendeePhotoByPublicUrl(previousPhotoUrl)
-      setSuccess('Photo removed.')
-      updateRowLocal(attendeeId, { photo_url: null })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to remove photo.')
-      await loadAll({ showPageLoading: false })
-    } finally {
-      setPhotoBusyId(null)
-    }
-  }
-
-  async function handleCreateGroup() {
-    setGroupCreating(true)
-    setError(null)
-    setSuccess(null)
-    try {
-      await createAttendeeGroup({ group_name: newGroupName, notes: newGroupNotes || null })
-      setNewGroupName('')
-      setNewGroupNotes('')
-      setSuccess('Group created.')
-      await loadAll({ showPageLoading: false })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create group.')
-    } finally {
-      setGroupCreating(false)
-    }
-  }
-
-  function openGroupEdit(g: AttendeeGroupRow) {
-    setEditingGroupId(g.id)
-    setGroupEditName(g.group_name)
-    setGroupEditNotes(g.notes ?? '')
-  }
-
-  async function saveGroupEdit() {
-    if (!editingGroupId) return
-    setGroupSaveBusy(true)
-    try {
-      await updateAttendeeGroup(editingGroupId, {
-        group_name: groupEditName,
-        notes: groupEditNotes,
-      })
-      setEditingGroupId(null)
-      setSuccess('Group updated.')
-      await loadAll({ showPageLoading: false })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update group.')
-    } finally {
-      setGroupSaveBusy(false)
-    }
-  }
-
-  async function handleDeleteGroup(id: string, name: string) {
-    if (
-      !window.confirm(
-        `Delete group “${name}”? Attendees stay in the roster but are removed from this group.`
-      )
-    ) {
-      return
-    }
-    try {
-      await deleteAttendeeGroup(id)
-      setSuccess('Group deleted.')
-      await loadAll({ showPageLoading: false })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete group.')
-    }
-  }
-
-  async function handleCreatePlaceholder() {
-    if (!placeholderTargetGroupId) return
-    setPlaceholderBusy(true)
-    setError(null)
-    try {
-      await createPlaceholderAttendee({
-        groupId: placeholderTargetGroupId,
-        displayLabel: placeholderLabel,
-      })
-      setPlaceholderTargetGroupId(null)
-      setPlaceholderLabel('Guest')
-      setSuccess('Placeholder guest added.')
-      await loadAll({ showPageLoading: false })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to add placeholder.')
-    } finally {
-      setPlaceholderBusy(false)
-    }
-  }
-
-  async function handleCreateGuest() {
-    if (!newGuest.full_name.trim()) {
-      setError('Full name is required.')
-      return
-    }
-    setCreateGuestBusy(true)
-    setError(null)
-    setSuccess(null)
-    try {
-      await createAttendee({
-        full_name: newGuest.full_name.trim(),
-        email: newGuest.email.trim() || null,
-        phone: newGuest.phone.trim() || null,
-        rsvp_status: newGuest.rsvp_status.trim() || null,
-        group_id: newGuest.group_id.trim() || null,
-        is_placeholder: newGuest.is_placeholder,
-      })
-      setNewGuest({
-        full_name: '',
-        email: '',
-        phone: '',
-        rsvp_status: '',
-        group_id: '',
-        is_placeholder: false,
-      })
-      setSuccess('Guest created.')
-      await loadAll({ showPageLoading: false })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create guest.')
-    } finally {
-      setCreateGuestBusy(false)
-    }
-  }
-
-  async function handleCreateGuestForParty(groupId: string) {
-    const nameFromDraft = partyAddGuestDraft.full_name.trim()
-    const isPlaceholder = partyAddGuestRole === 'placeholder'
-    const full_name = nameFromDraft || (isPlaceholder ? 'Guest' : '')
-
-    if (!full_name) {
-      setError('Full name is required.')
-      return
-    }
-
-    setPartyAddGuestBusy(true)
-    setError(null)
-    setSuccess(null)
-    try {
-      const created = await createAttendee({
-        full_name,
-        email: partyAddGuestDraft.email.trim() || null,
-        phone: partyAddGuestDraft.phone.trim() || null,
-        rsvp_status: partyAddGuestDraft.rsvp_status.trim() || null,
-        group_id: groupId,
-        is_placeholder: isPlaceholder,
-        party_role: isPlaceholder ? 'placeholder' : partyAddGuestRole,
-      })
-
-      bumpFiltersAfterCreate()
-
-      await loadAll({ showPageLoading: false })
-
-      setExpandedPartyKeys((prev) => ({
-        ...prev,
-        [`g:${groupId}`]: true,
-      }))
-
-      setSelectedPartyKey(`g:${groupId}`)
-      setSelectedMemberId(created.id)
-
-      setSuccess('Guest added.')
-      setPartyAddGuestGroupId(null)
-      setPartyAddGuestRole('guest')
-      setPartyAddGuestDraft({
-        full_name: '',
-        email: '',
-        phone: '',
-        rsvp_status: '',
-        is_placeholder: false,
-      })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create guest.')
-      try {
-        await loadAll({ showPageLoading: false })
-      } catch {
-        /* secondary load failure — primary error already shown */
-      }
-    } finally {
-      setPartyAddGuestBusy(false)
-    }
-  }
-
-  function firstName(fullName: string): string {
-    return fullName.trim().split(/\s+/).filter(Boolean)[0] ?? ''
-  }
-
-  async function createSoloParty() {
-    const full_name = createSolo.full_name.trim()
-    if (!full_name) {
-      setError('Full name is required.')
-      return
-    }
-    setPartyCreateBusy(true)
-    setError(null)
-    setSuccess(null)
-    try {
-      await createAttendee({
-        full_name,
-        email: createSolo.email.trim() || null,
-        phone: createSolo.phone.trim() || null,
-        rsvp_status: createSolo.rsvp_status.trim() || null,
-        is_placeholder: false,
-        party_role: 'lead',
-        group_id: null,
-      })
-      setSuccess('Solo guest created.')
-      setCreateSolo({ full_name: '', email: '', phone: '', rsvp_status: '' })
-      await loadAll({ showPageLoading: false })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create party.')
-    } finally {
-      setPartyCreateBusy(false)
-    }
-  }
-
-  async function createCoupleParty() {
-    const lead1 = createCouple.lead1.trim()
-    const lead2 = createCouple.lead2.trim()
-    if (!lead1 || !lead2) {
-      setError('Both lead adult names are required.')
-      return
-    }
-    setPartyCreateBusy(true)
-    setError(null)
-    setSuccess(null)
-    try {
-      const group_name = `${firstName(lead1)} & ${firstName(lead2)}`
-      const group = await createAttendeeGroup({
-        group_name,
-        notes: null,
-      })
-      await createAttendee({
-        full_name: lead1,
-        email: createCouple.email1.trim() || null,
-        phone: createCouple.phone1.trim() || null,
-        rsvp_status: createCouple.rsvp_status.trim() || null,
-        group_id: group.id,
-        is_placeholder: false,
-        party_role: 'lead',
-      })
-      await createAttendee({
-        full_name: lead2,
-        email: createCouple.email2.trim() || null,
-        phone: createCouple.phone2.trim() || null,
-        rsvp_status: createCouple.rsvp_status.trim() || null,
-        group_id: group.id,
-        is_placeholder: false,
-        party_role: 'spouse',
-      })
-      setSuccess('Party created.')
-      setCreateCouple({
-        lead1: '',
-        lead2: '',
-        rsvp_status: '',
-        email1: '',
-        email2: '',
-        phone1: '',
-        phone2: '',
-      })
-      await loadAll({ showPageLoading: false })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create party.')
-    } finally {
-      setPartyCreateBusy(false)
-    }
-  }
-
-  async function createFamilyParty() {
-    const lead1 = createFamily.lead1.trim()
-    const lead2 = createFamily.lead2.trim()
-    if (!lead1) {
-      setError('Lead adult name is required.')
-      return
-    }
-    setPartyCreateBusy(true)
-    setError(null)
-    setSuccess(null)
-    try {
-      const group_name = lead2
-        ? `${firstName(lead1)} & ${firstName(lead2)}`
-        : lead1
-      const group = await createAttendeeGroup({
-        group_name,
-        notes: null,
-      })
-      await createAttendee({
-        full_name: lead1,
-        email: createFamily.email1.trim() || null,
-        phone: createFamily.phone1.trim() || null,
-        rsvp_status: createFamily.rsvp_status.trim() || null,
-        group_id: group.id,
-        is_placeholder: false,
-        party_role: 'lead',
-      })
-      if (lead2) {
-        await createAttendee({
-          full_name: lead2,
-          email: createFamily.email2.trim() || null,
-          phone: createFamily.phone2.trim() || null,
-          rsvp_status: createFamily.rsvp_status.trim() || null,
-          group_id: group.id,
-          is_placeholder: false,
-          party_role: 'spouse',
-        })
-      }
-      setSuccess('Party created.')
-      setCreateFamily({
-        lead1: '',
-        lead2: '',
-        rsvp_status: '',
-        email1: '',
-        email2: '',
-        phone1: '',
-        phone2: '',
-      })
-      await loadAll({ showPageLoading: false })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create party.')
-    } finally {
-      setPartyCreateBusy(false)
-    }
-  }
-
-  async function createPartyFromCompactForm() {
-    const leadFullName = compactCreate.leadFullName.trim()
-    if (!leadFullName) {
-      setError('Lead guest full name is required.')
-      return
-    }
-
-    const addSpouse = compactCreate.addSpouse
-    const spouseFullName = compactCreate.spouseFullName.trim()
-    if (addSpouse && !spouseFullName) {
-      setError('Spouse name is required when “Add spouse” is checked.')
-      return
-    }
-
-    const childNames = compactCreate.childNames
-      .map((n) => n.trim())
-      .filter(Boolean)
-    const addKids = compactCreate.addKids
-    if (addKids && childNames.length === 0) {
-      setError('Add at least one child name when “Add kids” is checked.')
-      return
-    }
-
-    setPartyCreateBusy(true)
-    setError(null)
-    setSuccess(null)
-
-    try {
-      const rsvp_status = compactCreate.rsvp_status.trim() || null
-      const email = compactCreate.email.trim() || null
-      const phone = compactCreate.phone.trim() || null
-
-      // Solo: no attendee_groups row.
-      if (!addSpouse && !addKids) {
-        const created = await createAttendee({
-          full_name: leadFullName,
-          email,
-          phone,
-          rsvp_status,
-          is_placeholder: false,
-          party_role: 'lead',
-          group_id: null,
-        })
-        bumpFiltersAfterCreate()
-        await loadAll({ showPageLoading: false })
-        setSelectedPartyKey(`s:${created.id}`)
-        setSelectedMemberId(created.id)
-        setSuccess('Attendee created.')
-      } else {
-        const group_name = addSpouse
-          ? `${firstName(leadFullName)} & ${firstName(spouseFullName)}`
-          : firstName(leadFullName)
-
-        const group = await createAttendeeGroup({
-          group_name,
-          notes: null,
-        })
-
-        const lead = await createAttendee({
-          full_name: leadFullName,
-          email,
-          phone,
-          rsvp_status,
-          group_id: group.id,
-          is_placeholder: false,
-          party_role: 'lead',
-        })
-
-        if (addSpouse) {
-          await createAttendee({
-            full_name: spouseFullName,
-            email: null,
-            phone: null,
-            rsvp_status,
-            group_id: group.id,
-            is_placeholder: false,
-            party_role: 'spouse',
-          })
-        }
-
-        for (const childName of childNames) {
-          await createAttendee({
-            full_name: childName,
-            email: null,
-            phone: null,
-            rsvp_status,
-            group_id: group.id,
-            is_placeholder: false,
-            party_role: 'child',
-          })
-        }
-
-        bumpFiltersAfterCreate()
-        await loadAll({ showPageLoading: false })
-        setSelectedPartyKey(`g:${group.id}`)
-        setSelectedMemberId(lead.id)
-        setExpandedPartyKeys((prev) => ({
-          ...prev,
-          [`g:${group.id}`]: true,
-        }))
-
-        setSuccess(
-          addKids ? (addSpouse ? 'Family created.' : 'Family created.') : 'Couple created.'
-        )
-      }
-
-      setCompactCreate({
-        leadFullName: '',
-        rsvp_status: '',
-        email: '',
-        phone: '',
-        addSpouse: false,
-        spouseFullName: '',
-        addKids: false,
-        childNames: [''],
-      })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create party.')
-      // Ensure we recover to the server state if something went wrong mid-flight.
-      await loadAll({ showPageLoading: false })
-    } finally {
-      setPartyCreateBusy(false)
-    }
-  }
-
-  async function convertSoloToPartyAndAddMember(
-    soloAttendeeId: string,
-    role: 'spouse' | 'child' | 'guest',
-    name: string
-  ) {
-    const trimmed = name.trim()
-    if (!trimmed) return
-
-    const soloLead = rows.find((r) => r.id === soloAttendeeId) ?? null
-    if (!soloLead) {
-      setError('Solo attendee not found.')
-      return
-    }
-
-    setSoloAddBusy(true)
-    setError(null)
-    setSuccess(null)
-
-    try {
-      const leadFullName = soloLead.full_name.trim()
-      const rsvp_status = soloLead.rsvp_status ?? null
-
-      const group_name =
-        role === 'spouse'
-          ? `${firstName(leadFullName)} & ${firstName(trimmed)}`
-          : firstName(leadFullName)
-
-      const group = await createAttendeeGroup({
-        group_name,
-        notes: null,
-      })
-
-      await updateAttendee(soloLead.id, {
-        group_id: group.id,
-        is_placeholder: false,
-        party_role: 'lead',
-      })
-
-      const created = await createAttendee({
-        full_name: trimmed,
-        email: null,
-        phone: null,
-        rsvp_status,
-        group_id: group.id,
-        is_placeholder: false,
-        party_role: role,
-      })
-
-      bumpFiltersAfterCreate()
-
-      await loadAll({ showPageLoading: false })
-
-      setSuccess('Party updated.')
-      setSoloAdd(null)
-      setSelectedPartyKey(`g:${group.id}`)
-      setSelectedMemberId(created.id)
-      setExpandedPartyKeys((prev) => {
-        const next = { ...prev }
-        delete next[`s:${soloLead.id}`]
-        next[`g:${group.id}`] = true
-        return next
-      })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update party.')
-      await loadAll({ showPageLoading: false })
-    } finally {
-      setSoloAddBusy(false)
-    }
-  }
-
-  async function quickRsvpSave(attendeeId: string, value: string) {
-    setQuickRsvpId(attendeeId)
-    setError(null)
-    try {
-      const prev = rows.find((r) => r.id === attendeeId) ?? null
-      const nextRsvp = value === '' ? null : value
-      await updateAttendee(attendeeId, {
-        rsvp_status: nextRsvp,
-      })
-      if (prev) {
-        updateRowLocal(attendeeId, { rsvp_status: nextRsvp })
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'RSVP update failed.')
-      // Refresh to recover if our optimistic local state diverged.
-      await loadAll({ showPageLoading: false })
-    } finally {
-      setQuickRsvpId(null)
-    }
-  }
-
-  async function handleGroupRsvpApply(groupId: string, raw: string) {
-    if (!raw) return
-    setGroupRsvpBusyId(groupId)
-    setError(null)
-    setSuccess(null)
-    try {
-      const rsvp = raw === '__clear__' ? null : raw
-      await updateRsvpForGroup(groupId, rsvp)
-      setGroupRsvpSelect((s) => ({ ...s, [groupId]: '' }))
-      setSuccess('Group RSVP updated.')
-      await loadAll({ showPageLoading: false })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update group RSVP.')
-      await loadAll({ showPageLoading: false })
-    } finally {
-      setGroupRsvpBusyId(null)
-    }
-  }
+  const GRADIENT_BTN =
+    'ml-auto inline-flex h-[40px] items-center gap-2 rounded-full px-4 text-[14px] font-medium text-white transition-opacity hover:opacity-90 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]'
 
   return (
-    <div className="admin-page-shell">
-      <div className="w-full space-y-6">
-        <header>
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            Attendees
-          </h1>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Parties (solo / couple / family) are the seating unit. Add an attendee/party, then manage RSVP, table, seat, and photos directly in the list below.
+    <div className="admin-page-shell flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+      <p className="sr-only" aria-live="polite">
+        {error ?? ''} {success ?? ''}
+      </p>
+      <div className="admin-page-controls flex flex-1 min-h-0 flex-col overflow-hidden">
+        <header className="shrink-0">
+          <h1 className="admin-page-title text-zinc-900">Attendees</h1>
+          <p className="admin-gap-page-title-intro admin-intro">
+            Manage guests and parties in one list. Click a row to edit names and RSVP, or add a new party.
           </p>
         </header>
 
-        {error && (
-          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
-            {error}
-          </p>
-        )}
-        {success && (
-          <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-200">
-            {success}
-          </p>
-        )}
-
-        <section className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            Add attendee / party
-          </h2>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Create a solo guest, couple, or family with one form. Toggle spouse/kids as needed—saving will automatically create the party group and the right set of attendees.
-          </p>
-
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <label className="block text-xs">
-              <span className="font-medium text-zinc-500">Lead guest full name</span>
-              <input
-                value={compactCreate.leadFullName}
-                onChange={(e) =>
-                  setCompactCreate((s) => ({ ...s, leadFullName: e.target.value }))
-                }
-                placeholder="e.g. Chris"
-                className="mt-0.5 w-full rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-              />
-            </label>
-
-            <label className="block text-xs">
-              <span className="font-medium text-zinc-500">RSVP</span>
-              <select
-                value={compactCreate.rsvp_status}
-                onChange={(e) =>
-                  setCompactCreate((s) => ({ ...s, rsvp_status: e.target.value }))
-                }
-                className="mt-0.5 w-full rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-              >
-                {RSVP_OPTIONS.map((o) => (
-                  <option key={o.value || 'empty'} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block text-xs">
-              <span className="font-medium text-zinc-500">Email (optional)</span>
-              <input
-                type="email"
-                value={compactCreate.email}
-                onChange={(e) =>
-                  setCompactCreate((s) => ({ ...s, email: e.target.value }))
-                }
-                className="mt-0.5 w-full rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-              />
-            </label>
-
-            <label className="block text-xs">
-              <span className="font-medium text-zinc-500">Phone (optional)</span>
-              <input
-                value={compactCreate.phone}
-                onChange={(e) =>
-                  setCompactCreate((s) => ({ ...s, phone: e.target.value }))
-                }
-                className="mt-0.5 w-full rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-              />
-            </label>
-
-            <div className="md:col-span-2 flex flex-wrap items-center gap-3 pt-1">
-              <label className="inline-flex items-center gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-200">
-                <input
-                  type="checkbox"
-                  checked={compactCreate.addSpouse}
-                  onChange={(e) => {
-                    const checked = e.target.checked
-                    setCompactCreate((s) => ({
-                      ...s,
-                      addSpouse: checked,
-                      spouseFullName: checked ? s.spouseFullName : '',
-                    }))
-                  }}
-                />
-                Add spouse
-              </label>
-
-              <label className="inline-flex items-center gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-200">
-                <input
-                  type="checkbox"
-                  checked={compactCreate.addKids}
-                  onChange={(e) => {
-                    const checked = e.target.checked
-                    setCompactCreate((s) => ({
-                      ...s,
-                      addKids: checked,
-                      childNames: checked ? s.childNames : [''],
-                    }))
-                  }}
-                />
-                Add kids
-              </label>
-            </div>
-
-            {compactCreate.addSpouse ? (
-              <label className="block text-xs md:col-span-2">
-                <span className="font-medium text-zinc-500">Spouse name</span>
-                <input
-                  value={compactCreate.spouseFullName}
-                  onChange={(e) =>
-                    setCompactCreate((s) => ({
-                      ...s,
-                      spouseFullName: e.target.value,
-                    }))
-                  }
-                  placeholder="e.g. Lulu"
-                  className="mt-0.5 w-full rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-                />
-              </label>
-            ) : null}
-
-            {compactCreate.addKids ? (
-              <div className="md:col-span-2 space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
-                <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                  Kids
-                </div>
-
-                <div className="space-y-2">
-                  {compactCreate.childNames.map((name, idx) => (
-                    <label key={idx} className="block text-xs">
-                      <span className="font-medium text-zinc-500">
-                        Child {idx + 1} name
-                      </span>
-                      <input
-                        value={name}
-                        onChange={(e) => {
-                          const v = e.target.value
-                          setCompactCreate((s) => {
-                            const next = [...s.childNames]
-                            next[idx] = v
-                            return { ...s, childNames: next }
-                          })
-                        }}
-                        placeholder="e.g. Ava"
-                        className="mt-0.5 w-full rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-                      />
-                    </label>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCompactCreate((s) => ({
-                      ...s,
-                      childNames: [...s.childNames, ''],
-                    }))
-                  }
-                  className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200"
-                >
-                  + Add another child
-                </button>
-              </div>
-            ) : null}
-
-            <div className="md:col-span-2 flex flex-wrap items-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => void createPartyFromCompactForm()}
-                disabled={
-                  partyCreateBusy ||
-                  !compactCreate.leadFullName.trim() ||
-                  (compactCreate.addSpouse && !compactCreate.spouseFullName.trim()) ||
-                  (compactCreate.addKids &&
-                    !compactCreate.childNames.some((n) => n.trim().length > 0))
-                }
-                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-emerald-500"
-              >
-                {partyCreateBusy
-                  ? 'Creating…'
-                  : compactCreate.addKids
-                    ? 'Create family'
-                    : compactCreate.addSpouse
-                      ? 'Create couple'
-                      : 'Add attendee'}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setCompactCreate({
-                    leadFullName: '',
-                    rsvp_status: '',
-                    email: '',
-                    phone: '',
-                    addSpouse: false,
-                    spouseFullName: '',
-                    addKids: false,
-                    childNames: [''],
-                  })
-                }
-                className="text-sm text-zinc-600 dark:text-zinc-400"
-              >
-                Clear
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search name, email, table"
-                  className="min-w-[min(100%,12rem)] flex-1 rounded-full border border-zinc-200 bg-[#fdfdfd] px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition-colors focus:border-zinc-400 focus:bg-white dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-500"
-                />
-                <select
-                  value={tableFilterId}
-                  onChange={(e) => setTableFilterId(e.target.value)}
-                  aria-label="Filter by table"
-                  className="min-w-[10.5rem] shrink-0 cursor-pointer rounded-full border border-zinc-200 bg-[#fdfdfd] py-2 pl-3.5 pr-9 text-xs font-medium text-zinc-800 outline-none transition-colors focus:border-zinc-400 focus:bg-white dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:focus:border-zinc-500"
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2371717a'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 0.65rem center',
-                    backgroundSize: '0.9rem',
-                    appearance: 'none',
-                  }}
-                >
-                  <option value="all">All tables</option>
-                  {tableOptionsWithCounts.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} ({t.count})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div
-              className="flex flex-wrap gap-1.5"
-              role="tablist"
-              aria-label="Guest list filters"
-            >
-              {(
-                [
-                  ['all', 'All'],
-                  ['guests', 'Guests'],
-                  ['yes', 'Attending'],
-                  ['pending', 'Pending response'],
-                  ['no', 'Not attending'],
-                ] as const
-              ).map(([id, label]) => {
-                const active = guestListChip === id
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setGuestListChip(id)}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                      active
-                        ? 'border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900'
-                        : 'border-zinc-200 bg-[#fdfdfd] text-zinc-700 hover:border-zinc-300 hover:bg-[#fafafa] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/80'
-                    }`}
+        <section className="admin-gap-intro-first-section flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-2xl border-x border-t border-[#ebebeb] bg-white">
+          <div className="z-20 shrink-0 rounded-t-2xl border-b border-[#ebebeb] bg-white p-4 pb-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
+                <div className="relative w-full md:w-[360px]">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+                    aria-hidden
                   >
-                    <span>{label}</span>
-                    <span
-                      className={`tabular-nums ${
-                        active
-                          ? 'text-white/90 dark:text-zinc-800/90'
-                          : 'text-zinc-500 dark:text-zinc-400'
-                      }`}
-                    >
-                      {chipCounts[id]}
-                    </span>
-                  </button>
-                )
-              })}
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="m20 20-3.5-3.5" />
+                  </svg>
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search attendees..."
+                    className="h-10 w-full rounded-full border border-[#ebebeb] bg-white pl-8 pr-[12px] text-[14px] font-normal text-[#171717] placeholder:text-[14px] placeholder:text-[#767676] outline-none transition-colors duration-150 ease-out focus:border-zinc-400"
+                  />
+                </div>
+
+                <AdminFilterRowSegmented<GuestListChip>
+                  ariaLabel="Guest list filters"
+                  value={guestListChip}
+                  onChange={setGuestListChip}
+                  className="max-w-full flex-wrap"
+                  options={(
+                    [
+                      ['all', 'All', (n: number) => n],
+                      ['guests', 'Guests', (n: number) => n],
+                      ['yes', 'Attending', (n: number) => n],
+                      ['pending', 'Pending', (n: number) => n],
+                      ['no', 'Declined', (n: number) => n],
+                    ] as const
+                  ).map(([id, label, countFn]) => ({
+                    value: id,
+                    label: (
+                      <>
+                        {label}{' '}
+                        <span className="tabular-nums opacity-90">
+                          ({countFn(chipCounts[id as GuestListChip])})
+                        </span>
+                      </>
+                    ),
+                  }))}
+                />
+
+                <AdminSelectDropdown
+                  value={tableFilterId}
+                  onChange={(v) => setTableFilterId(v)}
+                  className="min-w-0"
+                  buttonClassName="inline-flex h-10 min-w-[200px] max-w-[280px] shrink-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 pr-2.5 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors duration-150 ease-out hover:border-zinc-300"
+                  options={[
+                    { value: 'all', label: 'All tables' },
+                    ...tableOptionsWithCounts.map((t) => ({
+                      value: t.id,
+                      label: `${t.name} (${t.count})`,
+                    })),
+                  ]}
+                />
+              </div>
+
+              <button type="button" onClick={openCreateAttendeeEditor} className={GRADIENT_BTN}>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-4 w-4"
+                  aria-hidden
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                <span>New attendee</span>
+              </button>
             </div>
           </div>
+
+          {error ? (
+            <p className="shrink-0 px-4 pt-2 text-sm font-medium text-red-600">{error}</p>
+          ) : null}
+          {success ? (
+            <p className="shrink-0 px-4 pt-2 text-sm font-medium text-emerald-700">{success}</p>
+          ) : null}
 
           {loading ? (
-            <p className="mt-6 text-sm text-zinc-500">Loading attendees…</p>
+            <div className="admin-scroll-area h-full overflow-y-auto px-4 pb-4 pt-3">
+              <div className="admin-content-in space-y-1">
+                <div className="grid min-h-[50px] grid-cols-12 gap-x-2 border-b border-[#ebebeb] px-3 pb-2 pt-[10px] text-[14px] font-medium text-[#18181b]">
+                  <div className="col-span-4">Party</div>
+                  <div className="col-span-1 text-center">Kids</div>
+                  <div className="col-span-1 text-center">Extra</div>
+                  <div className="col-span-2">Table</div>
+                  <div className="col-span-2">Seat</div>
+                  <div className="col-span-1">RSVP</div>
+                  <div className="col-span-1" aria-hidden />
+                </div>
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div key={i} className="grid min-h-[50px] grid-cols-12 items-center gap-x-2 rounded-lg px-3 py-1.5">
+                    <div className="col-span-4">
+                      <span className="admin-skeleton inline-block h-3.5 w-32 rounded-md" />
+                    </div>
+                    <div className="col-span-1 flex justify-center">
+                      <span className="admin-skeleton h-6 w-6 rounded-full" />
+                    </div>
+                    <div className="col-span-1 flex justify-center">
+                      <span className="admin-skeleton h-6 w-6 rounded-full" />
+                    </div>
+                    <div className="col-span-2">
+                      <span className="admin-skeleton h-3.5 w-16 rounded-md" />
+                    </div>
+                    <div className="col-span-2">
+                      <span className="admin-skeleton h-3.5 w-12 rounded-md" />
+                    </div>
+                    <div className="col-span-1">
+                      <span className="admin-skeleton h-6 w-14 rounded-full" />
+                    </div>
+                    <div className="col-span-1" />
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : filtered.length === 0 ? (
-            <p className="mt-6 text-sm text-zinc-500">
-              No parties match. Try adjusting search/filters, or add an attendee/party above.
-            </p>
+            <div className="admin-scroll-area px-4 pb-4 pt-6 text-[14px] text-zinc-500">
+              No attendees match your filters.
+            </div>
           ) : (
-            <>
-            <div className="mt-4" ref={attendeeListRef}>
-              <div className="grid grid-cols-12 gap-x-2 px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-                <div className="col-span-4">Name</div>
+            <div className="admin-scroll-area admin-content-in h-full min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+              <div className="sticky top-0 z-10 grid grid-cols-12 gap-x-2 border-b border-[#ebebeb] bg-white px-3 pb-2 pt-[10px] text-[14px] font-medium text-[#18181b]">
+                <div className="col-span-4">Party</div>
                 <div className="col-span-1 text-center">Kids</div>
                 <div className="col-span-1 text-center">Extra</div>
                 <div className="col-span-2">Table</div>
                 <div className="col-span-2">Seat</div>
                 <div className="col-span-1">RSVP</div>
-                <div className="col-span-1 text-right" aria-hidden />
+                <div className="col-span-1" aria-hidden />
               </div>
-
-              <div className="space-y-1">
+              <div className="space-y-1 pt-1">
+                <button
+                  type="button"
+                  onClick={openCreateAttendeeEditor}
+                  className="grid min-h-[50px] w-full cursor-pointer grid-cols-12 items-center gap-x-2 rounded-lg border border-dashed border-[#dcdcdc] bg-[#f9fafb] px-3 py-1.5 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-50"
+                >
+                  <span className="col-span-11 text-[14px] font-semibold text-zinc-600">
+                    + Add new attendee
+                  </span>
+                  <span className="col-span-1" aria-hidden />
+                </button>
                 {partyBlocks.map((p, partyIndex) => {
-                  const isExpanded = expandedPartyKeys[p.key] === true
-                  const expandable = p.kind === 'group'
-
-                  const partyTitle =
-                    p.kind === 'solo'
-                      ? p.members[0]?.full_name ?? ''
-                      : getPartyTitle(p.members, p.group!)
                   const kidsCount = computePartyKidsCount(p.members)
                   const extraGuestsCount = computePartyExtraGuestsCount(p.members)
                   const childMembers = childMembersOf(p.members)
                   const extraGuestsMembers = extraGuestsMembersOf(p.members)
                   const parentMembers = parentMembersOf(p.members)
-                  const seatSummary = computePartySeatAndTable(
-                    p.members,
-                    tableNameById
-                  )
+                  const seatSummary = computePartySeatAndTable(p.members, tableNameById)
                   const rsvpBadge = computePartyRsvpBadge(p.members)
-
-                  const partyBgClass =
+                  const partyTitle =
+                    p.kind === 'solo'
+                      ? p.members[0]?.full_name ?? ''
+                      : getPartyTitle(p.members, p.group!)
+                  const rowBgClass =
                     partyIndex % 2 === 0
-                      ? 'bg-[#fdfdfd] hover:bg-[#fafafa] dark:bg-zinc-900/45 dark:hover:bg-zinc-800/55'
-                      : 'bg-[#1f1f1f08] hover:bg-[#ededed] dark:bg-zinc-950/35 dark:hover:bg-zinc-800/45'
-
-                  const rowSelectedAccent =
-                    'shadow-[inset_3px_0_0_0_rgb(63_63_70)] dark:shadow-[inset_3px_0_0_0_rgb(161_161_170)]'
-
-                  if (p.kind === 'solo') {
-                    const m = p.members[0]!
-                    const showAddForThisSolo = soloAdd?.attendeeId === m.id
-                    const isSel =
-                      selectedPartyKey === p.key && selectedMemberId === m.id
-                    const soloRsvp = computePartyRsvpBadge([m])
-                    const tableLabelPlain =
-                      m.table_id == null
-                        ? '—'
-                        : tableNameById.get(m.table_id) ?? m.table_id.slice(0, 8)
-                    const seatLabelPlain =
-                      m.seat_number == null ? '—' : String(m.seat_number)
-
-                    return (
-                      <div
-                        key={p.key}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => {
-                          if (
-                            selectedPartyKey === p.key &&
-                            selectedMemberId === m.id
-                          ) {
-                            setSelectedPartyKey(null)
-                            setSelectedMemberId(null)
-                          } else {
-                            setSelectedPartyKey(p.key)
-                            setSelectedMemberId(m.id)
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (isInsideFormField(e.target)) return
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            if (
-                              selectedPartyKey === p.key &&
-                              selectedMemberId === m.id
-                            ) {
-                              setSelectedPartyKey(null)
-                              setSelectedMemberId(null)
-                            } else {
-                              setSelectedPartyKey(p.key)
-                              setSelectedMemberId(m.id)
-                            }
-                          }
-                        }}
-                        className={`${partyBgClass} cursor-pointer rounded-lg transition-colors ${
-                          selectedPartyKey === p.key && selectedMemberId === m.id
-                            ? rowSelectedAccent
-                            : ''
-                        }`}
-                      >
-                        <div className="grid grid-cols-12 gap-x-2 items-center px-3 py-1.5 text-[12px]">
-                          <div
-                            className={`col-span-4 flex gap-2.5 min-w-0 ${
-                              isSel ? 'items-start' : 'items-center'
-                            }`}
-                          >
-                            <label
-                              className="relative h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-full border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800"
-                              aria-label={`Upload photo for ${m.full_name}`}
-                              title="Click to upload photo"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <input
-                                type="file"
-                                accept="image/jpeg,image/png,image/webp"
-                                className="hidden"
-                                disabled={photoBusyId === m.id}
-                                onChange={(e) =>
-                                  void onPhotoPick(
-                                    m.id,
-                                    e.target.files?.[0] ?? null
-                                  )
-                                }
-                              />
-                              {m.photo_url ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={m.photo_url}
-                                  alt=""
-                                  className="h-full w-full rounded-full object-cover"
-                                />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-zinc-600 dark:text-zinc-200">
-                                  {getInitials(m.full_name)}
-                                </div>
-                              )}
-                              {photoBusyId === m.id ? (
-                                <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/40 text-[10px] font-medium text-white">
-                                  …
-                                </div>
-                              ) : null}
-                            </label>
-
-                            <div className="min-w-0 flex-1">
-                              {isSel ? (
-                                <input
-                                  value={nameDraftById[m.id] ?? m.full_name}
-                                  onChange={(e) =>
-                                    setNameDraftById((prev) => ({
-                                      ...prev,
-                                      [m.id]: e.target.value,
-                                    }))
-                                  }
-                                  onBlur={() =>
-                                    void saveInlineFullName(
-                                      m.id,
-                                      nameDraftById[m.id] ?? m.full_name,
-                                      m.full_name
-                                    )
-                                  }
-                                  disabled={inlineSavingId === m.id}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="w-full max-w-[14rem] rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[12px] text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-                                />
-                              ) : (
-                                <span className="block truncate font-medium text-zinc-900 dark:text-zinc-100">
-                                  {m.full_name || '(Unnamed)'}
-                                </span>
-                              )}
-
-                              {isSel && m.photo_url ? (
-                                <div className="mt-1">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      void clearPhoto(m.id)
-                                    }}
-                                    className="text-[11px] text-zinc-600 underline dark:text-zinc-400"
-                                  >
-                                    Clear photo
-                                  </button>
-                                </div>
-                              ) : null}
-
-                              {isSel ? (
-                                showAddForThisSolo ? (
-                                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                                    <input
-                                      value={soloAdd.full_name}
-                                      onChange={(e) =>
-                                        setSoloAdd((s) =>
-                                          s
-                                            ? { ...s, full_name: e.target.value }
-                                            : s
-                                        )
-                                      }
-                                      onClick={(e) => e.stopPropagation()}
-                                      placeholder={
-                                        soloAdd.role === 'spouse'
-                                          ? 'Spouse name'
-                                          : soloAdd.role === 'child'
-                                            ? 'Kid name'
-                                            : 'Guest name'
-                                      }
-                                      className="w-[9.5rem] rounded border border-zinc-300 bg-white px-2 py-1.5 text-[12px] dark:border-zinc-600 dark:bg-zinc-950"
-                                    />
-                                    <button
-                                      type="button"
-                                      disabled={
-                                        soloAddBusy ||
-                                        soloAdd.full_name.trim().length === 0
-                                      }
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        void convertSoloToPartyAndAddMember(
-                                          m.id,
-                                          soloAdd.role,
-                                          soloAdd.full_name
-                                        )
-                                      }}
-                                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-medium text-white disabled:opacity-50 dark:bg-emerald-500"
-                                    >
-                                      {soloAddBusy
-                                        ? 'Adding…'
-                                        : soloAdd.role === 'spouse'
-                                          ? 'Add spouse'
-                                          : soloAdd.role === 'child'
-                                            ? 'Add kid'
-                                            : 'Add guest (+1)'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        setSoloAdd(null)
-                                      }}
-                                      className="text-[12px] text-zinc-600 dark:text-zinc-400"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="mt-1 flex flex-wrap gap-2">
-                                    <button
-                                      type="button"
-                                      disabled={soloAddBusy}
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        setSoloAdd({
-                                          attendeeId: m.id,
-                                          role: 'spouse',
-                                          full_name: '',
-                                        })
-                                      }}
-                                      className="rounded border border-violet-300 bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-800 hover:bg-violet-100 dark:border-violet-600 dark:bg-violet-500/10 dark:text-violet-200 dark:hover:bg-violet-500/20"
-                                    >
-                                      Add spouse
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={soloAddBusy}
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        setSoloAdd({
-                                          attendeeId: m.id,
-                                          role: 'child',
-                                          full_name: '',
-                                        })
-                                      }}
-                                      className="rounded border border-violet-300 bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-800 hover:bg-violet-100 dark:border-violet-600 dark:bg-violet-500/10 dark:text-violet-200 dark:hover:bg-violet-500/20"
-                                    >
-                                      Add kid
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={soloAddBusy}
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        setSoloAdd({
-                                          attendeeId: m.id,
-                                          role: 'guest',
-                                          full_name: '',
-                                        })
-                                      }}
-                                      className="rounded border border-violet-300 bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-800 hover:bg-violet-100 dark:border-violet-600 dark:bg-violet-500/10 dark:text-violet-200 dark:hover:bg-violet-500/20"
-                                    >
-                                      Add guest (+1)
-                                    </button>
-                                  </div>
-                                )
-                              ) : null}
-                            </div>
-                          </div>
-
-                          <div className="col-span-1 text-center text-[11px] text-zinc-500">
-                            —
-                          </div>
-                          <div className="col-span-1 text-center text-[11px] text-zinc-500">
-                            —
-                          </div>
-
-                          <div className="col-span-2 text-[11px] text-zinc-700 dark:text-zinc-200">
-                            {isSel ? (
-                              <select
-                                value={m.table_id ?? ''}
-                                disabled={inlineSavingId === m.id}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) =>
-                                  void saveInlineTable(
-                                    m.id,
-                                    e.target.value || null
-                                  )
-                                }
-                                className="max-w-full rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[11px] text-zinc-800 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200"
-                              >
-                                <option value="">—</option>
-                                {tables.map((t) => (
-                                  <option key={t.id} value={t.id}>
-                                    {t.name}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              tableLabelPlain
-                            )}
-                          </div>
-
-                          <div className="col-span-2 text-[11px] text-zinc-700 dark:text-zinc-200">
-                            {isSel ? (
-                              <input
-                                type="number"
-                                min={1}
-                                step={1}
-                                value={
-                                  seatDraftById[m.id] ??
-                                  (m.seat_number != null
-                                    ? String(m.seat_number)
-                                    : '')
-                                }
-                                disabled={inlineSavingId === m.id}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  const v = e.target.value
-                                  setSeatDraftById((prev) => ({
-                                    ...prev,
-                                    [m.id]: v,
-                                  }))
-                                }}
-                                onBlur={() =>
-                                  void saveInlineSeatNumber(
-                                    m.id,
-                                    seatDraftById[m.id] ??
-                                      (m.seat_number != null
-                                        ? String(m.seat_number)
-                                        : ''),
-                                    m.seat_number
-                                  )
-                                }
-                                className="w-full max-w-[5rem] rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[11px] text-zinc-800 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200 disabled:opacity-60"
-                                placeholder="-"
-                              />
-                            ) : (
-                              seatLabelPlain
-                            )}
-                          </div>
-
-                          <div className="col-span-1 text-[11px]">
-                            {isSel ? (
-                              <select
-                                value={m.rsvp_status ?? ''}
-                                disabled={
-                                  inlineSavingId === m.id || quickRsvpId === m.id
-                                }
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) =>
-                                  void quickRsvpSave(m.id, e.target.value)
-                                }
-                                className="max-w-full rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[11px] text-zinc-800 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200"
-                              >
-                                <option value="">—</option>
-                                {RSVP_OPTIONS.map((o) => (
-                                  <option key={o.value || 'empty'} value={o.value}>
-                                    {o.label}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              <span
-                                className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${soloRsvp.className}`}
-                              >
-                                {soloRsvp.text}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="col-span-1 flex justify-end">
-                            <ArchiveGuestIconButton
-                              disabled={inlineSavingId === m.id}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                void handleDeleteAttendee(m.id)
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  }
-
+                      ? 'bg-[#fdfdfd] hover:bg-[#fafafa]'
+                      : 'bg-[#1f1f1f08] hover:bg-[#ededed]'
                   return (
-                    <div key={p.key} className={`${partyBgClass} rounded-lg transition-colors`}>
-                      <div
-                        className={`grid grid-cols-12 gap-x-2 items-center px-3 py-1.5 text-xs transition-colors ${
-                          expandable ? 'cursor-pointer select-none' : ''
-                        } ${
-                          selectedPartyKey === p.key && selectedMemberId === null
-                            ? rowSelectedAccent
-                            : ''
-                        }`}
-                        onClick={() => {
-                          if (!expandable) return
-                          const headerSelected =
-                            selectedPartyKey === p.key &&
-                            selectedMemberId === null
-                          if (headerSelected) {
-                            setSelectedPartyKey(null)
-                            setSelectedMemberId(null)
-                            setExpandedPartyKeys((prev) => ({
-                              ...prev,
-                              [p.key]: false,
-                            }))
-                          } else {
-                            setSelectedPartyKey(p.key)
-                            setSelectedMemberId(null)
-                            setExpandedPartyKeys((prev) => ({
-                              ...prev,
-                              [p.key]: true,
-                            }))
-                          }
-                        }}
+                    <div
+                      key={p.key}
+                      className={`grid min-h-[50px] grid-cols-12 items-center gap-x-2 rounded-lg px-3 py-1.5 ${rowBgClass}`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => openEditAttendeeEditor(p)}
+                        className="col-span-11 grid cursor-pointer grid-cols-11 items-center gap-x-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2"
                       >
-                        <div className="col-span-4 flex items-center gap-2.5 min-w-0">
+                        <div className="col-span-4 flex min-w-0 items-center gap-2.5">
                           {parentMembers.length > 0 ? (
                             <MiniAvatarStack members={parentMembers} max={3} />
                           ) : null}
-                          <span className="min-w-0 truncate font-medium leading-tight text-zinc-900 dark:text-zinc-100">
+                          <span className="min-w-0 truncate text-[14px] font-medium text-zinc-900">
                             {partyTitle}
                           </span>
                         </div>
-
-                        <div className="col-span-1 flex items-center justify-center text-[11px] text-zinc-600 dark:text-zinc-300">
+                        <div className="col-span-1 flex items-center justify-center text-[13px] text-zinc-600">
                           {kidsCount === 0 ? (
                             '—'
                           ) : (
                             <MiniAvatarStack members={childMembers} max={3} />
                           )}
                         </div>
-
-                        <div className="col-span-1 flex items-center justify-center text-[11px] text-zinc-600 dark:text-zinc-300">
+                        <div className="col-span-1 flex items-center justify-center text-[13px] text-zinc-600">
                           {extraGuestsCount === 0 ? (
                             '—'
                           ) : (
                             <MiniAvatarStack members={extraGuestsMembers} max={3} />
                           )}
                         </div>
-
-                        <div className="col-span-2 text-[11px] text-zinc-700 dark:text-zinc-200">
+                        <div className="col-span-2 text-[14px] font-medium text-zinc-500">
                           {seatSummary.tableLabel}
                         </div>
-                        <div className="col-span-2 text-[11px] text-zinc-700 dark:text-zinc-200">
+                        <div className="col-span-2 text-[14px] font-medium text-zinc-500">
                           {seatSummary.seatLabel}
                         </div>
-
                         <div className="col-span-1">
                           <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${rsvpBadge.className}`}
+                            className={`inline-flex rounded-full px-2 py-0.5 text-[13px] font-semibold ${rsvpBadge.className}`}
                           >
                             {rsvpBadge.text}
                           </span>
                         </div>
-                        <div className="col-span-1 text-right text-[11px] text-zinc-400">
-                          —
-                        </div>
+                      </button>
+                      <div className="col-span-1 flex justify-end">
+                        <ArchiveGuestIconButton
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const firstId = p.members[0]?.id
+                            if (firstId) void handleDeleteAttendee(firstId)
+                          }}
+                        />
                       </div>
-
-                      {isExpanded ? (
-                        <div className="ml-3 border-l border-zinc-200/90 pl-3 dark:border-zinc-700/90">
-                          {p.members.map((m) => {
-                            const memSel =
-                              selectedPartyKey === p.key &&
-                              selectedMemberId === m.id
-                            const memRsvp = computePartyRsvpBadge([m])
-                            const tablePlain =
-                              m.table_id == null
-                                ? '—'
-                                : tableNameById.get(m.table_id) ??
-                                  m.table_id.slice(0, 8)
-                            const seatPlain =
-                              m.seat_number == null
-                                ? '—'
-                                : String(m.seat_number)
-                            const isExtraMember =
-                              m.party_role === 'guest' ||
-                              m.party_role === 'placeholder' ||
-                              (Boolean(m.is_placeholder) &&
-                                m.party_role !== 'child')
-
-                            return (
-                              <div
-                                key={m.id}
-                                role="button"
-                                tabIndex={0}
-                                onClick={() => {
-                                  if (
-                                    selectedPartyKey === p.key &&
-                                    selectedMemberId === m.id
-                                  ) {
-                                    setSelectedPartyKey(null)
-                                    setSelectedMemberId(null)
-                                  } else {
-                                    setSelectedPartyKey(p.key)
-                                    setSelectedMemberId(m.id)
-                                    setExpandedPartyKeys((prev) => ({
-                                      ...prev,
-                                      [p.key]: true,
-                                    }))
-                                  }
-                                }}
-                                onKeyDown={(e) => {
-                                  if (isInsideFormField(e.target)) return
-                                  if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault()
-                                    if (
-                                      selectedPartyKey === p.key &&
-                                      selectedMemberId === m.id
-                                    ) {
-                                      setSelectedPartyKey(null)
-                                      setSelectedMemberId(null)
-                                    } else {
-                                      setSelectedPartyKey(p.key)
-                                      setSelectedMemberId(m.id)
-                                      setExpandedPartyKeys((prev) => ({
-                                        ...prev,
-                                        [p.key]: true,
-                                      }))
-                                    }
-                                  }
-                                }}
-                                className={`grid cursor-pointer grid-cols-12 gap-x-2 items-center px-3 py-2 text-[12px] ${
-                                  memSel
-                                    ? 'bg-violet-50/80 dark:bg-violet-950/20'
-                                    : ''
-                                }`}
-                              >
-                                <div
-                                  className={`col-span-4 flex gap-2.5 min-w-0 ${
-                                    memSel ? 'items-start' : 'items-center'
-                                  }`}
-                                >
-                                  <label
-                                    className="relative h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-full border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800"
-                                    aria-label={`Upload photo for ${m.full_name}`}
-                                    title="Click to upload photo"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <input
-                                      type="file"
-                                      accept="image/jpeg,image/png,image/webp"
-                                      className="hidden"
-                                      disabled={photoBusyId === m.id}
-                                      onChange={(e) =>
-                                        void onPhotoPick(
-                                          m.id,
-                                          e.target.files?.[0] ?? null
-                                        )
-                                      }
-                                    />
-                                    {m.photo_url ? (
-                                      // eslint-disable-next-line @next/next/no-img-element
-                                      <img
-                                        src={m.photo_url}
-                                        alt=""
-                                        className="h-full w-full rounded-full object-cover"
-                                      />
-                                    ) : (
-                                      <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-zinc-600 dark:text-zinc-200">
-                                        {getInitials(m.full_name)}
-                                      </div>
-                                    )}
-                                    {photoBusyId === m.id ? (
-                                      <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/40 text-[10px] font-medium text-white">
-                                        …
-                                      </div>
-                                    ) : null}
-                                  </label>
-
-                                  <div className="min-w-0 flex-1">
-                                    {memSel ? (
-                                      <input
-                                        value={nameDraftById[m.id] ?? m.full_name}
-                                        onChange={(e) =>
-                                          setNameDraftById((prev) => ({
-                                            ...prev,
-                                            [m.id]: e.target.value,
-                                          }))
-                                        }
-                                        onBlur={() =>
-                                          void saveInlineFullName(
-                                            m.id,
-                                            nameDraftById[m.id] ?? m.full_name,
-                                            m.full_name
-                                          )
-                                        }
-                                        disabled={inlineSavingId === m.id}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="w-full max-w-[14rem] rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[12px] text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-                                      />
-                                    ) : (
-                                      <span className="min-w-0 truncate font-medium text-zinc-900 dark:text-zinc-100">
-                                        {m.full_name || '(Unnamed)'}
-                                      </span>
-                                    )}
-                                    {memSel && m.photo_url ? (
-                                      <div className="mt-1">
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            void clearPhoto(m.id)
-                                          }}
-                                          className="text-[11px] text-zinc-600 underline dark:text-zinc-400"
-                                        >
-                                          Clear photo
-                                        </button>
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                </div>
-
-                                <div className="col-span-1 flex items-center justify-center text-[11px] text-zinc-600 dark:text-zinc-300">
-                                  {m.party_role === 'child' ? (
-                                    <MiniAvatarStack members={[m]} max={1} />
-                                  ) : (
-                                    '—'
-                                  )}
-                                </div>
-
-                                <div className="col-span-1 flex items-center justify-center text-[11px] text-zinc-600 dark:text-zinc-300">
-                                  {isExtraMember ? (
-                                    <MiniAvatarStack members={[m]} max={1} />
-                                  ) : (
-                                    '—'
-                                  )}
-                                </div>
-
-                                <div className="col-span-2 text-[11px] text-zinc-700 dark:text-zinc-200">
-                                  {memSel ? (
-                                    <select
-                                      value={m.table_id ?? ''}
-                                      disabled={inlineSavingId === m.id}
-                                      onClick={(e) => e.stopPropagation()}
-                                      onChange={(e) =>
-                                        void saveInlineTable(
-                                          m.id,
-                                          e.target.value || null
-                                        )
-                                      }
-                                      className="max-w-full rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[11px] text-zinc-800 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200"
-                                    >
-                                      <option value="">—</option>
-                                      {tables.map((t) => (
-                                        <option key={t.id} value={t.id}>
-                                          {t.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  ) : (
-                                    tablePlain
-                                  )}
-                                </div>
-
-                                <div className="col-span-2 text-[11px] text-zinc-700 dark:text-zinc-200">
-                                  {memSel ? (
-                                    <input
-                                      type="number"
-                                      min={1}
-                                      step={1}
-                                      value={
-                                        seatDraftById[m.id] ??
-                                        (m.seat_number != null
-                                          ? String(m.seat_number)
-                                          : '')
-                                      }
-                                      disabled={inlineSavingId === m.id}
-                                      onClick={(e) => e.stopPropagation()}
-                                      onChange={(e) => {
-                                        const v = e.target.value
-                                        setSeatDraftById((prev) => ({
-                                          ...prev,
-                                          [m.id]: v,
-                                        }))
-                                      }}
-                                      onBlur={() =>
-                                        void saveInlineSeatNumber(
-                                          m.id,
-                                          seatDraftById[m.id] ??
-                                            (m.seat_number != null
-                                              ? String(m.seat_number)
-                                              : ''),
-                                          m.seat_number
-                                        )
-                                      }
-                                      className="w-full max-w-[5rem] rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[11px] text-zinc-800 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200 disabled:opacity-60"
-                                      placeholder="-"
-                                    />
-                                  ) : (
-                                    seatPlain
-                                  )}
-                                </div>
-
-                                <div className="col-span-1 text-[11px]">
-                                  {memSel ? (
-                                    <select
-                                      value={m.rsvp_status ?? ''}
-                                      disabled={inlineSavingId === m.id}
-                                      onClick={(e) => e.stopPropagation()}
-                                      onChange={(e) =>
-                                        void quickRsvpSave(m.id, e.target.value)
-                                      }
-                                      className="max-w-full rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[11px] text-zinc-800 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200"
-                                    >
-                                      <option value="">—</option>
-                                      {RSVP_OPTIONS.map((o) => (
-                                        <option
-                                          key={o.value || 'empty'}
-                                          value={o.value}
-                                        >
-                                          {o.label}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  ) : (
-                                    <span
-                                      className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${memRsvp.className}`}
-                                    >
-                                      {memRsvp.text}
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div className="col-span-1 flex justify-end">
-                                  <ArchiveGuestIconButton
-                                    disabled={inlineSavingId === m.id}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      void handleDeleteAttendee(m.id)
-                                    }}
-                                  />
-                                </div>
-                              </div>
-                            )
-                          })}
-
-                          {p.kind === 'group' && selectedPartyKey === p.key ? (
-                            <div className="px-3 py-2 pt-3">
-                              <div className="flex flex-wrap gap-2">
-                                {partyAddGuestGroupId === p.group.id ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        setPartyAddGuestGroupId(null)
-                                      }}
-                                      className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        setPartyAddGuestGroupId(p.group.id)
-                                        setPartyAddGuestRole('spouse')
-                                        setPartyAddGuestDraft({
-                                          full_name: '',
-                                          email: '',
-                                          phone: '',
-                                          rsvp_status: '',
-                                          is_placeholder: false,
-                                        })
-                                      }}
-                                      className="rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-800 hover:bg-violet-100 dark:border-violet-600 dark:bg-violet-500/10 dark:text-violet-200 dark:hover:bg-violet-500/20"
-                                    >
-                                      Add spouse
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        setPartyAddGuestGroupId(p.group.id)
-                                        setPartyAddGuestRole('child')
-                                        setPartyAddGuestDraft({
-                                          full_name: '',
-                                          email: '',
-                                          phone: '',
-                                          rsvp_status: '',
-                                          is_placeholder: false,
-                                        })
-                                      }}
-                                      className="rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-800 hover:bg-violet-100 dark:border-violet-600 dark:bg-violet-500/10 dark:text-violet-200 dark:hover:bg-violet-500/20"
-                                    >
-                                      Add kid
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        setPartyAddGuestGroupId(p.group.id)
-                                        setPartyAddGuestRole('guest')
-                                        setPartyAddGuestDraft({
-                                          full_name: '',
-                                          email: '',
-                                          phone: '',
-                                          rsvp_status: '',
-                                          is_placeholder: false,
-                                        })
-                                      }}
-                                      className="rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-800 hover:bg-violet-100 dark:border-violet-600 dark:bg-violet-500/10 dark:text-violet-200 dark:hover:bg-violet-500/20"
-                                    >
-                                      Add guest (+1)
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-
-                              {partyAddGuestGroupId === p.group.id ? (
-                                <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/40">
-                                  <div className="grid gap-3 sm:grid-cols-2">
-                                    <label className="block text-xs sm:col-span-2">
-                                      <span className="font-medium text-zinc-500">
-                                        Full name
-                                      </span>
-                                      <input
-                                        value={partyAddGuestDraft.full_name}
-                                        onChange={(e) =>
-                                          setPartyAddGuestDraft((s) => ({
-                                            ...s,
-                                            full_name: e.target.value,
-                                          }))
-                                        }
-                                        placeholder="Guest name"
-                                        className="mt-0.5 w-full rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-                                      />
-                                    </label>
-
-                                    <label className="block text-xs">
-                                      <span className="font-medium text-zinc-500">
-                                        RSVP
-                                      </span>
-                                      <select
-                                        value={partyAddGuestDraft.rsvp_status}
-                                        onChange={(e) =>
-                                          setPartyAddGuestDraft((s) => ({
-                                            ...s,
-                                            rsvp_status: e.target.value,
-                                          }))
-                                        }
-                                        className="mt-0.5 w-full rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-                                      >
-                                        {RSVP_OPTIONS.map((o) => (
-                                          <option
-                                            key={o.value || 'empty'}
-                                            value={o.value}
-                                          >
-                                            {o.label}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </label>
-                                  </div>
-
-                                  <div className="mt-3 flex flex-wrap gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        void handleCreateGuestForParty(
-                                          p.group.id
-                                        )
-                                      }}
-                                      disabled={
-                                        partyAddGuestBusy ||
-                                        partyAddGuestDraft.full_name
-                                          .trim().length === 0
-                                      }
-                                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-emerald-500"
-                                    >
-                                      {partyAddGuestBusy
-                                        ? 'Adding…'
-                                        : partyAddGuestRole === 'child'
-                                          ? 'Add kid'
-                                          : partyAddGuestRole === 'spouse'
-                                            ? 'Add spouse'
-                                            : 'Add guest (+1)'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        setPartyAddGuestGroupId(null)
-                                        setPartyAddGuestDraft({
-                                          full_name: '',
-                                          email: '',
-                                          phone: '',
-                                          rsvp_status: '',
-                                          is_placeholder: false,
-                                        })
-                                      }}
-                                      className="text-sm text-zinc-600 dark:text-zinc-400"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : null}
-                            </div>
-                          ) : null}
-
-                        </div>
-                      ) : null}
                     </div>
                   )
                 })}
               </div>
-              </div>
-            </>
+            </div>
           )}
+
+          <AttendeeEditorOverlay
+            open={attendeeEditorOpen}
+            mode={attendeeEditorMode}
+            party={attendeeEditorParty}
+            onClose={() => setAttendeeEditorOpen(false)}
+            onSaved={async () => {
+              bumpFiltersAfterCreate()
+              await loadAll({ showPageLoading: false })
+            }}
+            onError={(m) => setError(m)}
+            onSuccess={(m) => {
+              setSuccess(m)
+              setError(null)
+            }}
+          />
         </section>
       </div>
     </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import { AdminDropdown } from '@/app/admin/_components/AdminDropdown'
 
 export type AdminSelectOption<T extends string = string> = {
@@ -21,6 +21,7 @@ type Props<T extends string> = {
   align?: 'left' | 'right'
   className?: string
   menuItemClassName?: string
+  onTriggerKeyDown?: (e: KeyboardEvent<HTMLButtonElement>) => void
 }
 
 /**
@@ -36,6 +37,7 @@ export function AdminSelectDropdown<T extends string>({
   align = 'left',
   className = '',
   menuItemClassName = 'flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-[14px] font-medium text-[#171717] hover:bg-zinc-50',
+  onTriggerKeyDown,
 }: Props<T>) {
   const selected = options.find((o) => o.value === value)
 
@@ -44,6 +46,7 @@ export function AdminSelectDropdown<T extends string>({
       className={className}
       align={align}
       buttonClassName={buttonClassName ?? DEFAULT_BUTTON}
+      onTriggerKeyDown={onTriggerKeyDown}
       trigger={
         <>
           <span className="min-w-0 flex-1 truncate">{renderValue ? renderValue(selected) : selected?.label}</span>
