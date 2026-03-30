@@ -121,6 +121,8 @@ export function AdminTableTwinSeatMap({
   previewGhostMembers = null,
   size = 'compact',
   showSeatNames = false,
+  onSeatClick = null,
+  lockedSeatNums = null,
 }: {
   capacity: number
   attendeesAtTable: AttendeeRow[]
@@ -130,6 +132,10 @@ export function AdminTableTwinSeatMap({
   previewGhostMembers?: AttendeeRow[] | null
   size?: 'compact' | 'large'
   showSeatNames?: boolean
+  /** Precision UX (e.g. large overlay): click seat to assign. Coexists with map drag/drop elsewhere. */
+  onSeatClick?: ((seatNum: number, guest: AttendeeRow | null) => void) | null
+  /** Seat numbers locked for assignment (session UI; persist later). */
+  lockedSeatNums?: ReadonlySet<number> | null
 }) {
   const bySeat = new Map<number, AttendeeRow>()
   for (const r of attendeesAtTable) {
@@ -181,6 +187,8 @@ export function AdminTableTwinSeatMap({
           partyForSeat={partyForSeat}
           showSeatNames={showSeatNames}
           isLarge={size === 'large'}
+          onSeatClick={onSeatClick}
+          lockedSeatNums={lockedSeatNums}
         />
 
         {/* Bottom row: N/2+1 → N */}
@@ -199,6 +207,8 @@ export function AdminTableTwinSeatMap({
           partyForSeat={partyForSeat}
           showSeatNames={showSeatNames}
           isLarge={size === 'large'}
+          onSeatClick={onSeatClick}
+          lockedSeatNums={lockedSeatNums}
         />
       </div>
     </div>
@@ -220,6 +230,8 @@ function SideRow({
   partyForSeat,
   showSeatNames,
   isLarge,
+  onSeatClick,
+  lockedSeatNums,
 }: {
   sideName: 'top' | 'bottom'
   sideStart: number
@@ -235,6 +247,8 @@ function SideRow({
   partyForSeat: (seatNum: number) => SeatingParty | undefined
   showSeatNames: boolean
   isLarge: boolean
+  onSeatClick: ((seatNum: number, guest: AttendeeRow | null) => void) | null
+  lockedSeatNums: ReadonlySet<number> | null
 }) {
   const count = Math.max(0, sideEnd - sideStart + 1)
   if (count <= 0) {
@@ -330,11 +344,14 @@ function SideRow({
                 ? 'ring-2 ring-[#5b38f2]/25'
                 : ''
 
-              const seatClass = inPreview
-                ? 'border-[#5b38f2]/60 bg-[#5b38f2]/12'
-                : filled
-                  ? 'border-[#5b38f2]/30 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]/10'
-                  : 'border-dashed border-zinc-200/70 bg-zinc-50/55'
+              const isLocked = lockedSeatNums?.has(seatNum) ?? false
+              const seatClass = isLocked
+                ? 'border-zinc-500/50 bg-zinc-200/50'
+                : inPreview
+                  ? 'border-[#5b38f2]/60 bg-[#5b38f2]/12'
+                  : filled
+                    ? 'border-[#5b38f2]/30 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]/10'
+                    : 'border-dashed border-zinc-200/70 bg-zinc-50/55'
 
               return (
                 <div key={seatNum} className="relative flex flex-col items-center">
@@ -349,7 +366,28 @@ function SideRow({
                   ) : null}
                   <div
                     title={title}
-                    className={`flex items-center justify-center rounded-full border ${seatClass} ${ringClass}`}
+                    role={onSeatClick ? 'button' : undefined}
+                    tabIndex={onSeatClick ? 0 : undefined}
+                    onKeyDown={
+                      onSeatClick
+                        ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              onSeatClick(seatNum, guest ?? null)
+                            }
+                          }
+                        : undefined
+                    }
+                    onClick={
+                      onSeatClick
+                        ? (e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            onSeatClick(seatNum, guest ?? null)
+                          }
+                        : undefined
+                    }
+                    className={`flex items-center justify-center rounded-full border ${seatClass} ${ringClass} ${onSeatClick ? 'cursor-pointer transition-transform hover:scale-[1.04]' : ''}`}
                     style={{ width: seatPx, height: seatPx }}
                   >
                     {guest ? (
@@ -374,6 +412,14 @@ function SideRow({
                         {seatNum}
                       </span>
                     )}
+                    {isLocked ? (
+                      <span
+                        className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-zinc-800 text-[7px] font-bold text-white"
+                        aria-hidden
+                      >
+                        L
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               )
