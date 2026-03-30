@@ -156,11 +156,10 @@ export function AdminTableTwinSeatMap({
     Math.max(0, bottomCount) * seatPx + Math.max(0, bottomCount - 1) * gapPx
 
   return (
-    <div className="rounded-lg border border-[#ebebeb] bg-white px-1.5 py-1">
-      <div className="grid gap-1.5">
-        {/* Side A (top row): 1 → N/2 */}
+    <div className="rounded-none bg-transparent p-0">
+      <div className="grid gap-1">
+        {/* Top row: 1 → N/2 */}
         <SideRow
-          sideLabel="Side A"
           sideStart={1}
           sideEnd={topCount}
           rowWidth={rowWidthTop}
@@ -174,9 +173,8 @@ export function AdminTableTwinSeatMap({
           partyForSeat={partyForSeat}
         />
 
-        {/* Side B (bottom row): N/2+1 → N */}
+        {/* Bottom row: N/2+1 → N */}
         <SideRow
-          sideLabel="Side B"
           sideStart={bottomStart}
           sideEnd={capacity}
           rowWidth={rowWidthBottom}
@@ -195,7 +193,6 @@ export function AdminTableTwinSeatMap({
 }
 
 function SideRow({
-  sideLabel,
   sideStart,
   sideEnd,
   rowWidth,
@@ -208,7 +205,6 @@ function SideRow({
   previewGhostInitials,
   partyForSeat,
 }: {
-  sideLabel: string
   sideStart: number
   sideEnd: number
   rowWidth: number
@@ -236,7 +232,7 @@ function SideRow({
   return (
     <div className="relative">
       <div
-        className="mx-auto flex items-center justify-center"
+        className="flex items-center justify-start"
         style={{ width: rowWidth }}
       >
         <div className="relative h-[62px] w-full">
@@ -265,7 +261,7 @@ function SideRow({
                 : 'border-zinc-300/80'
 
             const centerSeat = (p.minSeat + p.maxSeat) / 2
-            const showLabel = centerSeat >= sideStart && centerSeat <= sideEnd
+            const showLabel = width >= seatPx * 2 && centerSeat >= sideStart && centerSeat <= sideEnd
 
             return (
               <div
@@ -280,7 +276,7 @@ function SideRow({
                 />
                 {showLabel ? (
                   <span
-                    className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-semibold shadow-sm ${
+                    className={`absolute -top-2 left-1/2 -translate-x-1/2 max-w-[70px] -translate-y-0 whitespace-nowrap overflow-hidden text-ellipsis rounded-full px-1 py-0.5 text-[8px] font-semibold shadow-sm ${
                       isActive
                         ? 'bg-white text-zinc-800'
                         : 'bg-white/70 text-zinc-500'
@@ -295,7 +291,7 @@ function SideRow({
 
           {/* Seats */}
           <div
-            className="absolute left-0 top-5 flex items-center justify-start"
+            className="absolute left-0 top-4 flex items-center justify-start"
             style={{ gap: `${gapPx}px` }}
           >
             {Array.from({ length: count }, (_, i) => {
@@ -307,10 +303,10 @@ function SideRow({
               const ghostInitial = previewGhostInitials[(seatNum + previewGhostInitials.length) % Math.max(1, previewGhostInitials.length)] ?? '?'
 
               const title = guest
-                ? `${sideLabel} seat ${seatNum} · ${guest.full_name}${party ? ` · ${party.title}` : ''}`
+                ? `Seat ${seatNum} · ${guest.full_name}${party ? ` · ${party.title}` : ''}`
                 : inPreview
-                  ? `${sideLabel} seat ${seatNum} · preview`
-                  : `${sideLabel} seat ${seatNum} · empty`
+                  ? `Seat ${seatNum} · preview`
+                  : `Seat ${seatNum} · empty`
 
               const ringClass = isActiveGroup
                 ? 'ring-2 ring-[#5b38f2]/25'
@@ -320,7 +316,7 @@ function SideRow({
                 ? 'border-[#5b38f2]/60 bg-[#5b38f2]/12'
                 : filled
                   ? 'border-[#5b38f2]/30 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]/10'
-                  : 'border-dashed border-zinc-200/80 bg-zinc-50/70'
+                  : 'border-dashed border-zinc-200/70 bg-zinc-50/55'
 
               return (
                 <div

@@ -488,26 +488,7 @@ export default function AdminSeatingPage() {
                             laneFlash ? 'ring-2 ring-[#5b38f2]/35' : ''
                           }`}
                         >
-                          <div className="border-b border-[#ebebeb] px-3 py-2.5">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                              <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-[#ebebeb] shadow-sm">
-                                {tableAvatarUrl ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={tableAvatarUrl} alt="" className="h-full w-full object-cover" />
-                                ) : (
-                                  <div className="h-full w-full" style={tableSwatchStyle(t.color)} aria-hidden />
-                                )}
-                              </div>
-                              <h2 className="truncate text-[14px] font-semibold text-zinc-900">
-                                {t.name}
-                              </h2>
-                            </div>
-                            <div className="shrink-0 text-[11px] font-medium tabular-nums text-zinc-500">
-                              {used} / {cap}
-                            </div>
-                          </div>
-                          <div className="mt-1">
+                          <div className="px-2 pt-2 pb-1">
                             <div
                               onDragOver={(e) => {
                                 if (!dragPartyKey) return
@@ -533,10 +514,32 @@ export default function AdminSeatingPage() {
                               />
                             </div>
                           </div>
+
+                          <div className="flex items-center justify-between gap-3 px-3 py-2">
+                            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                              <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-[#ebebeb] shadow-sm">
+                                {tableAvatarUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={tableAvatarUrl}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="h-full w-full" style={tableSwatchStyle(t.color)} aria-hidden />
+                                )}
+                              </div>
+                              <h2 className="truncate text-[14px] font-semibold text-zinc-900">
+                                {t.name}
+                              </h2>
+                            </div>
+                            <div className="shrink-0 text-[11px] font-medium tabular-nums text-zinc-500">
+                              {used} / {cap}
+                            </div>
                           </div>
 
                         <div
-                          className="flex min-h-[220px] flex-1 flex-col gap-1.5 px-2 py-2"
+                          className="flex min-h-[220px] flex-1 flex-col gap-1 px-2 py-1.5"
                           onDragOver={(e) => {
                             if (!dragPartyKey) return
                             e.preventDefault()
@@ -647,36 +650,19 @@ export default function AdminSeatingPage() {
             </div>
 
             <aside
-              className={`flex shrink-0 flex-col border-l border-[#ebebeb] bg-white shadow-[-8px_0_24px_-20px_rgba(0,0,0,0.12)] transition-[width] duration-200 ${
+              className={`relative z-[60] flex shrink-0 flex-col border-l border-[#ebebeb] bg-white shadow-[-8px_0_24px_-20px_rgba(0,0,0,0.12)] transition-[width] duration-200 ${
                 dockCollapsed ? 'w-14' : 'w-[min(100%,430px)]'
               }`}
             >
-              <div className="shrink-0 space-y-3 border-b border-[#ebebeb] px-3 py-3">
-                <div className="flex items-center justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setDockCollapsed((v) => !v)}
-                    className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-[#ebebeb] bg-white text-zinc-600 transition-colors hover:bg-zinc-50"
-                    title={dockCollapsed ? 'Expand party panel' : 'Collapse party panel'}
-                    aria-label={dockCollapsed ? 'Expand party panel' : 'Collapse party panel'}
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className={`h-4 w-4 transition-transform ${dockCollapsed ? 'rotate-180' : ''}`}
-                      aria-hidden
-                    >
-                      <path d="m15 18-6-6 6-6" />
-                    </svg>
-                  </button>
-                </div>
-                {!dockCollapsed ? (
-                  <>
-                <div className="relative">
+              <button
+                type="button"
+                onClick={() => setDockCollapsed((v) => !v)}
+                aria-label={dockCollapsed ? 'Expand party panel' : 'Collapse party panel'}
+                className={`absolute left-0 top-1/2 z-[70] -translate-y-1/2 transform rounded-r-xl border border-[#ebebeb] bg-white text-zinc-600 shadow-sm transition-[height,width] duration-200 ${
+                  dockCollapsed ? 'h-24 w-12' : 'h-10 w-8'
+                }`}
+              >
+                <div className="flex h-full w-full flex-col items-center justify-center">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -684,159 +670,164 @@ export default function AdminSeatingPage() {
                     strokeWidth={2}
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+                    className={`h-4 w-4 transition-transform ${dockCollapsed ? 'rotate-180' : ''}`}
                     aria-hidden
                   >
-                    <circle cx="11" cy="11" r="7" />
-                    <path d="m20 20-3.5-3.5" />
+                    <path d="m15 18-6-6 6-6" />
                   </svg>
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search parties or guests…"
-                    className="h-10 w-full rounded-full border border-[#ebebeb] bg-white pl-8 pr-[12px] text-[14px] font-normal text-[#171717] placeholder:text-[14px] placeholder:text-[#767676] outline-none transition-colors duration-150 ease-out focus:border-zinc-400"
-                  />
+                  {dockCollapsed ? (
+                    <span className="mt-2 rotate-[-90deg] whitespace-nowrap text-[11px] font-semibold text-zinc-600">
+                      Party panel
+                    </span>
+                  ) : null}
                 </div>
-                <AdminFilterRowSegmented<DockFilter>
-                  ariaLabel="Party list filters"
-                  value={dockFilter}
-                  onChange={setDockFilter}
-                  className="max-w-full flex-wrap"
-                  options={(
-                    [
-                      ['all', 'All', dockCounts.all],
-                      ['unassigned', 'Unassigned', dockCounts.unassigned],
-                      ['assigned', 'Assigned', dockCounts.assigned],
-                      ['split', 'Split', dockCounts.split],
-                    ] as const
-                  ).map(([id, label, n]) => ({
-                    value: id,
-                    label: (
-                      <>
-                        {label}
-                        <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-zinc-200 px-1.5 text-[11px] font-semibold tabular-nums text-zinc-700">
-                          {n}
-                        </span>
-                      </>
-                    ),
-                  }))}
-                />
-                  </>
-                ) : null}
-              </div>
+              </button>
+
               {!dockCollapsed ? (
-                <div className="admin-scroll-area min-h-0 flex-1 overflow-y-auto px-3 py-3">
-                <ul className="space-y-2">
-                  {filteredDockParties.map((p) => {
-                    const assignedTable =
-                      p.uniformTableId != null ? tableNameById.get(p.uniformTableId) : null
-                    const matchesSearch =
-                      Boolean(searchNeedle) &&
-                      (p.title.toLowerCase().includes(searchNeedle) ||
-                        p.members.some((m) =>
-                          m.full_name.toLowerCase().includes(searchNeedle)
-                        ))
-                    const dockDraggable = !busy && !p.splitWarning
-                    return (
-                      <li key={p.key}>
-                        <div
-                          data-party-key={p.key}
-                          draggable={dockDraggable}
-                          onDragStart={(e) => startPartyDrag(e, p.key, dockDraggable)}
-                          onDragEnd={endPartyDrag}
-                          onDragOver={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            e.dataTransfer.dropEffect = 'move'
-                          }}
-                          onDrop={(e) => e.stopPropagation()}
-                          className={`rounded-xl border border-[#ebebeb] bg-[#fafafa] px-2.5 py-2 transition-[box-shadow,border-color,opacity] ${
-                            matchesSearch ? 'border-[#5b38f2]/40 ring-2 ring-[#5b38f2]/25' : ''
-                          } ${dragPartyKey === p.key ? 'opacity-55' : ''} ${
-                            dockDraggable ? 'cursor-grab active:cursor-grabbing' : ''
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <PartyAvatarCluster members={p.members} size="sm" />
-                            <div className="min-w-0 flex-1">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedPartyKey(p.key)
-                                  focusPartyInWorkspace(p)
-                                }}
-                                onMouseEnter={() => setHoveredPartyKey(p.key)}
-                                onMouseLeave={() => setHoveredPartyKey(null)}
-                                className="block w-full cursor-pointer text-left"
-                              >
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  <span className="truncate text-[13px] font-semibold text-zinc-900">
-                                    {p.title}
-                                  </span>
-                                  {p.splitWarning ? (
-                                    <span className="shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
-                                      Split
-                                    </span>
-                                  ) : null}
-                                </div>
-                                <p className="mt-0.5 text-[11px] text-zinc-600">
-                                  <PartyMetaLine party={p} />
-                                  {assignedTable ? (
-                                    <>
-                                      <span className="text-zinc-400"> · </span>
-                                      <span className="font-medium text-zinc-700">{assignedTable}</span>
-                                      {p.minSeat != null && p.maxSeat != null ? (
+                <>
+                  <div className="shrink-0 space-y-3 border-b border-[#ebebeb] px-4 py-3">
+                    <div className="relative">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+                        aria-hidden
+                      >
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-3.5-3.5" />
+                      </svg>
+                      <input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search parties or guests…"
+                        className="h-10 w-full rounded-full border border-[#ebebeb] bg-white pl-8 pr-[12px] text-[14px] font-normal text-[#171717] placeholder:text-[14px] placeholder:text-[#767676] outline-none transition-colors duration-150 ease-out focus:border-zinc-400"
+                      />
+                    </div>
+
+                    <AdminFilterRowSegmented<DockFilter>
+                      ariaLabel="Party list filters"
+                      value={dockFilter}
+                      onChange={setDockFilter}
+                      className="max-w-full flex-wrap"
+                      options={(
+                        [
+                          ['all', 'All', dockCounts.all],
+                          ['unassigned', 'Unassigned', dockCounts.unassigned],
+                          ['assigned', 'Assigned', dockCounts.assigned],
+                          ['split', 'Split', dockCounts.split],
+                        ] as const
+                      ).map(([id, label, n]) => ({
+                        value: id,
+                        label: (
+                          <>
+                            {label}
+                            <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-zinc-200 px-1.5 text-[11px] font-semibold tabular-nums text-zinc-700">
+                              {n}
+                            </span>
+                          </>
+                        ),
+                      }))}
+                    />
+                  </div>
+
+                  <div className="admin-scroll-area min-h-0 flex-1 overflow-y-auto px-3 py-3">
+                    <ul className="space-y-2">
+                      {filteredDockParties.map((p) => {
+                        const assignedTable =
+                          p.uniformTableId != null ? tableNameById.get(p.uniformTableId) : null
+                        const matchesSearch =
+                          Boolean(searchNeedle) &&
+                          (p.title.toLowerCase().includes(searchNeedle) ||
+                            p.members.some((m) =>
+                              m.full_name.toLowerCase().includes(searchNeedle)
+                            ))
+                        const dockDraggable = !busy && !p.splitWarning
+                        return (
+                          <li key={p.key}>
+                            <div
+                              data-party-key={p.key}
+                              draggable={dockDraggable}
+                              onDragStart={(e) => startPartyDrag(e, p.key, dockDraggable)}
+                              onDragEnd={endPartyDrag}
+                              onDragOver={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                e.dataTransfer.dropEffect = 'move'
+                              }}
+                              onDrop={(e) => e.stopPropagation()}
+                              className={`rounded-xl border border-[#ebebeb] bg-[#fafafa] px-2.5 py-2 transition-[box-shadow,border-color,opacity] ${
+                                matchesSearch ? 'border-[#5b38f2]/40 ring-2 ring-[#5b38f2]/25' : ''
+                              } ${dragPartyKey === p.key ? 'opacity-55' : ''} ${
+                                dockDraggable ? 'cursor-grab active:cursor-grabbing' : ''
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <PartyAvatarCluster members={p.members} size="sm" />
+                                <div className="min-w-0 flex-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedPartyKey(p.key)
+                                      focusPartyInWorkspace(p)
+                                    }}
+                                    onMouseEnter={() => setHoveredPartyKey(p.key)}
+                                    onMouseLeave={() => setHoveredPartyKey(null)}
+                                    className="block w-full cursor-pointer text-left"
+                                  >
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <span className="truncate text-[13px] font-semibold text-zinc-900">
+                                        {p.title}
+                                      </span>
+                                      {p.splitWarning ? (
+                                        <span className="shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
+                                          Split
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <p className="mt-0.5 text-[11px] text-zinc-600">
+                                      <PartyMetaLine party={p} />
+                                      {assignedTable ? (
                                         <>
                                           <span className="text-zinc-400"> · </span>
-                                          <span className="tabular-nums">
-                                            Seats {seatRangeLabel(p)}
+                                          <span className="font-medium text-zinc-700">
+                                            {assignedTable}
+                                          </span>
+                                          {p.minSeat != null && p.maxSeat != null ? (
+                                            <>
+                                              <span className="text-zinc-400"> · </span>
+                                              <span className="tabular-nums">
+                                                Seats {seatRangeLabel(p)}
+                                              </span>
+                                            </>
+                                          ) : null}
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className="text-zinc-400"> · </span>
+                                          <span className="font-medium text-amber-800/90">
+                                            Not seated
                                           </span>
                                         </>
-                                      ) : null}
-                                    </>
-                                  ) : (
-                                    <>
-                                      <span className="text-zinc-400"> · </span>
-                                      <span className="font-medium text-amber-800/90">Not seated</span>
-                                    </>
-                                  )}
-                                </p>
-                              </button>
+                                      )}
+                                    </p>
+                                  </button>
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-                {filteredDockParties.length === 0 ? (
-                  <p className="py-8 text-center text-[13px] text-zinc-500">No parties match.</p>
-                ) : null}
-                </div>
-              ) : (
-                <div className="flex min-h-0 flex-1 items-start justify-center pt-3">
-                  <button
-                    type="button"
-                    onClick={() => setDockCollapsed(false)}
-                    className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-[#ebebeb] bg-white text-zinc-600 transition-colors hover:bg-zinc-50"
-                    title="Show parties panel"
-                    aria-label="Show parties panel"
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-4 w-4"
-                      aria-hidden
-                    >
-                      <path d="m9 18 6-6-6-6" />
-                    </svg>
-                  </button>
-                </div>
-              )}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                    {filteredDockParties.length === 0 ? (
+                      <p className="py-8 text-center text-[13px] text-zinc-500">No parties match.</p>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
             </aside>
           </>
         )}
