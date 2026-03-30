@@ -1139,7 +1139,7 @@ export default function MissionsLibraryPage() {
                 <button
                   type="button"
                   onClick={openCreate}
-                  className="group relative isolate flex h-[320px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-white text-center shadow-sm transform-gpu transition-transform duration-200 ease-out hover:-translate-y-0.5"
+                  className="group relative isolate flex h-[320px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-white text-center shadow-none transform-gpu transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md"
                 >
                   <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 text-zinc-800 transition-[color,background-color] duration-200 ease-out group-hover:bg-zinc-900 group-hover:text-white">
                     <svg
@@ -1190,7 +1190,7 @@ export default function MissionsLibraryPage() {
                         <img
                           src={coverImage}
                           alt=""
-                          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+                          className="pointer-events-none absolute inset-0 h-full w-full min-h-full min-w-full scale-[1.03] object-cover object-center"
                         />
                       ) : null}
                       <span

@@ -31,7 +31,8 @@ export function AdminDropdown({
   children,
   align = 'left',
   className = '',
-  buttonClassName = 'flex h-11 w-full min-w-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300',
+  buttonClassName =
+    'flex h-11 w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300',
   menuClassName = '',
   closeOnMenuItemClick = true,
   onTriggerKeyDown,
@@ -62,7 +63,7 @@ export function AdminDropdown({
       </button>
       {open ? (
         <div
-          className={`absolute top-[calc(100%+6px)] z-40 min-w-full overflow-hidden rounded-2xl border border-[#ebebeb] bg-white py-1 shadow-lg ${
+          className={`absolute top-[calc(100%+6px)] z-[300] min-w-full overflow-hidden rounded-2xl border border-[#ebebeb] bg-white py-1 shadow-lg ${
             align === 'right' ? 'right-0' : 'left-0'
           } ${menuClassName}`.trim()}
           onClick={(e) => {

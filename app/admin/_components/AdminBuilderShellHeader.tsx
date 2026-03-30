@@ -26,7 +26,7 @@ export function AdminBuilderShellHeader({
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black text-white"
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black text-white"
           aria-label={closeLabel}
         >
           <svg

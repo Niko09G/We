@@ -9,7 +9,7 @@ export type AdminSelectOption<T extends string = string> = {
 }
 
 const DEFAULT_BUTTON =
-  'inline-flex h-10 w-auto min-w-0 max-w-full shrink-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 pr-2.5 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300'
+  'inline-flex h-10 w-auto min-w-0 max-w-full shrink-0 cursor-pointer items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 pr-2.5 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300'
 
 type Props<T extends string> = {
   value: T
@@ -71,7 +71,7 @@ export function AdminSelectDropdown<T extends string>({
           key={String(opt.value)}
           type="button"
           onClick={() => onChange(opt.value)}
-          className={menuItemClassName}
+          className={`cursor-pointer ${menuItemClassName}`.trim()}
         >
           <span className="min-w-0 flex-1 text-left">{opt.label}</span>
           {opt.value === value ? (

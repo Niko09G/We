@@ -150,7 +150,7 @@ function ArchiveGuestIconButton({
       title="Remove guest"
       onClick={onClick}
       disabled={disabled}
-      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[18px] font-light leading-none text-red-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:pointer-events-none disabled:opacity-40 dark:text-red-400 dark:hover:bg-red-500/15 dark:hover:text-red-300"
+      className="flex h-7 w-7 cursor-pointer shrink-0 items-center justify-center rounded-full text-[18px] font-light leading-none text-red-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:pointer-events-none disabled:opacity-40 dark:text-red-400 dark:hover:bg-red-500/15 dark:hover:text-red-300"
     >
       ×
     </button>
@@ -485,7 +485,7 @@ export default function AdminAttendeesPage() {
   }
 
   const GRADIENT_BTN =
-    'ml-auto inline-flex h-[40px] items-center gap-2 rounded-full px-4 text-[14px] font-medium text-white transition-opacity hover:opacity-90 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]'
+    'ml-auto inline-flex h-[40px] cursor-pointer items-center gap-2 rounded-full px-4 text-[14px] font-medium text-white transition-opacity hover:opacity-90 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]'
 
   return (
     <div className="admin-page-shell flex h-full min-h-0 flex-1 flex-col overflow-hidden">
@@ -500,8 +500,8 @@ export default function AdminAttendeesPage() {
           </p>
         </header>
 
-        <section className="admin-gap-intro-first-section flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-2xl border-x border-t border-[#ebebeb] bg-white">
-          <div className="z-20 shrink-0 rounded-t-2xl border-b border-[#ebebeb] bg-white p-4 pb-3">
+        <section className="admin-gap-intro-first-section flex min-h-0 flex-1 flex-col rounded-t-2xl border-x border-t border-[#ebebeb] bg-white">
+          <div className="relative z-[50] shrink-0 rounded-t-2xl border-b border-[#ebebeb] bg-white p-4 pb-3">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex min-w-0 flex-wrap items-center gap-3">
                 <div className="relative w-full md:w-[300px] md:max-w-[300px]">
@@ -542,9 +542,11 @@ export default function AdminAttendeesPage() {
                     value: id,
                     label: (
                       <>
-                        {label}{' '}
+                        {label}
                         <span className="tabular-nums opacity-90">
-                          ({countFn(chipCounts[id as GuestListChip])})
+                          {' ('}
+                          {countFn(chipCounts[id as GuestListChip])}
+                          {')'}
                         </span>
                       </>
                     ),
@@ -555,7 +557,7 @@ export default function AdminAttendeesPage() {
                   value={tableFilterId}
                   onChange={(v) => setTableFilterId(v)}
                   className="min-w-0"
-                  buttonClassName="inline-flex h-10 min-w-[200px] max-w-[280px] shrink-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 pr-2.5 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors duration-150 ease-out hover:border-zinc-300"
+                  buttonClassName="inline-flex h-10 min-w-[200px] max-w-[280px] shrink-0 cursor-pointer items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 pr-2.5 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors duration-150 ease-out hover:border-zinc-300"
                   options={[
                     { value: 'all', label: 'All tables' },
                     ...tableOptionsWithCounts.map((t) => ({
@@ -591,6 +593,7 @@ export default function AdminAttendeesPage() {
             <p className="shrink-0 px-4 pt-2 text-sm font-medium text-emerald-700">{success}</p>
           ) : null}
 
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {loading ? (
             <div className="admin-scroll-area h-full overflow-y-auto px-4 pb-4 pt-3">
               <div className="admin-content-in space-y-1">
@@ -648,17 +651,17 @@ export default function AdminAttendeesPage() {
                   <button
                     type="button"
                     onClick={openCreateAttendeeEditor}
-                    className="group/add-row grid min-h-[50px] w-full cursor-pointer grid-cols-12 items-center gap-x-2 rounded-lg border border-dashed border-[#dcdcdc] bg-[#f9fafb] px-3 py-1.5 text-left transition-[background,border-color,color] duration-200 ease-out hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]"
+                    className="group/add-row flex min-h-[50px] w-full cursor-pointer items-center justify-center gap-2.5 rounded-lg border border-dashed border-[#dcdcdc] bg-[#f9fafb] px-3 py-1.5 transition-[background,border-color,color] duration-200 ease-out hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]"
                   >
-                    <span className="col-span-11 flex min-w-0 items-center gap-2.5">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-[18px] font-light leading-none text-white transition-[background,transform] duration-200 ease-out group-hover/add-row:scale-[1.02] group-hover/add-row:bg-white group-hover/add-row:text-[#5b38f2]">
-                        +
-                      </span>
-                      <span className="text-[14px] font-semibold text-zinc-600 transition-colors duration-200 group-hover/add-row:text-white">
-                        Add new attendee
-                      </span>
+                    <span
+                      className="text-[22px] font-light leading-none text-[#5b38f2] transition-colors duration-200 group-hover/add-row:text-white"
+                      aria-hidden
+                    >
+                      +
                     </span>
-                    <span className="col-span-1" aria-hidden />
+                    <span className="text-[14px] font-semibold text-zinc-600 transition-colors duration-200 group-hover/add-row:text-white">
+                      Add new attendee
+                    </span>
                   </button>
                 </div>
                 <div className="space-y-1 pt-1">
@@ -740,6 +743,7 @@ export default function AdminAttendeesPage() {
               </div>
             </div>
           )}
+          </div>
 
           <AttendeeEditorOverlay
             open={attendeeEditorOpen}

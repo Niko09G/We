@@ -43,7 +43,7 @@ const MENU_ITEM =
 const MENU_WIDE = 'w-max min-w-[13.5rem] max-w-[min(calc(100vw-48px),280px)]'
 
 const DROPDOWN_BTN =
-  'inline-flex h-9 min-w-[7rem] max-w-[11rem] shrink-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-2.5 pr-2 text-left text-[13px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300 focus-visible:ring-2 focus-visible:ring-[#5b38f2]/35 focus-visible:ring-offset-2'
+  'inline-flex h-9 min-w-[7rem] max-w-[11rem] shrink-0 cursor-pointer items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-2.5 pr-2 text-left text-[13px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300 focus-visible:ring-2 focus-visible:ring-[#5b38f2]/35 focus-visible:ring-offset-2'
 
 /** Gradient ring when inner control is focused (focus-within / has :focus-visible) */
 const FOCUS_RING =
@@ -272,7 +272,7 @@ export function AttendeeEditorOverlay({
     for (const r of rowsSnapshotRef.current) revokeIfBlob(r.photoObjectUrl)
   }, [open])
 
-  const title = mode === 'create' ? 'New attendee' : 'Edit attendee'
+  const title = mode === 'create' ? 'Add Guest / Party' : 'Edit Guest / Party'
 
   const addRow = useCallback(() => {
     const k = newRowKey()
@@ -499,11 +499,6 @@ export function AttendeeEditorOverlay({
       <div className={BUILDER_SHELL} onMouseDown={(e) => e.stopPropagation()}>
         <AdminBuilderShellHeader title={title} onClose={onClose} center={null} />
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          <p className="mb-4 text-center text-[13px] font-medium text-zinc-500">
-            {mode === 'create'
-              ? 'Add one guest or build a party. Press Tab in the last name field to add another row.'
-              : 'Update names, RSVP, photos, or party members.'}
-          </p>
           <div className="space-y-0 divide-y divide-[#ebebeb]">
             {rows.map((row, i) => {
               const rel =
@@ -533,7 +528,7 @@ export function AttendeeEditorOverlay({
                       type="button"
                       title="Add photo"
                       onClick={() => fileInputs.current[row.key]?.click()}
-                      className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-100 outline-none"
+                      className="relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-zinc-100 outline-none"
                     >
                       {displayPhoto ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -634,32 +629,29 @@ export function AttendeeEditorOverlay({
             })}
           </div>
 
-          <div className="mt-6 flex items-start gap-2 border-t border-dashed border-zinc-200/90 pt-4">
-            <kbd className="mt-0.5 inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded border border-zinc-200 bg-zinc-50 px-1.5 font-mono text-[11px] font-medium text-zinc-600">
+          <button
+            type="button"
+            onClick={addRow}
+            className="group/more mt-3 flex w-full cursor-pointer items-center justify-center gap-2 py-2 text-[13px] font-medium text-zinc-600 transition-colors hover:text-zinc-900"
+          >
+            <kbd className="inline-flex h-6 min-w-[1.75rem] shrink-0 items-center justify-center rounded border border-zinc-200 bg-zinc-50 px-1.5 font-mono text-[11px] font-medium text-zinc-600">
               Tab
             </kbd>
-            <p className="text-[12px] leading-relaxed text-zinc-500">
-              After the last guest&apos;s name, press Tab to add another row. Name field is focused
-              automatically.
-            </p>
-          </div>
-
-          {mode === 'edit' ? (
-            <button
-              type="button"
-              onClick={addRow}
-              className="mt-3 text-[13px] font-semibold text-zinc-600 underline decoration-zinc-300 underline-offset-2 hover:text-zinc-900"
+            <span
+              className="text-[18px] font-light leading-none text-[#5b38f2] transition-colors group-hover/more:text-[#4a2fd4]"
+              aria-hidden
             >
-              + Add party member
-            </button>
-          ) : null}
+              +
+            </span>
+            <span>Add more to this party</span>
+          </button>
         </div>
         <div className="flex shrink-0 justify-end gap-2 border-t border-zinc-200 px-5 py-3">
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="inline-flex h-10 items-center rounded-full border border-zinc-200 bg-white px-4 text-[14px] font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
+            className="inline-flex h-10 cursor-pointer items-center rounded-full border border-zinc-200 bg-white px-4 text-[14px] font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
           >
             Cancel
           </button>
@@ -667,7 +659,7 @@ export function AttendeeEditorOverlay({
             type="button"
             onClick={() => void save()}
             disabled={busy}
-            className="inline-flex h-10 items-center rounded-full bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] px-5 text-[14px] font-semibold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
+            className="inline-flex h-10 cursor-pointer items-center rounded-full bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] px-5 text-[14px] font-semibold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
           >
             {busy ? 'Saving…' : 'Save'}
           </button>

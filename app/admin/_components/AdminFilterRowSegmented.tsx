@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 const TRACK =
   'inline-flex h-10 items-stretch overflow-hidden rounded-full border border-[#ebebeb] bg-white'
 const BTN =
-  'inline-flex h-full items-center rounded-full px-[12px] text-[14px] font-medium transition-colors duration-150 ease-out'
+  'inline-flex h-full cursor-pointer items-center rounded-full px-[12px] text-[14px] font-medium transition-colors duration-150 ease-out'
 const BTN_ON = 'bg-black text-white'
 const BTN_OFF = 'text-[#4d4d4d] hover:text-[#171717]'
 
