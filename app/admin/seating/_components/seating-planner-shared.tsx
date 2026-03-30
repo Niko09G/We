@@ -221,7 +221,6 @@ function SideRow({
   rowWidth: number
   seatPx: number
   gapPx: number
-  capacity: number
   bySeat: Map<number, AttendeeRow>
   partiesOnTable: SeatingParty[]
   highlightPartyKey: string | null
