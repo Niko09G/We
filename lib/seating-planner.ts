@@ -138,7 +138,6 @@ export function buildSeatingParties(
   rows: AttendeeRow[],
   groups: AttendeeGroupRow[]
 ): SeatingParty[] {
-  const groupById = new Map(groups.map((g) => [g.id, g]))
   const out: SeatingParty[] = []
 
   for (const r of rows) {
