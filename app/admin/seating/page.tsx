@@ -8,6 +8,7 @@ import {
   useState,
   type CSSProperties,
   type DragEvent,
+  type MouseEvent,
 } from 'react'
 import {
   listAttendeesForAdmin,
@@ -130,6 +131,14 @@ function LargeSeatingOverlay({
   ) => Promise<void>
   onClose: () => void
 }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   if (!table) return null
   const tableRows = rows.filter((r) => r.table_id === table.id)
   const keys = partyKeysOnTableOrdered(rows, table.id)
@@ -137,26 +146,49 @@ function LargeSeatingOverlay({
   const list = keys.map((k) => byKey.get(k)).filter((p): p is SeatingParty => Boolean(p))
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 p-4">
-      <div className="flex h-[min(90vh,760px)] w-[min(1120px,96vw)] flex-col overflow-hidden rounded-2xl border border-[#ebebeb] bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[#ebebeb] px-4 py-3">
-          <div>
-            <h3 className="text-[16px] font-semibold text-zinc-900">{table.name} seating map</h3>
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 p-4"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        className="flex h-[min(92vh,820px)] w-[min(1120px,96vw)] flex-col overflow-hidden rounded-2xl border border-[#ebebeb] bg-white shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="large-seating-title"
+        onClick={(e: MouseEvent) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-[#ebebeb] px-4 py-3">
+          <div className="min-w-0 pr-3">
+            <h3 id="large-seating-title" className="truncate text-[16px] font-semibold text-zinc-900">
+              {table.name} seating map
+            </h3>
             <p className="text-[12px] text-zinc-500">Inspect and edit seating at larger scale.</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-[#ebebeb] text-zinc-600 hover:bg-zinc-50"
+            className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-black text-white"
             aria-label="Close large seating view"
           >
-            ×
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden
+            >
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
           </button>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[1.6fr_1fr] gap-4 p-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
           <div
-            className="rounded-xl border border-[#ebebeb] p-4"
+            className="shrink-0 rounded-xl border border-[#ebebeb] p-4"
             onDragOver={(e) => {
               if (!dragPartyKey) return
               e.preventDefault()
@@ -185,12 +217,12 @@ function LargeSeatingOverlay({
             />
           </div>
 
-          <div className="admin-scroll-area min-h-0 overflow-y-auto rounded-xl border border-[#ebebeb] p-2">
-            <ul className="space-y-1.5">
+          <div className="admin-scroll-area min-h-0 flex-1 overflow-y-auto rounded-xl border border-[#ebebeb] p-3">
+            <div className="grid grid-cols-5 gap-2">
               {list.map((p) => {
                 const rowDraggable = !busy && !p.splitWarning
                 return (
-                  <li
+                  <div
                     key={p.key}
                     draggable={rowDraggable}
                     onDragStart={(e) => startPartyDrag(e, p.key, rowDraggable)}
@@ -212,16 +244,18 @@ function LargeSeatingOverlay({
                     }}
                     onMouseEnter={() => setHoveredPartyKey(p.key)}
                     onMouseLeave={() => setHoveredPartyKey(null)}
-                    className={`rounded-xl border px-2 py-2 ${p.splitWarning ? 'border-amber-300 bg-amber-50/80' : 'border-[#ebebeb] bg-[#fafafa]'} ${rowDraggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                    className={`flex min-w-0 flex-col gap-1 rounded-xl border px-2 py-2 ${p.splitWarning ? 'border-amber-300 bg-amber-50/80' : 'border-[#ebebeb] bg-[#fafafa]'} ${rowDraggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <PartyAvatarCluster members={p.members} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-semibold text-zinc-900">{p.title}</p>
-                        <p className="text-[11px] font-medium tabular-nums text-zinc-600">
-                          Seats {seatRangeLabel(p)}
-                        </p>
-                      </div>
+                      <p className="min-w-0 flex-1 truncate text-[12px] font-semibold text-zinc-900">
+                        {p.title}
+                      </p>
+                    </div>
+                    <p className="text-[10px] font-medium tabular-nums text-zinc-600">
+                      {seatRangeLabel(p)}
+                    </p>
+                    <div className="mt-auto flex justify-end pt-0.5">
                       <RemoveFromTableButton
                         disabled={busy}
                         onClick={() =>
@@ -229,10 +263,10 @@ function LargeSeatingOverlay({
                         }
                       />
                     </div>
-                  </li>
+                  </div>
                 )
               })}
-            </ul>
+            </div>
           </div>
         </div>
       </div>
@@ -330,6 +364,22 @@ export default function AdminSeatingPage() {
             tableName: t.name,
           })
           return [t.id, d.avatarImageUrl.trim()] as const
+        })
+      ),
+    [plannerTables]
+  )
+
+  const tableGradientById = useMemo(
+    () =>
+      new Map(
+        plannerTables.map((t) => {
+          const d = teamPageAdminFormDefaults(t.page_config, {
+            tableColor: t.color,
+            tableName: t.name,
+          })
+          const top = d.tableGradTop.trim()
+          const bottom = d.tableGradBottom.trim()
+          return [t.id, `linear-gradient(145deg, ${top}, ${bottom})`] as const
         })
       ),
     [plannerTables]
@@ -653,6 +703,9 @@ export default function AdminSeatingPage() {
                         (p) => p.minSeat != null && p.minSeat > topSeatMax
                       )
                       const tableAvatarUrl = tableAvatarById.get(t.id) ?? ''
+                      const tableTeamGradient =
+                        tableGradientById.get(t.id) ??
+                        'linear-gradient(145deg, #1ca0d8, #5b38f2)'
                       const laneFlash = dropFlash === t.id
                       return (
                         <div
@@ -707,9 +760,12 @@ export default function AdminSeatingPage() {
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between gap-3 border-y border-[#ebebeb] px-3 py-2">
+                          <div
+                            className="flex items-center justify-between gap-3 border-y border-white/25 px-3 py-2 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]"
+                            style={{ backgroundImage: tableTeamGradient }}
+                          >
                             <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                              <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-[#ebebeb] shadow-sm">
+                              <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-white/45 shadow-sm ring-1 ring-black/10">
                                 {tableAvatarUrl ? (
                                   // eslint-disable-next-line @next/next/no-img-element
                                   <img
@@ -721,17 +777,17 @@ export default function AdminSeatingPage() {
                                   <div className="h-full w-full" style={tableSwatchStyle(t.color)} aria-hidden />
                                 )}
                               </div>
-                              <h2 className="truncate text-[14px] font-semibold text-zinc-900">
+                              <h2 className="truncate text-[14px] font-semibold text-white">
                                 {t.name}
                               </h2>
                             </div>
-                            <div className="shrink-0 text-center text-[11px] font-medium tabular-nums text-zinc-500">
+                            <div className="shrink-0 text-center text-[11px] font-semibold tabular-nums text-white/95">
                               {used} / {cap}
                             </div>
                             <button
                               type="button"
                               onClick={() => setLargeMapTableId(t.id)}
-                              className="inline-flex h-7 shrink-0 cursor-pointer items-center rounded-full border border-[#ebebeb] bg-white px-2.5 text-[11px] font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
+                              className="inline-flex h-7 shrink-0 cursor-pointer items-center rounded-full border border-white/55 bg-white/95 px-2.5 text-[11px] font-semibold text-zinc-900 shadow-sm transition-colors hover:bg-white"
                             >
                               Large view
                             </button>
