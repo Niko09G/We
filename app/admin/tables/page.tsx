@@ -835,7 +835,8 @@ export default function TablesAdminPage() {
                 <div className="grid grid-cols-12 gap-x-2 border-b border-[#ebebeb] px-3 pb-2 pt-[10px] text-[14px] font-medium text-[#18181b]">
                   <div className="col-span-5">Table</div>
                   <div className="col-span-2">Status</div>
-                  <div className="col-span-5">Seats</div>
+                  <div className="col-span-3">Seats</div>
+                  <div className="col-span-2 text-right text-[13px] font-medium text-zinc-500">Actions</div>
                 </div>
                 {[0, 1, 2, 3, 4].map((i) => (
                   <div key={i} className="grid min-h-[50px] grid-cols-12 items-center gap-x-2 rounded-lg px-3 py-1.5">
@@ -846,8 +847,12 @@ export default function TablesAdminPage() {
                     <div className="col-span-2">
                       <span className="admin-skeleton inline-flex h-6 w-16 rounded-full" />
                     </div>
-                    <div className="col-span-5">
+                    <div className="col-span-3">
                       <span className="admin-skeleton inline-flex h-3.5 w-14 rounded-md" />
+                    </div>
+                    <div className="col-span-2 flex justify-end gap-1">
+                      <span className="admin-skeleton h-8 w-14 shrink-0 rounded-full" />
+                      <span className="admin-skeleton h-8 w-16 shrink-0 rounded-full" />
                     </div>
                   </div>
                 ))}
@@ -874,7 +879,8 @@ export default function TablesAdminPage() {
             <div className="sticky top-0 z-10 grid grid-cols-12 gap-x-2 border-b border-[#ebebeb] bg-white px-3 pb-2 pt-[10px] text-[14px] font-medium text-[#18181b]">
               <div className="col-span-5">Table</div>
               <div className="col-span-2">Status</div>
-              <div className="col-span-5">Seats</div>
+              <div className="col-span-3">Seats</div>
+              <div className="col-span-2 text-right text-[13px] font-medium text-zinc-500">Actions</div>
             </div>
             {visibleRows.length === 0 ? (
               <div className="rounded-lg bg-white px-4 py-6 text-[14px] text-zinc-500">
@@ -893,50 +899,86 @@ export default function TablesAdminPage() {
                     index % 2 === 0
                       ? 'bg-[#fdfdfd] hover:bg-[#fafafa]'
                       : 'bg-[#1f1f1f08] hover:bg-[#ededed]'
+                  const tablePageUrl = `/missions/${row.id}`
                   return (
-                    <button
+                    <div
                       key={row.id}
-                      type="button"
-                      onClick={(e) => openEditEditor(row, e.currentTarget)}
-                      className={`grid w-full min-h-[50px] cursor-pointer grid-cols-12 items-center gap-x-2 rounded-lg px-3 py-1.5 text-left transition-colors ${
+                      className={`grid min-h-[50px] grid-cols-12 items-center gap-x-2 rounded-lg px-3 py-1.5 transition-colors ${
                         row.is_archived ? `${rowBgClass} opacity-80` : rowBgClass
                       }`}
                     >
-                      <div className="col-span-5 inline-flex items-center gap-3">
-                        <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-zinc-200 bg-zinc-100">
-                          {avatarUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
-                          ) : (
-                            <span
-                              className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-white"
-                              style={{ backgroundColor: avatarFallbackColor(row.name) }}
-                            >
-                              {initialsFromName(row.name)}
-                            </span>
-                          )}
-                        </span>
-                        <span className={`text-[14px] font-medium ${row.is_archived ? 'text-zinc-700' : 'text-zinc-900'}`}>
-                          {row.name}
-                        </span>
-                      </div>
-                      <div className="col-span-2">
-                        <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-[14px] font-medium ${
-                            row.is_archived
-                              ? 'bg-zinc-200 text-zinc-700'
-                              : row.is_active
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : 'bg-zinc-100 text-zinc-600'
-                          }`}
+                      <button
+                        type="button"
+                        onClick={(e) => openEditEditor(row, e.currentTarget)}
+                        className="col-span-10 grid cursor-pointer grid-cols-10 items-center gap-x-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2"
+                      >
+                        <div className="col-span-5 inline-flex min-w-0 items-center gap-3">
+                          <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-zinc-200 bg-zinc-100">
+                            {avatarUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+                            ) : (
+                              <span
+                                className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-white"
+                                style={{ backgroundColor: avatarFallbackColor(row.name) }}
+                              >
+                                {initialsFromName(row.name)}
+                              </span>
+                            )}
+                          </span>
+                          <span
+                            className={`min-w-0 truncate text-[14px] font-medium ${
+                              row.is_archived ? 'text-zinc-700' : 'text-zinc-900'
+                            }`}
+                          >
+                            {row.name}
+                          </span>
+                        </div>
+                        <div className="col-span-2">
+                          <span
+                            className={`inline-flex rounded-full px-2 py-0.5 text-[14px] font-medium ${
+                              row.is_archived
+                                ? 'bg-zinc-200 text-zinc-700'
+                                : row.is_active
+                                  ? 'bg-emerald-50 text-emerald-700'
+                                  : 'bg-zinc-100 text-zinc-600'
+                            }`}
+                          >
+                            {statusLabel}
+                          </span>
+                        </div>
+                        <div className="col-span-3 text-[14px] font-medium text-zinc-700 tabular-nums">
+                          {row.occupied_count}/{row.capacity}
+                        </div>
+                      </button>
+                      <div className="col-span-2 flex flex-wrap items-center justify-end gap-1">
+                        <a
+                          href={tablePageUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex h-8 shrink-0 items-center rounded-full border border-[#ebebeb] bg-white px-2.5 text-[12px] font-medium text-zinc-800 outline-none transition-colors hover:border-zinc-300 hover:bg-zinc-50"
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
                         >
-                          {statusLabel}
-                        </span>
+                          Visit
+                        </a>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 shrink-0 items-center rounded-full border border-[#ebebeb] bg-white px-2.5 text-[12px] font-medium text-zinc-800 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const url = new URL(tablePageUrl, window.location.origin).href
+                            void navigator.clipboard
+                              .writeText(url)
+                              .then(() => showToast('Link copied.', 'success'))
+                              .catch(() => showToast('Copy failed.', 'error'))
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                        >
+                          Copy link
+                        </button>
                       </div>
-                      <div className="col-span-5 text-[14px] font-medium text-zinc-700 tabular-nums">
-                        {row.occupied_count}/{row.capacity}
-                      </div>
-                    </button>
+                    </div>
                   )
                 })}
               </div>
@@ -991,13 +1033,14 @@ export default function TablesAdminPage() {
                     className="absolute inset-0 z-0 cursor-pointer rounded-2xl"
                     aria-label={`Edit ${row.name}`}
                   />
-                  <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center gap-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+                  <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center gap-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                     <a
                       href={`/missions/${row.id}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="pointer-events-auto inline-flex h-8 shrink-0 items-center rounded-full bg-black px-3 text-xs font-medium text-white shadow-sm"
                       onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
                     >
                       Visit page
                     </a>
@@ -1012,6 +1055,7 @@ export default function TablesAdminPage() {
                           .then(() => showToast('Link copied.', 'success'))
                           .catch(() => showToast('Copy failed.', 'error'))
                       }}
+                      onMouseDown={(e) => e.stopPropagation()}
                     >
                       Copy page link
                     </button>

@@ -178,7 +178,7 @@ function emptyForm(): MissionForm {
     is_active: true,
     max_submissions_per_table: '',
     add_to_greetings: false,
-    message_max_chars: '240',
+    message_max_chars: '140',
   }
 }
 
@@ -204,7 +204,7 @@ function formFromMission(m: MissionRecord): MissionForm {
     is_active: m.is_active ?? true,
     max_submissions_per_table: maxSubmissionsDisplayValue(m),
     add_to_greetings: m.add_to_greetings ?? false,
-    message_max_chars: '240',
+    message_max_chars: '140',
   }
 }
 
@@ -307,17 +307,50 @@ function ManualApprovalGlyph({ className }: { className?: string }) {
   )
 }
 
+function AutoApprovalGlyphFilled({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden fill="currentColor">
+      <path
+        fillRule="evenodd"
+        d="M14.615 1.595a.75.75 0 0 1 .359.852L12.982 9.75h7.268a.75.75 0 0 1 .548 1.262l-10.5 11.25a.75.75 0 0 1-1.272-.71l1.992-7.302H3.75a.75.75 0 0 1-.548-1.262l10.5-11.25a.75.75 0 0 1 .913-.143Z"
+        clipRule="evenodd"
+      />
+    </svg>
+  )
+}
+
+function ManualApprovalGlyphFilled({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden fill="currentColor">
+      <path
+        fillRule="evenodd"
+        d="M8.75 1.5a2.25 2.25 0 0 0-2.25 2.25V5h-1A2.25 2.25 0 0 0 3.25 7.25v12.5A2.25 2.25 0 0 0 5.5 22h12a2.25 2.25 0 0 0 2.25-2.25V9.558a2.25 2.25 0 0 0-.659-1.591l-5.558-5.558a2.25 2.25 0 0 0-1.591-.659H8.75Zm1.5 3.75h3.31a.75.75 0 0 1 .53.22l4.69 4.69v10.31a.75.75 0 0 1-.75.75h-12a.75.75 0 0 1-.75-.75V7.25a.75.75 0 0 1 .75-.75h1.25V5.25a.75.75 0 0 1 .75-.75ZM15.78 9.97a.75.75 0 0 0-1.06 0l-4.47 4.47-1.72-1.72a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.06 0l5-5a.75.75 0 0 0 0-1.06Z"
+        clipRule="evenodd"
+      />
+    </svg>
+  )
+}
+
 function ApprovalModeInline({
   mode,
   className = 'text-[12px] text-zinc-700',
+  iconFilled = false,
 }: {
   mode: 'auto' | 'manual'
   className?: string
+  /** Solid icons for mission card metadata (list view uses stroke). */
+  iconFilled?: boolean
 }) {
   const manual = mode === 'manual'
   return (
     <span className={`inline-flex min-w-0 items-center gap-1.5 ${className}`.trim()}>
-      {manual ? (
+      {iconFilled ? (
+        manual ? (
+          <ManualApprovalGlyphFilled className="h-4 w-4 shrink-0 text-zinc-700" />
+        ) : (
+          <AutoApprovalGlyphFilled className="h-4 w-4 shrink-0 text-zinc-700" />
+        )
+      ) : manual ? (
         <ManualApprovalGlyph className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
       ) : (
         <AutoApprovalGlyph className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
@@ -1131,33 +1164,38 @@ export default function MissionsLibraryPage() {
                       ) : null}
                       <span className={`absolute right-3 top-3 z-20 ${status.className}`}>{status.label}</span>
                       <div className="relative z-10 flex h-full min-h-0 flex-col p-3">
-                        <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200/60 bg-white/95 shadow-sm">
+                        <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/45 bg-black/25 shadow-sm ring-1 ring-white/35 backdrop-blur-[2px]">
                           <MissionCategoryTypeIcon type={m.validation_type} size={20} className="h-5 w-5" />
                         </div>
-                        <div className="mt-3 rounded-xl border border-zinc-200/70 bg-white/95 px-3 py-2 shadow-sm">
-                          <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-zinc-900">{m.title}</p>
-                          <p className="mt-1.5 inline-flex items-center gap-1.5 text-[13px] font-medium text-zinc-800">
-                            <RewardUnitIcon size={16} className="shrink-0" />
-                            <span className="tabular-nums">{m.points}</span>
+                        <div className="mt-3 min-w-0">
+                          <p className="line-clamp-2 text-[15px] font-semibold leading-snug tracking-tight text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.45)]">
+                            {m.title}
+                          </p>
+                          <p className="mt-1.5 inline-flex items-center gap-1.5 text-[14px] font-semibold tabular-nums text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.45)]">
+                            <RewardUnitIcon size={18} className="shrink-0 drop-shadow-sm" />
+                            <span>{m.points}</span>
                           </p>
                         </div>
                         <div className="min-h-0 flex-1" aria-hidden />
-                        <div className="mt-auto rounded-xl border border-zinc-200/80 bg-white/95 px-3 py-2.5 shadow-sm">
+                        <div className="mt-auto rounded-xl border border-zinc-200 bg-white px-3 py-2 shadow-sm">
                           <ApprovalModeInline
                             mode={m.approval_mode === 'manual' ? 'manual' : 'auto'}
-                            className="text-[12px] text-zinc-800"
+                            iconFilled
+                            className="text-[13px] font-semibold text-zinc-900"
                           />
-                          <p className="mt-1.5 text-[11px] font-medium text-zinc-600">
-                            {assignedCount} {assignedCount === 1 ? 'table' : 'tables'}
-                          </p>
-                          <p className="mt-0.5 text-[11px] font-medium text-zinc-600">
-                            {cap === null ? (
-                              'Unlimited'
-                            ) : (
-                              <>
-                                Limited <span className={MISSION_SIGNATURE_NUM}>{cap}</span>
-                              </>
-                            )}
+                          <p className="mt-1.5 flex items-center justify-between gap-2 text-[13px] font-semibold text-zinc-800">
+                            <span>
+                              {assignedCount} {assignedCount === 1 ? 'table' : 'tables'}
+                            </span>
+                            <span className="tabular-nums">
+                              {cap === null ? (
+                                'Unlimited'
+                              ) : (
+                                <>
+                                  Limited <span className={MISSION_SIGNATURE_NUM}>{cap}</span>
+                                </>
+                              )}
+                            </span>
                           </p>
                         </div>
                       </div>
