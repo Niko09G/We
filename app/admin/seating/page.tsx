@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type DragEvent,
 } from 'react'
 import {
   listAttendeesForAdmin,
@@ -21,19 +22,22 @@ import {
   buildSeatingParties,
   partyKeysOnTableOrdered,
   planAssignPartyToTable,
-  planMovePartyOnTable,
+  planDropPartyAtTablePosition,
+  planReorderPartyInTable,
   planUnassignParty,
   type SeatingParty,
   type SeatingUpdate,
 } from '@/lib/seating-planner'
 import {
+  AdminTableTwinSeatMap,
   PartyAvatarCluster,
   PartyMetaLine,
-  SeatVisualizationStrip,
   seatRangeLabel,
 } from '@/app/admin/seating/_components/seating-planner-shared'
 
 type DockFilter = 'all' | 'unassigned' | 'assigned' | 'split'
+
+const DND_PARTY_KEY = 'application/x-wedding-party-key'
 
 async function applySeatingUpdates(updates: SeatingUpdate[]): Promise<void> {
   await Promise.all(
@@ -94,6 +98,8 @@ export default function AdminSeatingPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [dockFilter, setDockFilter] = useState<DockFilter>('all')
+  const [dragPartyKey, setDragPartyKey] = useState<string | null>(null)
+  const [dropFlash, setDropFlash] = useState<string | null>(null)
   const workspaceRef = useRef<HTMLDivElement>(null)
   const laneRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
@@ -261,6 +267,55 @@ export default function AdminSeatingPage() {
     else laneRefs.current.delete(tableId)
   }
 
+  const readDragPartyKey = useCallback((e: DragEvent) => {
+    return e.dataTransfer.getData(DND_PARTY_KEY) || e.dataTransfer.getData('text/plain')
+  }, [])
+
+  function handleDropOnTable(
+    tableId: string,
+    partyKey: string,
+    insertBeforePartyKey: string | null
+  ) {
+    if (busy || loading) return
+    const party = parties.find((p) => p.key === partyKey)
+    if (!party || party.splitWarning) return
+    if (insertBeforePartyKey === partyKey) return
+
+    const cap = plannerTables.find((t) => t.id === tableId)?.capacity ?? 10
+    const onThisTable = party.uniformTableId === tableId
+
+    if (onThisTable) {
+      void runPlan(
+        () => planReorderPartyInTable(rows, tableId, partyKey, insertBeforePartyKey),
+        'Order updated.'
+      )
+    } else {
+      void runPlan(
+        () =>
+          planDropPartyAtTablePosition(rows, partyKey, tableId, cap, insertBeforePartyKey),
+        insertBeforePartyKey ? 'Party placed.' : 'Party assigned.'
+      )
+    }
+  }
+
+  const startPartyDrag = useCallback(
+    (e: DragEvent, partyKey: string, canDrag: boolean) => {
+      if (!canDrag || busy) {
+        e.preventDefault()
+        return
+      }
+      e.dataTransfer.setData(DND_PARTY_KEY, partyKey)
+      e.dataTransfer.setData('text/plain', partyKey)
+      e.dataTransfer.effectAllowed = 'move'
+      setDragPartyKey(partyKey)
+    },
+    [busy]
+  )
+
+  const endPartyDrag = useCallback(() => {
+    setDragPartyKey(null)
+  }, [])
+
   return (
     <div className="admin-page-shell flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <p className="sr-only" aria-live="polite">
@@ -275,80 +330,21 @@ export default function AdminSeatingPage() {
         </p>
       </header>
 
-      <section className="admin-gap-intro-first-section flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-2xl border-x border-t border-[#ebebeb] bg-white">
-        <div className="relative z-[50] shrink-0 border-b border-[#ebebeb] bg-white p-4 pb-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative min-w-[200px] max-w-full flex-1 md:max-w-[320px]">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
-                aria-hidden
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" />
-              </svg>
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search parties or guest names…"
-                className="h-10 w-full rounded-full border border-[#ebebeb] bg-white pl-8 pr-[12px] text-[14px] font-normal text-[#171717] placeholder:text-[14px] placeholder:text-[#767676] outline-none transition-colors duration-150 ease-out focus:border-zinc-400"
-              />
-            </div>
+      {error ? (
+        <p className="admin-gap-page-title-intro mt-2 shrink-0 text-sm font-medium text-red-600" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {success ? (
+        <p
+          className="admin-gap-page-title-intro mt-2 shrink-0 text-sm font-medium text-emerald-700"
+          role="status"
+        >
+          {success}
+        </p>
+      ) : null}
 
-            <AdminFilterRowSegmented<DockFilter>
-              ariaLabel="Party list filters"
-              value={dockFilter}
-              onChange={setDockFilter}
-              className="max-w-full flex-wrap"
-              options={(
-                [
-                  ['all', 'All', dockCounts.all],
-                  ['unassigned', 'Unassigned', dockCounts.unassigned],
-                  ['assigned', 'Assigned', dockCounts.assigned],
-                  ['split', 'Split', dockCounts.split],
-                ] as const
-              ).map(([id, label, n]) => ({
-                value: id,
-                label: (
-                  <>
-                    {label}
-                    <span className="tabular-nums opacity-90">
-                      {' ('}
-                      {n}
-                      {')'}
-                    </span>
-                  </>
-                ),
-              }))}
-            />
-
-            <button
-              type="button"
-              disabled={busy || loading}
-              onClick={() => void loadAll()}
-              className="ml-auto inline-flex h-10 cursor-pointer shrink-0 items-center rounded-full border border-[#ebebeb] bg-white px-4 text-[14px] font-medium text-[#171717] transition-colors hover:border-zinc-300 disabled:opacity-50"
-            >
-              Refresh
-            </button>
-          </div>
-
-          {error ? (
-            <p className="mt-3 text-sm font-medium text-red-600" role="alert">
-              {error}
-            </p>
-          ) : null}
-          {success ? (
-            <p className="mt-3 text-sm font-medium text-emerald-700" role="status">
-              {success}
-            </p>
-          ) : null}
-        </div>
-
+      <section className="admin-gap-intro-first-section flex min-h-0 flex-1 flex-row overflow-hidden rounded-t-2xl border-x border-t border-[#ebebeb] bg-white">
         {loading ? (
           <p className="shrink-0 px-4 py-6 text-sm text-zinc-500">Loading…</p>
         ) : plannerTables.length === 0 ? (
@@ -356,176 +352,138 @@ export default function AdminSeatingPage() {
             No active tables. Add tables under Overview → Tables (mark active, not archived).
           </p>
         ) : (
-          <div className="flex min-h-0 flex-1 overflow-hidden">
-            <div
-              ref={workspaceRef}
-              className="admin-scroll-area min-w-0 flex-1 overflow-x-auto overflow-y-auto"
-            >
-              <div className="min-h-full min-w-min p-4 pb-6">
-                {splitParties.length > 0 ? (
-                  <div
-                    className="mb-4 max-w-[min(56rem,calc(100vw-20rem))] rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-950"
-                    role="status"
-                  >
-                    <p className="font-semibold">
-                      {splitParties.length}{' '}
-                      {splitParties.length === 1 ? 'party has' : 'parties have'} split seat assignments
-                    </p>
-                    <p className="mt-1 text-[12px] text-amber-900/90">
-                      Members are not all on the same table. Resolve on the Attendees page, or unassign
-                      and reseat here. Split parties cannot be moved with Up/Down until fixed.
-                    </p>
-                  </div>
-                ) : null}
+          <>
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <div
+                ref={workspaceRef}
+                className="admin-scroll-area min-h-0 flex-1 overflow-x-auto overflow-y-auto"
+              >
+                <div className="min-h-full min-w-min p-4 pb-6">
+                  {splitParties.length > 0 ? (
+                    <div
+                      className="mb-4 max-w-[min(56rem,calc(100vw-24rem))] rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-950"
+                      role="status"
+                    >
+                      <p className="font-semibold">
+                        {splitParties.length}{' '}
+                        {splitParties.length === 1 ? 'party has' : 'parties have'} split seat assignments
+                      </p>
+                      <p className="mt-1 text-[12px] text-amber-900/90">
+                        Members are not all on the same table. Resolve on the Attendees page, or unassign
+                        and reseat here. Split parties cannot be drag-moved until fixed.
+                      </p>
+                    </div>
+                  ) : null}
 
-                <div className="flex gap-4 pr-2">
-                  {plannerTables.map((t) => {
-                    const used = rowsAtTable(t.id).length
-                    const cap = t.capacity
-                    const remaining = Math.max(0, cap - used)
-                    const list = partiesOnTable(t.id)
-                    return (
-                      <div
-                        key={t.id}
-                        ref={setLaneRef(t.id)}
-                        data-table-lane={t.id}
-                        className="flex w-[min(100vw-3rem,300px)] shrink-0 flex-col rounded-2xl border border-[#ebebeb] bg-white shadow-none transition-[box-shadow] duration-200 ease-out hover:shadow-md"
-                      >
-                        <div className="border-b border-[#ebebeb] px-3 py-2.5">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                              <div
-                                className="h-9 w-9 shrink-0 rounded-full border border-[#ebebeb] shadow-sm"
-                                style={tableSwatchStyle(t.color)}
-                                aria-hidden
-                              />
-                              <div className="min-w-0">
-                                <h2 className="truncate text-[14px] font-semibold text-zinc-900">
-                                  {t.name}
-                                </h2>
-                                <p className="mt-0.5 text-[11px] font-medium tabular-nums text-zinc-500">
-                                  Cap {cap} · {used} used · {remaining} left
-                                </p>
+                  <div className="flex gap-5 pr-2">
+                    {plannerTables.map((t) => {
+                      const used = rowsAtTable(t.id).length
+                      const cap = t.capacity
+                      const remaining = Math.max(0, cap - used)
+                      const list = partiesOnTable(t.id)
+                      const laneFlash = dropFlash === t.id
+                      return (
+                        <div
+                          key={t.id}
+                          ref={setLaneRef(t.id)}
+                          data-table-lane={t.id}
+                          onDragOver={(e) => {
+                            e.preventDefault()
+                            e.dataTransfer.dropEffect = 'move'
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault()
+                            const key = readDragPartyKey(e)
+                            if (!key) return
+                            handleDropOnTable(t.id, key, null)
+                            setDropFlash(t.id)
+                            window.setTimeout(
+                              () => setDropFlash((c: string | null) => (c === t.id ? null : c)),
+                              350
+                            )
+                          }}
+                          className={`flex w-[min(100vw-2rem,420px)] shrink-0 flex-col rounded-2xl border border-[#ebebeb] bg-white shadow-none transition-[box-shadow,ring] duration-200 ease-out hover:shadow-md ${
+                            laneFlash ? 'ring-2 ring-[#5b38f2]/35' : ''
+                          }`}
+                        >
+                          <div className="border-b border-[#ebebeb] px-3 py-2.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                                <div
+                                  className="h-9 w-9 shrink-0 rounded-full border border-[#ebebeb] shadow-sm"
+                                  style={tableSwatchStyle(t.color)}
+                                  aria-hidden
+                                />
+                                <div className="min-w-0">
+                                  <h2 className="truncate text-[14px] font-semibold text-zinc-900">
+                                    {t.name}
+                                  </h2>
+                                  <p className="mt-0.5 text-[11px] font-medium tabular-nums text-zinc-500">
+                                    Cap {cap} · {used} used · {remaining} left
+                                  </p>
+                                </div>
                               </div>
                             </div>
+                            <div className="mt-3">
+                              <AdminTableTwinSeatMap
+                                capacity={cap}
+                                attendeesAtTable={rowsAtTable(t.id)}
+                              />
+                            </div>
                           </div>
-                          <div className="mt-3">
-                            <SeatVisualizationStrip
-                              capacity={cap}
-                              attendeesAtTable={rowsAtTable(t.id)}
-                            />
-                          </div>
-                        </div>
 
-                        <div className="flex min-h-[200px] flex-1 flex-col gap-1.5 px-2 py-2">
-                          {list.length === 0 ? (
-                            <p className="px-1 py-6 text-center text-[13px] text-zinc-500">
-                              Drop parties here from the list, or assign from the party panel.
-                            </p>
-                          ) : (
-                            list.map((p) => (
-                              <div
-                                key={p.key}
-                                data-party-key={p.key}
-                                className={`rounded-xl border px-2 py-2 transition-colors ${
-                                  p.splitWarning
-                                    ? 'border-amber-300 bg-amber-50/80'
-                                    : 'border-[#ebebeb] bg-[#fafafa]'
-                                }`}
-                              >
-                                <div className="flex items-start gap-2">
-                                  <PartyAvatarCluster members={p.members} size="sm" />
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex flex-wrap items-center gap-1.5">
-                                      <span className="truncate text-[13px] font-semibold text-zinc-900">
-                                        {p.title}
-                                      </span>
-                                      {p.splitWarning ? (
-                                        <span className="shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
-                                          Split
-                                        </span>
-                                      ) : null}
-                                    </div>
-                                    <p className="mt-0.5 text-[11px] text-zinc-600">
-                                      <PartyMetaLine party={p} />
-                                      <span className="text-zinc-400"> · </span>
-                                      <span className="font-medium tabular-nums text-zinc-600">
-                                        Seats {seatRangeLabel(p)}
-                                      </span>
-                                    </p>
-                                  </div>
-                                  <div className="flex shrink-0 flex-col items-end gap-1">
-                                    <div className="flex items-center gap-0.5">
-                                      <button
-                                        type="button"
-                                        disabled={busy || p.splitWarning}
-                                        onClick={() =>
-                                          void runPlan(
-                                            () => planMovePartyOnTable(rows, t.id, p.key, 'up'),
-                                            'Order updated.'
-                                          )
-                                        }
-                                        title="Move up"
-                                        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-[#ebebeb] bg-white text-[13px] font-semibold text-zinc-600 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
-                                      >
-                                        ↑
-                                      </button>
-                                      <button
-                                        type="button"
-                                        disabled={busy || p.splitWarning}
-                                        onClick={() =>
-                                          void runPlan(
-                                            () => planMovePartyOnTable(rows, t.id, p.key, 'down'),
-                                            'Order updated.'
-                                          )
-                                        }
-                                        title="Move down"
-                                        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-[#ebebeb] bg-white text-[13px] font-semibold text-zinc-600 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
-                                      >
-                                        ↓
-                                      </button>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <select
-                                        disabled={busy || p.splitWarning}
-                                        value=""
-                                        aria-label="Move party to another table"
-                                        onChange={(e) => {
-                                          const v = e.target.value
-                                          e.target.value = ''
-                                          if (!v || v === '__pick') return
-                                          if (v === '__unassign') {
-                                            void runPlan(
-                                              () => planUnassignParty(rows, p.key),
-                                              'Party removed from table.'
-                                            )
-                                            return
-                                          }
-                                          void runPlan(
-                                            () =>
-                                              planAssignPartyToTable(
-                                                rows,
-                                                p.key,
-                                                v,
-                                                plannerTables.find((x) => x.id === v)?.capacity ?? 10
-                                              ),
-                                            'Party moved.'
-                                          )
-                                        }}
-                                        className="h-8 max-w-[6.5rem] cursor-pointer truncate rounded-full border border-[#ebebeb] bg-white py-0 pl-2.5 pr-6 text-[11px] font-semibold text-zinc-800 outline-none hover:border-zinc-300 disabled:cursor-not-allowed disabled:opacity-40"
-                                      >
-                                        <option value="__pick">Move…</option>
-                                        <option value="__unassign">Remove</option>
-                                        {!p.splitWarning
-                                          ? plannerTables
-                                              .filter((x) => x.id !== t.id)
-                                              .map((x) => (
-                                                <option key={x.id} value={x.id}>
-                                                  {x.name}
-                                                </option>
-                                              ))
-                                          : null}
-                                      </select>
+                          <div className="flex min-h-[200px] flex-1 flex-col gap-1.5 px-2 py-2">
+                            {list.length === 0 ? (
+                              <p className="px-1 py-6 text-center text-[13px] text-zinc-500">
+                                Drag a party here, or assign from the Parties panel.
+                              </p>
+                            ) : (
+                              list.map((p) => {
+                                const rowDraggable = !busy && !p.splitWarning
+                                return (
+                                  <div
+                                    key={p.key}
+                                    data-party-key={p.key}
+                                    draggable={rowDraggable}
+                                    onDragStart={(e) => startPartyDrag(e, p.key, rowDraggable)}
+                                    onDragEnd={endPartyDrag}
+                                    onDragOver={(e) => {
+                                      e.preventDefault()
+                                      e.stopPropagation()
+                                      e.dataTransfer.dropEffect = 'move'
+                                    }}
+                                    onDrop={(e) => {
+                                      e.preventDefault()
+                                      e.stopPropagation()
+                                      const key = readDragPartyKey(e)
+                                      if (!key) return
+                                      handleDropOnTable(t.id, key, p.key)
+                                    }}
+                                    className={`rounded-xl border px-2 py-2 transition-[opacity,border-color] ${
+                                      p.splitWarning
+                                        ? 'border-amber-300 bg-amber-50/80'
+                                        : 'border-[#ebebeb] bg-[#fafafa]'
+                                    } ${dragPartyKey === p.key ? 'opacity-55' : ''} ${
+                                      rowDraggable ? 'cursor-grab active:cursor-grabbing' : ''
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <PartyAvatarCluster members={p.members} size="sm" />
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                          <span className="truncate text-[13px] font-semibold text-zinc-900">
+                                            {p.title}
+                                          </span>
+                                          {p.splitWarning ? (
+                                            <span className="shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
+                                              Split
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                        <p className="mt-0.5 text-[11px] font-medium tabular-nums text-zinc-600">
+                                          Seats {seatRangeLabel(p)}
+                                        </p>
+                                      </div>
                                       <RemoveFromTableButton
                                         disabled={busy}
                                         onClick={() =>
@@ -537,25 +495,104 @@ export default function AdminSeatingPage() {
                                       />
                                     </div>
                                   </div>
-                                </div>
-                              </div>
-                            ))
-                          )}
+                                )
+                              })
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
 
-            <aside className="flex w-[min(100%,340px)] shrink-0 flex-col border-l border-[#ebebeb] bg-white shadow-[-8px_0_24px_-20px_rgba(0,0,0,0.12)]">
-              <div className="shrink-0 border-b border-[#ebebeb] px-4 py-3">
-                <h2 className="text-[13px] font-semibold text-zinc-900">Parties</h2>
-                <p className="mt-0.5 text-[11px] leading-snug text-zinc-500">
-                  Search matches any guest name; results stay grouped as parties. Unassigned parties
-                  sort first.
-                </p>
+            <aside
+              className="flex w-[min(100%,400px)] shrink-0 flex-col border-l border-[#ebebeb] bg-white shadow-[-8px_0_24px_-20px_rgba(0,0,0,0.12)]"
+              onDragOver={(e) => {
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+              }}
+              onDrop={(e) => {
+                e.preventDefault()
+                const key = readDragPartyKey(e)
+                if (!key) return
+                void runPlan(() => planUnassignParty(rows, key), 'Party removed from table.')
+              }}
+            >
+              <div className="shrink-0 space-y-3 border-b border-[#ebebeb] px-4 py-3">
+                <div>
+                  <h2 className="text-[13px] font-semibold text-zinc-900">Parties</h2>
+                  <p className="mt-1 text-[11px] leading-snug text-zinc-500">
+                    Search matches guest names; rows stay grouped as parties. Drag onto a table or use
+                    Assign. Use the dashed zone below to unseat. Unassigned sort first.
+                  </p>
+                </div>
+                <div className="relative">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+                    aria-hidden
+                  >
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="m20 20-3.5-3.5" />
+                  </svg>
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search parties or guests…"
+                    className="h-10 w-full rounded-full border border-[#ebebeb] bg-white pl-8 pr-[12px] text-[14px] font-normal text-[#171717] placeholder:text-[14px] placeholder:text-[#767676] outline-none transition-colors duration-150 ease-out focus:border-zinc-400"
+                  />
+                </div>
+                <AdminFilterRowSegmented<DockFilter>
+                  ariaLabel="Party list filters"
+                  value={dockFilter}
+                  onChange={setDockFilter}
+                  className="max-w-full flex-wrap"
+                  options={(
+                    [
+                      ['all', 'All', dockCounts.all],
+                      ['unassigned', 'Unassigned', dockCounts.unassigned],
+                      ['assigned', 'Assigned', dockCounts.assigned],
+                      ['split', 'Split', dockCounts.split],
+                    ] as const
+                  ).map(([id, label, n]) => ({
+                    value: id,
+                    label: (
+                      <>
+                        {label}
+                        <span className="tabular-nums opacity-90">
+                          {' ('}
+                          {n}
+                          {')'}
+                        </span>
+                      </>
+                    ),
+                  }))}
+                />
+                <div
+                  className="rounded-lg border border-dashed border-[#dcdcdc] bg-[#f9fafb] px-3 py-2.5 text-center text-[11px] font-medium text-zinc-600"
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    const key = readDragPartyKey(e)
+                    if (!key) return
+                    void runPlan(
+                      () => planUnassignParty(rows, key),
+                      'Party removed from table.'
+                    )
+                  }}
+                >
+                  Drop on this zone to unseat from table
+                </div>
               </div>
               <div className="admin-scroll-area min-h-0 flex-1 overflow-y-auto px-3 py-3">
                 <ul className="space-y-2">
@@ -568,15 +605,27 @@ export default function AdminSeatingPage() {
                         p.members.some((m) =>
                           m.full_name.toLowerCase().includes(searchNeedle)
                         ))
+                    const dockDraggable = !busy && !p.splitWarning
                     return (
                       <li key={p.key}>
                         <div
                           data-party-key={p.key}
-                          className={`rounded-xl border border-[#ebebeb] bg-[#fafafa] px-2.5 py-2 transition-[box-shadow,border-color] ${
+                          draggable={dockDraggable}
+                          onDragStart={(e) => startPartyDrag(e, p.key, dockDraggable)}
+                          onDragEnd={endPartyDrag}
+                          onDragOver={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            e.dataTransfer.dropEffect = 'move'
+                          }}
+                          onDrop={(e) => e.stopPropagation()}
+                          className={`rounded-xl border border-[#ebebeb] bg-[#fafafa] px-2.5 py-2 transition-[box-shadow,border-color,opacity] ${
                             matchesSearch ? 'border-[#5b38f2]/40 ring-2 ring-[#5b38f2]/25' : ''
+                          } ${dragPartyKey === p.key ? 'opacity-55' : ''} ${
+                            dockDraggable ? 'cursor-grab active:cursor-grabbing' : ''
                           }`}
                         >
-                          <div className="flex items-start gap-2">
+                          <div className="flex items-center gap-2">
                             <PartyAvatarCluster members={p.members} size="sm" />
                             <div className="min-w-0 flex-1">
                               <button
@@ -674,7 +723,7 @@ export default function AdminSeatingPage() {
                 ) : null}
               </div>
             </aside>
-          </div>
+          </>
         )}
       </section>
     </div>

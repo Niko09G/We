@@ -69,6 +69,18 @@ select {
   }
 }
 
+/** Admin attendee party-editor: new row enters gently (subtle motion). */
+@keyframes attendeePartyRowEnter {
+  from {
+    opacity: 0.88;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes adminSkeletonShimmer {
   0% {
     background-position: 200% 0;

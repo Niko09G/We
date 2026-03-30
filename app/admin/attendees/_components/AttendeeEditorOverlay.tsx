@@ -219,6 +219,7 @@ export function AttendeeEditorOverlay({
 }: Props) {
   const [rows, setRows] = useState<EditorPartyRow[]>([])
   const [busy, setBusy] = useState(false)
+  const [enterAnimKey, setEnterAnimKey] = useState<string | null>(null)
   const nameRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
 
@@ -276,6 +277,10 @@ export function AttendeeEditorOverlay({
 
   const addRow = useCallback(() => {
     const k = newRowKey()
+    setEnterAnimKey(k)
+    window.setTimeout(() => {
+      setEnterAnimKey((cur) => (cur === k ? null : cur))
+    }, 220)
     setRows((prev) => [
       ...prev,
       {
@@ -499,7 +504,7 @@ export function AttendeeEditorOverlay({
       <div className={BUILDER_SHELL} onMouseDown={(e) => e.stopPropagation()}>
         <AdminBuilderShellHeader title={title} onClose={onClose} center={null} />
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          <div className="space-y-0 divide-y divide-[#ebebeb]">
+          <div className="space-y-0 divide-y divide-[#ebebeb] transition-[gap] duration-200 ease-out">
             {rows.map((row, i) => {
               const rel =
                 i > 0 && row.relationship === REL_PRIMARY ? 'guest' : row.relationship
@@ -508,7 +513,11 @@ export function AttendeeEditorOverlay({
                 <div
                   key={row.key}
                   data-attendee-row
-                  className={`flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:gap-3 ${i > 0 ? 'sm:pl-3' : ''}`}
+                  className={`motion-safe:transition-[padding,opacity] motion-safe:duration-200 motion-safe:ease-out flex flex-col items-center gap-3 py-4 sm:flex-row sm:gap-3 ${i > 0 ? 'sm:pl-3' : ''} ${
+                    enterAnimKey === row.key
+                      ? 'motion-safe:animate-[attendeePartyRowEnter_0.18s_ease-out_both]'
+                      : ''
+                  }`}
                 >
                   <input
                     ref={(el) => {
@@ -632,18 +641,20 @@ export function AttendeeEditorOverlay({
           <button
             type="button"
             onClick={addRow}
-            className="group/more mt-3 flex w-full cursor-pointer items-center justify-center gap-2 py-2 text-[13px] font-medium text-zinc-600 transition-colors hover:text-zinc-900"
+            className="group/add-row mt-3 flex min-h-[50px] w-full cursor-pointer items-center justify-center gap-2.5 rounded-lg border border-dashed border-[#dcdcdc] bg-[#f9fafb] px-3 py-1.5 text-[13px] font-semibold text-zinc-600 transition-[background,border-color,color] duration-200 ease-out hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] hover:text-white"
           >
-            <kbd className="inline-flex h-6 min-w-[1.75rem] shrink-0 items-center justify-center rounded border border-zinc-200 bg-zinc-50 px-1.5 font-mono text-[11px] font-medium text-zinc-600">
+            <kbd className="inline-flex h-6 min-w-[1.75rem] shrink-0 items-center justify-center rounded border border-zinc-200 bg-zinc-50 px-1.5 font-mono text-[11px] font-medium text-zinc-600 transition-[border-color,background,color] group-hover/add-row:border-white/40 group-hover/add-row:bg-white/15 group-hover/add-row:text-white">
               Tab
             </kbd>
             <span
-              className="text-[18px] font-light leading-none text-[#5b38f2] transition-colors group-hover/more:text-[#4a2fd4]"
+              className="text-[22px] font-light leading-none text-[#5b38f2] transition-colors duration-200 group-hover/add-row:text-white"
               aria-hidden
             >
               +
             </span>
-            <span>Add more to this party</span>
+            <span className="transition-colors group-hover/add-row:text-white">
+              Add more to this party
+            </span>
           </button>
         </div>
         <div className="flex shrink-0 justify-end gap-2 border-t border-zinc-200 px-5 py-3">

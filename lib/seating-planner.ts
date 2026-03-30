@@ -370,3 +370,74 @@ export function planMovePartyOnTable(
   renumberTableSeats(next, tableId, swapped)
   return { updates: diffSeating(before, next), error: undefined }
 }
+
+/** Mutates `next` — reorder party rows then renumber seats (same table only). */
+export function reorderPartyKeysOnTableInPlace(
+  next: AttendeeRow[],
+  tableId: string,
+  partyKey: string,
+  insertBeforePartyKey: string | null
+): void {
+  const keys = [...partyKeysOnTableOrdered(next, tableId)]
+  const dragIdx = keys.indexOf(partyKey)
+  if (dragIdx < 0) return
+
+  if (insertBeforePartyKey != null && insertBeforePartyKey === partyKey) {
+    return
+  }
+
+  if (insertBeforePartyKey == null) {
+    keys.splice(dragIdx, 1)
+    keys.push(partyKey)
+  } else {
+    const targetIdx = keys.indexOf(insertBeforePartyKey)
+    if (targetIdx < 0) return
+    keys.splice(dragIdx, 1)
+    const insertAt = dragIdx < targetIdx ? targetIdx - 1 : targetIdx
+    keys.splice(insertAt, 0, partyKey)
+  }
+
+  renumberTableSeats(next, tableId, keys)
+}
+
+/**
+ * Drag/drop: place party on a table, optionally before another party row.
+ * Applies assign in one step, then reorder relative to `insertBeforePartyKey` when set.
+ */
+export function planDropPartyAtTablePosition(
+  before: AttendeeRow[],
+  partyKey: string,
+  targetTableId: string,
+  capacity: number,
+  insertBeforePartyKey: string | null
+): { updates: SeatingUpdate[]; error?: string } {
+  const assignRes = planAssignPartyToTable(before, partyKey, targetTableId, capacity)
+  if (assignRes.error) return assignRes
+
+  const next = cloneRows(before)
+  for (const u of assignRes.updates) {
+    const row = next.find((x) => x.id === u.id)
+    if (row) {
+      row.table_id = u.table_id
+      row.seat_number = u.seat_number
+    }
+  }
+
+  if (insertBeforePartyKey != null) {
+    reorderPartyKeysOnTableInPlace(next, targetTableId, partyKey, insertBeforePartyKey)
+  }
+
+  return { updates: diffSeating(before, next), error: undefined }
+}
+
+/** Reorder a party already on `tableId` (same-table drag) or move to end when `insertBeforePartyKey` is null. */
+export function planReorderPartyInTable(
+  before: AttendeeRow[],
+  tableId: string,
+  partyKey: string,
+  insertBeforePartyKey: string | null
+): { updates: SeatingUpdate[]; error?: string } {
+  const next = cloneRows(before)
+  reorderPartyKeysOnTableInPlace(next, tableId, partyKey, insertBeforePartyKey)
+  return { updates: diffSeating(before, next), error: undefined }
+}

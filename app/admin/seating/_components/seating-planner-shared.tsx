@@ -42,6 +42,10 @@ export function PartyMetaLine({ party }: { party: SeatingParty }) {
   )
 }
 
+function displayFirstName(fullName: string): string {
+  return fullName.trim().split(/\s+/).filter(Boolean)[0] ?? ''
+}
+
 export function PartyAvatarCluster({
   members,
   size = 'md',
@@ -79,45 +83,125 @@ export function PartyAvatarCluster({
   )
 }
 
-export function SeatVisualizationStrip({
+/**
+ * Two-sided seat map aligned with guest `SeatingMapPanel` seat pairing:
+ * odd seat numbers on top, even on bottom, paired by column (1–2, 3–4, …).
+ */
+export function AdminTableTwinSeatMap({
   capacity,
   attendeesAtTable,
 }: {
   capacity: number
   attendeesAtTable: AttendeeRow[]
 }) {
-  const occupied = new Set<number>()
+  const bySeat = new Map<number, AttendeeRow>()
   for (const r of attendeesAtTable) {
     const n = r.seat_number
-    if (typeof n === 'number' && Number.isFinite(n) && n >= 1 && n <= capacity) {
-      occupied.add(Math.trunc(n))
+    if (typeof n === 'number' && Number.isFinite(n)) {
+      const sn = Math.trunc(n)
+      if (sn >= 1 && sn <= capacity) bySeat.set(sn, r)
     }
   }
 
-  const numClass = capacity > 24 ? 'text-[7px]' : capacity > 14 ? 'text-[8px]' : 'text-[9px]'
+  const perSide = Math.max(1, Math.ceil(capacity / 2))
+  const labelClass =
+    capacity > 22 ? 'text-[7px]' : capacity > 14 ? 'text-[8px]' : 'text-[9px]'
+
   return (
-    <div className="w-full rounded-lg border border-[#ebebeb] bg-[#f4f4f5] p-1">
-      <div className="flex w-full gap-px">
-        {Array.from({ length: capacity }, (_, i) => {
-          const n = i + 1
-          const filled = occupied.has(n)
-          return (
-            <div
-              key={n}
-              className={`flex min-h-[26px] min-w-0 flex-1 flex-col items-center justify-center rounded-[3px] ${
-                filled ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]/35' : 'bg-white'
-              }`}
-              title={`Seat ${n}${filled ? ' · occupied' : ' · empty'}`}
-            >
-              <span
-                className={`tabular-nums font-semibold leading-none text-zinc-500 ${numClass}`}
-              >
-                {n}
-              </span>
-            </div>
-          )
-        })}
+    <div className="rounded-xl border border-[#ebebeb] bg-[#fafafa] p-2">
+      <div className="relative rounded-lg border border-zinc-200/90 bg-white px-1.5 pb-2 pt-7">
+        <div
+          className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-1 w-[85%] max-w-[calc(100%-8px)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#ebebeb]"
+          aria-hidden
+        />
+        <p className="absolute left-2 top-1.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-400">
+          Head
+        </p>
+        <div
+          className="relative z-[1] grid gap-x-1 gap-y-1.5"
+          style={{
+            gridTemplateColumns: `repeat(${perSide}, minmax(0, 1fr))`,
+          }}
+        >
+          {Array.from({ length: perSide }, (_, col) => {
+            const topSeat = col * 2 + 1
+            const bottomSeat = col * 2 + 2
+            const topGuest = bySeat.get(topSeat)
+            const bottomGuest =
+              bottomSeat <= capacity ? bySeat.get(bottomSeat) : undefined
+
+            return (
+              <div key={col} className="flex min-w-0 flex-col gap-1">
+                <SeatCell seatNum={topSeat} guest={topGuest} labelClass={labelClass} />
+                {bottomSeat <= capacity ? (
+                  <SeatCell seatNum={bottomSeat} guest={bottomGuest} labelClass={labelClass} />
+                ) : (
+                  <div className="min-h-[2.25rem]" aria-hidden />
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
+    </div>
+  )
+}
+
+function SeatCell({
+  seatNum,
+  guest,
+  labelClass,
+}: {
+  seatNum: number
+  guest: AttendeeRow | undefined
+  labelClass: string
+}) {
+  const filled = Boolean(guest)
+  return (
+    <div
+      title={
+        guest
+          ? `Seat ${seatNum} · ${guest.full_name}`
+          : `Seat ${seatNum} · empty`
+      }
+      className={`flex min-h-[2.35rem] min-w-0 flex-col justify-center rounded-md border px-0.5 py-0.5 ${
+        filled
+          ? 'border-[#5b38f2]/30 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]/12'
+          : 'border-dashed border-zinc-200/90 bg-zinc-50/80'
+      }`}
+    >
+      {filled && guest ? (
+        <div className="flex min-w-0 items-center gap-1">
+          <div className="h-6 w-6 shrink-0 overflow-hidden rounded-full border border-[#ebebeb] bg-zinc-100">
+            {guest.photo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={guest.photo_url}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center text-[9px] font-bold text-zinc-500">
+                {(displayFirstName(guest.full_name)[0] ?? '?').toUpperCase()}
+              </span>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[10px] font-semibold leading-tight text-zinc-800">
+              {displayFirstName(guest.full_name)}
+            </p>
+            <p className={`tabular-nums font-semibold leading-none text-zinc-500 ${labelClass}`}>
+              {seatNum}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-0.5">
+          <span className={`tabular-nums font-semibold text-zinc-400 ${labelClass}`}>
+            {seatNum}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
