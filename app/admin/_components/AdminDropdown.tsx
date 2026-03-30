@@ -15,6 +15,8 @@ type AdminDropdownProps = {
   className?: string
   /** Classes for the trigger button (width, padding, border, etc.). */
   buttonClassName?: string
+  /** Extra classes for the floating menu panel (e.g. min width wider than trigger). */
+  menuClassName?: string
   /** When false, clicking menu items does not close the panel (e.g. multi-select). */
   closeOnMenuItemClick?: boolean
   onTriggerKeyDown?: (e: KeyboardEvent<HTMLButtonElement>) => void
@@ -30,6 +32,7 @@ export function AdminDropdown({
   align = 'left',
   className = '',
   buttonClassName = 'flex h-11 w-full min-w-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-3 text-left text-[14px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300',
+  menuClassName = '',
   closeOnMenuItemClick = true,
   onTriggerKeyDown,
 }: AdminDropdownProps) {
@@ -61,7 +64,7 @@ export function AdminDropdown({
         <div
           className={`absolute top-[calc(100%+6px)] z-40 min-w-full overflow-hidden rounded-2xl border border-[#ebebeb] bg-white py-1 shadow-lg ${
             align === 'right' ? 'right-0' : 'left-0'
-          }`}
+          } ${menuClassName}`.trim()}
           onClick={(e) => {
             if (!closeOnMenuItemClick) return
             if ((e.target as HTMLElement).closest('button')) setOpen(false)

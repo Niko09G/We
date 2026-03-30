@@ -11,14 +11,7 @@ import {
   type AttendeePartyBlock,
 } from '@/app/admin/attendees/_components/AttendeeEditorOverlay'
 
-type GuestListChip = 'all' | 'guests' | 'yes' | 'pending' | 'no'
-
-/** Non-lead party members (kids, +1s, placeholders) — distinct from “hosts” in a party. */
-function rowMatchesGuestsChip(r: AttendeeRow): boolean {
-  const pr = r.party_role
-  if (pr === 'lead_adult' || pr === 'lead' || pr === 'spouse') return false
-  return true
-}
+type GuestListChip = 'all' | 'yes' | 'pending' | 'no'
 
 function isPendingResponseRow(r: AttendeeRow): boolean {
   const s = (r.rsvp_status ?? '').trim().toLowerCase()
@@ -29,8 +22,6 @@ function rowMatchesGuestListChip(r: AttendeeRow, chip: GuestListChip): boolean {
   switch (chip) {
     case 'all':
       return true
-    case 'guests':
-      return rowMatchesGuestsChip(r)
     case 'yes':
       return (r.rsvp_status ?? '').trim().toLowerCase() === 'yes'
     case 'pending':
@@ -344,7 +335,6 @@ export default function AdminAttendeesPage() {
     const base = rowsForChipCounts
     return {
       all: base.length,
-      guests: base.filter((r) => rowMatchesGuestsChip(r)).length,
       yes: base.filter(
         (r) => (r.rsvp_status ?? '').trim().toLowerCase() === 'yes'
       ).length,
@@ -514,7 +504,7 @@ export default function AdminAttendeesPage() {
           <div className="z-20 shrink-0 rounded-t-2xl border-b border-[#ebebeb] bg-white p-4 pb-3">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex min-w-0 flex-wrap items-center gap-3">
-                <div className="relative w-full md:w-[360px]">
+                <div className="relative w-full md:w-[300px] md:max-w-[300px]">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -544,7 +534,6 @@ export default function AdminAttendeesPage() {
                   options={(
                     [
                       ['all', 'All', (n: number) => n],
-                      ['guests', 'Guests', (n: number) => n],
                       ['yes', 'Attending', (n: number) => n],
                       ['pending', 'Pending', (n: number) => n],
                       ['no', 'Declined', (n: number) => n],
@@ -644,27 +633,35 @@ export default function AdminAttendeesPage() {
               No attendees match your filters.
             </div>
           ) : (
-            <div className="admin-scroll-area admin-content-in h-full min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-              <div className="sticky top-0 z-10 grid grid-cols-12 gap-x-2 border-b border-[#ebebeb] bg-white px-3 pb-2 pt-[10px] text-[14px] font-medium text-[#18181b]">
-                <div className="col-span-4">Party</div>
-                <div className="col-span-1 text-center">Kids</div>
-                <div className="col-span-1 text-center">Extra</div>
-                <div className="col-span-2">Table</div>
-                <div className="col-span-2">Seat</div>
-                <div className="col-span-1">RSVP</div>
-                <div className="col-span-1" aria-hidden />
-              </div>
-              <div className="space-y-1 pt-1">
-                <button
-                  type="button"
-                  onClick={openCreateAttendeeEditor}
-                  className="grid min-h-[50px] w-full cursor-pointer grid-cols-12 items-center gap-x-2 rounded-lg border border-dashed border-[#dcdcdc] bg-[#f9fafb] px-3 py-1.5 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-50"
-                >
-                  <span className="col-span-11 text-[14px] font-semibold text-zinc-600">
-                    + Add new attendee
-                  </span>
-                  <span className="col-span-1" aria-hidden />
-                </button>
+            <div className="admin-scroll-area admin-content-in flex h-full min-h-0 flex-1 flex-col overflow-hidden px-4 pb-4">
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="sticky top-0 z-20 space-y-1 bg-white pb-1 pt-1 shadow-[0_4px_12px_-4px_rgba(0,0,0,0.08)]">
+                  <div className="grid grid-cols-12 gap-x-2 border-b border-[#ebebeb] px-3 pb-2 pt-[10px] text-[14px] font-medium text-[#18181b]">
+                    <div className="col-span-4">Party</div>
+                    <div className="col-span-1 text-center">Kids</div>
+                    <div className="col-span-1 text-center">Extra</div>
+                    <div className="col-span-2">Table</div>
+                    <div className="col-span-2">Seat</div>
+                    <div className="col-span-1">RSVP</div>
+                    <div className="col-span-1" aria-hidden />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openCreateAttendeeEditor}
+                    className="group/add-row grid min-h-[50px] w-full cursor-pointer grid-cols-12 items-center gap-x-2 rounded-lg border border-dashed border-[#dcdcdc] bg-[#f9fafb] px-3 py-1.5 text-left transition-[background,border-color,color] duration-200 ease-out hover:border-transparent hover:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]"
+                  >
+                    <span className="col-span-11 flex min-w-0 items-center gap-2.5">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-[18px] font-light leading-none text-white transition-[background,transform] duration-200 ease-out group-hover/add-row:scale-[1.02] group-hover/add-row:bg-white group-hover/add-row:text-[#5b38f2]">
+                        +
+                      </span>
+                      <span className="text-[14px] font-semibold text-zinc-600 transition-colors duration-200 group-hover/add-row:text-white">
+                        Add new attendee
+                      </span>
+                    </span>
+                    <span className="col-span-1" aria-hidden />
+                  </button>
+                </div>
+                <div className="space-y-1 pt-1">
                 {partyBlocks.map((p, partyIndex) => {
                   const kidsCount = computePartyKidsCount(p.members)
                   const extraGuestsCount = computePartyExtraGuestsCount(p.members)
@@ -739,6 +736,7 @@ export default function AdminAttendeesPage() {
                     </div>
                   )
                 })}
+                </div>
               </div>
             </div>
           )}

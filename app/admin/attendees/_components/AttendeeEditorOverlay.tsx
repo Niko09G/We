@@ -9,14 +9,18 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  archiveAttendee,
   createAttendee,
   updateAttendee,
+  uploadAttendeePhoto,
+  removeAttendeePhotoByPublicUrl,
   type AttendeeRow,
 } from '@/lib/admin-attendees'
 import {
   createAttendeeGroup,
   updateAttendeeGroup,
 } from '@/lib/admin-attendee-groups'
+import { compressAvatarImage } from '@/lib/image-compress'
 import { AdminBuilderShellHeader } from '@/app/admin/_components/AdminBuilderShellHeader'
 import {
   AdminSelectDropdown,
@@ -30,13 +34,22 @@ export type AttendeePartyBlock = {
   members: AttendeeRow[]
 }
 
+const BUILDER_SHELL =
+  'admin-font relative z-10 flex h-[90vh] max-h-[900px] min-h-0 w-full max-w-[1080px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm'
+
 const MENU_ITEM =
   'flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-[14px] font-medium text-[#171717] hover:bg-zinc-50'
 
-const DROPDOWN_BTN =
-  'inline-flex h-9 min-w-[7rem] max-w-[11rem] shrink-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-2.5 pr-2 text-left text-[13px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300'
+const MENU_WIDE = 'w-max min-w-[13.5rem] max-w-[min(calc(100vw-48px),280px)]'
 
-type RsvpValue = '' | 'yes' | 'no' | 'pending'
+const DROPDOWN_BTN =
+  'inline-flex h-9 min-w-[7rem] max-w-[11rem] shrink-0 items-center justify-between gap-2 rounded-full border border-[#ebebeb] bg-white px-2.5 pr-2 text-left text-[13px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300 focus-visible:ring-2 focus-visible:ring-[#5b38f2]/35 focus-visible:ring-offset-2'
+
+/** Gradient ring when inner control is focused (focus-within / has :focus-visible) */
+const FOCUS_RING =
+  'rounded-full border border-[#ebebeb] bg-[#ebebeb] p-[1px] transition-[box-shadow,background] duration-150 focus-within:border-transparent focus-within:bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] focus-within:shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]'
+
+type RsvpValue = 'yes' | 'no' | 'pending'
 
 const REL_PRIMARY = '' as const
 type RelValue = '' | 'guest' | 'spouse' | 'kid'
@@ -47,6 +60,10 @@ export type EditorPartyRow = {
   full_name: string
   rsvp_status: RsvpValue
   relationship: RelValue
+  photo_url: string | null
+  /** Local preview (blob URL); revoke when replaced */
+  photoObjectUrl: string | null
+  photoFile: File | null
 }
 
 function newRowKey() {
@@ -58,6 +75,10 @@ function firstName(fullName: string): string {
   return v ?? ''
 }
 
+function revokeIfBlob(url: string | null) {
+  if (url?.startsWith('blob:')) URL.revokeObjectURL(url)
+}
+
 function attendeeToRelationship(m: AttendeeRow): RelValue {
   const pr = (m.party_role ?? '').trim().toLowerCase()
   if (pr === 'spouse') return 'spouse'
@@ -66,9 +87,16 @@ function attendeeToRelationship(m: AttendeeRow): RelValue {
   return REL_PRIMARY
 }
 
+function rsvpFromServer(m: AttendeeRow): RsvpValue {
+  const s = (m.rsvp_status ?? '').trim().toLowerCase()
+  if (s === 'yes') return 'yes'
+  if (s === 'no') return 'no'
+  if (s === 'pending') return 'pending'
+  return 'pending'
+}
+
 function roleFromRelationship(rel: RelValue, rowIndex: number): string | null {
   if (rowIndex === 0) {
-    if (rel === 'spouse' || rel === 'kid') return 'lead'
     if (rel === 'guest') return 'guest'
     return 'lead'
   }
@@ -78,8 +106,10 @@ function roleFromRelationship(rel: RelValue, rowIndex: number): string | null {
 }
 
 function normRsvp(v: RsvpValue): string | null {
-  if (v === '' || v === 'pending') return v === 'pending' ? 'pending' : null
-  return v
+  if (v === 'pending') return 'pending'
+  if (v === 'yes') return 'yes'
+  if (v === 'no') return 'no'
+  return 'pending'
 }
 
 const RsvpIconYes = () => (
@@ -100,6 +130,15 @@ const RsvpIconPending = () => (
 
 const RSVP_OPTIONS: { value: RsvpValue; label: React.ReactNode }[] = [
   {
+    value: 'pending',
+    label: (
+      <span className="flex items-center gap-2">
+        <RsvpIconPending />
+        Pending
+      </span>
+    ),
+  },
+  {
     value: 'yes',
     label: (
       <span className="flex items-center gap-2">
@@ -117,33 +156,14 @@ const RSVP_OPTIONS: { value: RsvpValue; label: React.ReactNode }[] = [
       </span>
     ),
   },
-  {
-    value: 'pending',
-    label: (
-      <span className="flex items-center gap-2">
-        <RsvpIconPending />
-        Pending
-      </span>
-    ),
-  },
-  {
-    value: '',
-    label: (
-      <span className="flex items-center gap-2 text-zinc-500">
-        <span className="h-4 w-4 shrink-0 rounded-full border border-zinc-300" aria-hidden />
-        Not set
-      </span>
-    ),
-  },
 ]
 
 function rsvpTriggerLabel(value: RsvpValue) {
   const opt = RSVP_OPTIONS.find((o) => o.value === value)
-  return opt?.label ?? RSVP_OPTIONS[3]!.label
+  return opt?.label ?? RSVP_OPTIONS[0]!.label
 }
 
-const REL_LABELS: Record<RelValue, React.ReactNode> = {
-  '': <span className="text-zinc-600">Primary</span>,
+const REL_LABELS: Record<Exclude<RelValue, ''>, React.ReactNode> = {
   guest: 'Guest',
   spouse: 'Spouse',
   kid: 'Kid',
@@ -159,6 +179,35 @@ type Props = {
   onSuccess: (message: string) => void
 }
 
+function emptyRow(): EditorPartyRow {
+  return {
+    key: newRowKey(),
+    full_name: '',
+    rsvp_status: 'pending',
+    relationship: REL_PRIMARY,
+    photo_url: null,
+    photoObjectUrl: null,
+    photoFile: null,
+  }
+}
+
+async function syncPhotoForAttendee(
+  attendeeId: string,
+  displayName: string,
+  file: File | null,
+  previousPublicUrl: string | null
+) {
+  if (!file) return
+  const { blob, contentType } = await compressAvatarImage(file)
+  const url = await uploadAttendeePhoto({
+    attendeeFirstName: firstName(displayName) || 'attendee',
+    blob,
+    contentType,
+  })
+  await updateAttendee(attendeeId, { photo_url: url })
+  await removeAttendeePhotoByPublicUrl(previousPublicUrl)
+}
+
 export function AttendeeEditorOverlay({
   open,
   mode,
@@ -171,57 +220,36 @@ export function AttendeeEditorOverlay({
   const [rows, setRows] = useState<EditorPartyRow[]>([])
   const [busy, setBusy] = useState(false)
   const nameRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const resetForOpen = useCallback(() => {
-    if (mode === 'create') {
-      setRows([
-        {
-          key: newRowKey(),
-          full_name: '',
-          rsvp_status: '',
-          relationship: REL_PRIMARY,
-        },
-      ])
-      return
-    }
-    if (!party?.members.length) {
-      setRows([
-        {
-          key: newRowKey(),
-          full_name: '',
-          rsvp_status: '',
-          relationship: REL_PRIMARY,
-        },
-      ])
-      return
-    }
-    const sorted = [...party.members].sort((a, b) => {
-      const rank = (m: AttendeeRow) => {
-        const pr = (m.party_role ?? '').toLowerCase()
-        if (pr === 'lead_adult' || pr === 'lead') return 0
-        if (pr === 'spouse') return 1
-        if (pr === 'child') return 2
-        return 3
-      }
-      const d = rank(a) - rank(b)
-      if (d !== 0) return d
-      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    })
-    setRows(
-      sorted.map((m, i) => ({
+    setRows((prev) => {
+      for (const r of prev) revokeIfBlob(r.photoObjectUrl)
+      if (mode === 'create') return [emptyRow()]
+      if (!party?.members.length) return [emptyRow()]
+      const sorted = [...party.members].sort((a, b) => {
+        const rank = (m: AttendeeRow) => {
+          const pr = (m.party_role ?? '').toLowerCase()
+          if (pr === 'lead_adult' || pr === 'lead') return 0
+          if (pr === 'spouse') return 1
+          if (pr === 'child') return 2
+          return 3
+        }
+        const d = rank(a) - rank(b)
+        if (d !== 0) return d
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      })
+      return sorted.map((m, i) => ({
         key: m.id,
         attendeeId: m.id,
         full_name: m.full_name,
-        rsvp_status: ((): RsvpValue => {
-          const s = (m.rsvp_status ?? '').trim().toLowerCase()
-          if (s === 'yes') return 'yes'
-          if (s === 'no') return 'no'
-          if (s === 'pending') return 'pending'
-          return ''
-        })(),
+        rsvp_status: rsvpFromServer(m),
         relationship: i === 0 ? REL_PRIMARY : attendeeToRelationship(m),
+        photo_url: m.photo_url ?? null,
+        photoObjectUrl: null,
+        photoFile: null,
       }))
-    )
+    })
   }, [mode, party])
 
   useEffect(() => {
@@ -237,6 +265,13 @@ export function AttendeeEditorOverlay({
     return () => document.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
+  const rowsSnapshotRef = useRef(rows)
+  rowsSnapshotRef.current = rows
+  useEffect(() => {
+    if (open) return
+    for (const r of rowsSnapshotRef.current) revokeIfBlob(r.photoObjectUrl)
+  }, [open])
+
   const title = mode === 'create' ? 'New attendee' : 'Edit attendee'
 
   const addRow = useCallback(() => {
@@ -246,22 +281,36 @@ export function AttendeeEditorOverlay({
       {
         key: k,
         full_name: '',
-        rsvp_status: prev[0]?.rsvp_status ?? '',
+        rsvp_status: prev[0]?.rsvp_status ?? 'pending',
         relationship: 'guest',
+        photo_url: null,
+        photoObjectUrl: null,
+        photoFile: null,
       },
     ])
     queueMicrotask(() => nameRefs.current[k]?.focus())
   }, [])
 
+  const removePartyMemberRow = useCallback(
+    async (row: EditorPartyRow, index: number) => {
+      if (index === 0) return
+      if (row.attendeeId) {
+        if (!window.confirm('Remove this guest from the party?')) return
+        try {
+          await archiveAttendee(row.attendeeId)
+        } catch (e) {
+          onError(e instanceof Error ? e.message : 'Failed to remove guest.')
+          return
+        }
+      }
+      revokeIfBlob(row.photoObjectUrl)
+      setRows((prev) => prev.filter((r) => r.key !== row.key))
+    },
+    [onError]
+  )
+
   const relationshipOptionsForRow = useCallback((rowIndex: number): AdminSelectOption<RelValue>[] => {
-    if (rowIndex === 0) {
-      return [
-        { value: REL_PRIMARY, label: REL_LABELS[''] },
-        { value: 'guest', label: REL_LABELS.guest },
-        { value: 'spouse', label: REL_LABELS.spouse },
-        { value: 'kid', label: REL_LABELS.kid },
-      ]
-    }
+    if (rowIndex === 0) return []
     return [
       { value: 'guest', label: REL_LABELS.guest },
       { value: 'spouse', label: REL_LABELS.spouse },
@@ -277,6 +326,27 @@ export function AttendeeEditorOverlay({
     }
     return firstName(names[0]!)
   }, [])
+
+  const onPickPhoto = useCallback((rowKey: string, file: File | null) => {
+    if (!file) return
+    const ok = ['image/jpeg', 'image/png', 'image/webp']
+    if (!ok.includes(file.type)) {
+      onError('Use JPG, PNG, or WebP.')
+      return
+    }
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.key !== rowKey) return r
+        revokeIfBlob(r.photoObjectUrl)
+        return {
+          ...r,
+          photoFile: file,
+          photoObjectUrl: URL.createObjectURL(file),
+          photo_url: null,
+        }
+      })
+    )
+  }, [onError])
 
   const save = useCallback(async () => {
     const valid = rows.filter((r) => r.full_name.trim())
@@ -297,25 +367,28 @@ export function AttendeeEditorOverlay({
       if (mode === 'create') {
         if (valid.length === 1) {
           const r = valid[0]!
-          await createAttendee({
+          const created = await createAttendee({
             full_name: r.full_name.trim(),
             rsvp_status: normRsvp(r.rsvp_status),
             party_role: roleFromRelationship(r.relationship, 0),
             group_id: null,
             is_placeholder: false,
           })
+          await syncPhotoForAttendee(created.id, r.full_name, r.photoFile, null)
         } else {
           const group_name = deriveGroupName(valid)
           const g = await createAttendeeGroup({ group_name, notes: null })
           for (let i = 0; i < valid.length; i += 1) {
             const r = valid[i]!
-            await createAttendee({
+            const created = await createAttendee({
               full_name: r.full_name.trim(),
               rsvp_status: normRsvp(r.rsvp_status),
               group_id: g.id,
               party_role: roleFromRelationship(r.relationship, i),
               is_placeholder: false,
             })
+            const prevUrl = r.photo_url
+            await syncPhotoForAttendee(created.id, r.full_name, r.photoFile, prevUrl)
           }
         }
         onSuccess('Attendee saved.')
@@ -329,6 +402,7 @@ export function AttendeeEditorOverlay({
               rsvp_status: normRsvp(r.rsvp_status),
               party_role: roleFromRelationship(r.relationship, 0),
             })
+            await syncPhotoForAttendee(m.id, r.full_name, r.photoFile, m.photo_url ?? null)
           } else {
             const group_name = deriveGroupName(valid)
             const g = await createAttendeeGroup({ group_name, notes: null })
@@ -338,39 +412,56 @@ export function AttendeeEditorOverlay({
               rsvp_status: normRsvp(valid[0]!.rsvp_status),
               party_role: 'lead',
             })
+            await syncPhotoForAttendee(
+              m.id,
+              valid[0]!.full_name,
+              valid[0]!.photoFile,
+              valid[0]!.photoObjectUrl ? m.photo_url ?? null : m.photo_url ?? null
+            )
             for (let i = 1; i < valid.length; i += 1) {
               const r = valid[i]!
-              await createAttendee({
-                full_name: r.full_name.trim(),
-                rsvp_status: normRsvp(r.rsvp_status),
-                group_id: g.id,
-                party_role: roleFromRelationship(r.relationship, i),
-                is_placeholder: false,
-              })
+              if (r.attendeeId) {
+                await updateAttendee(r.attendeeId, {
+                  full_name: r.full_name.trim(),
+                  rsvp_status: normRsvp(r.rsvp_status),
+                  party_role: roleFromRelationship(r.relationship, i),
+                })
+                await syncPhotoForAttendee(r.attendeeId, r.full_name, r.photoFile, r.photo_url)
+              } else {
+                const created = await createAttendee({
+                  full_name: r.full_name.trim(),
+                  rsvp_status: normRsvp(r.rsvp_status),
+                  group_id: g.id,
+                  party_role: roleFromRelationship(r.relationship, i),
+                  is_placeholder: false,
+                })
+                await syncPhotoForAttendee(created.id, r.full_name, r.photoFile, null)
+              }
             }
           }
         } else {
           const gid = party.group!.id
           const nextName = deriveGroupName(valid)
           await updateAttendeeGroup(gid, { group_name: nextName })
-          const seen = new Set<string>()
           for (let i = 0; i < valid.length; i += 1) {
             const r = valid[i]!
             if (r.attendeeId) {
-              seen.add(r.attendeeId)
               await updateAttendee(r.attendeeId, {
                 full_name: r.full_name.trim(),
                 rsvp_status: normRsvp(r.rsvp_status),
                 party_role: roleFromRelationship(r.relationship, i),
               })
+              const prevPhoto = party.members.find((x) => x.id === r.attendeeId)?.photo_url ?? null
+              await syncPhotoForAttendee(r.attendeeId, r.full_name, r.photoFile, prevPhoto)
             } else {
-              await createAttendee({
+              const created = await createAttendee({
                 full_name: r.full_name.trim(),
                 rsvp_status: normRsvp(r.rsvp_status),
                 group_id: gid,
                 party_role: roleFromRelationship(r.relationship, i),
                 is_placeholder: false,
               })
+              await syncPhotoForAttendee(created.id, r.full_name, r.photoFile, null)
             }
           }
         }
@@ -385,8 +476,8 @@ export function AttendeeEditorOverlay({
     }
   }, [rows, mode, party, deriveGroupName, onClose, onError, onSuccess, onSaved])
 
-  const onRelTriggerKeyDown = useCallback(
-    (rowIndex: number) => (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+  const onNameKeyDown = useCallback(
+    (rowIndex: number) => (e: ReactKeyboardEvent<HTMLInputElement>) => {
       if (e.key !== 'Tab' || e.shiftKey) return
       if (rowIndex !== rows.length - 1) return
       e.preventDefault()
@@ -405,25 +496,64 @@ export function AttendeeEditorOverlay({
         onClose()
       }}
     >
-      <div
-        className="relative z-10 flex max-h-[min(90vh,880px)] w-full max-w-[640px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-lg"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className={BUILDER_SHELL} onMouseDown={(e) => e.stopPropagation()}>
         <AdminBuilderShellHeader title={title} onClose={onClose} center={null} />
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           <p className="mb-4 text-center text-[13px] font-medium text-zinc-500">
             {mode === 'create'
-              ? 'Add one guest or build a party. Press Tab on the last relationship field to add another row.'
-              : 'Update names, RSVP, or party members.'}
+              ? 'Add one guest or build a party. Press Tab in the last name field to add another row.'
+              : 'Update names, RSVP, photos, or party members.'}
           </p>
-          <div className="space-y-3">
-            {rows.map((row, i) => (
-              <div
-                key={row.key}
-                className={`flex flex-col gap-2 rounded-2xl border border-[#ebebeb] bg-[#fafafa] p-3 sm:flex-row sm:items-center sm:gap-3 ${i > 0 ? 'ml-2 border-l-4 border-l-zinc-200 pl-3' : ''}`}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="rounded-2xl bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] p-[1px] shadow-[0_0_0_1px_rgba(91,56,242,0.08),0_0_28px_rgba(28,160,216,0.18)]">
+          <div className="space-y-0 divide-y divide-[#ebebeb]">
+            {rows.map((row, i) => {
+              const rel =
+                i > 0 && row.relationship === REL_PRIMARY ? 'guest' : row.relationship
+              const displayPhoto = row.photoObjectUrl ?? row.photo_url
+              return (
+                <div
+                  key={row.key}
+                  data-attendee-row
+                  className={`flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:gap-3 ${i > 0 ? 'sm:pl-3' : ''}`}
+                >
+                  <input
+                    ref={(el) => {
+                      fileInputs.current[row.key] = el
+                    }}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null
+                      e.target.value = ''
+                      onPickPhoto(row.key, file)
+                    }}
+                  />
+                  <div className={`relative shrink-0 ${FOCUS_RING}`}>
+                    <button
+                      type="button"
+                      title="Add photo"
+                      onClick={() => fileInputs.current[row.key]?.click()}
+                      className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-100 outline-none"
+                    >
+                      {displayPhoto ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={displayPhoto} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-5 w-5 text-zinc-400"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={1.8}
+                          aria-hidden
+                        >
+                          <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className={`min-w-0 flex-1 ${FOCUS_RING}`}>
                     <input
                       ref={(el) => {
                         nameRefs.current[row.key] = el
@@ -436,50 +566,84 @@ export function AttendeeEditorOverlay({
                           )
                         )
                       }
+                      onKeyDown={onNameKeyDown(i)}
                       placeholder="Full name"
                       autoFocus={i === 0 && mode === 'create'}
-                      className="h-11 w-full rounded-2xl border-0 bg-white px-3 !text-[15px] font-medium text-zinc-900 outline-none placeholder:text-zinc-400"
+                      className="h-9 w-full rounded-full border-0 bg-white px-3 !text-[15px] font-medium text-zinc-900 outline-none placeholder:text-zinc-400 focus-visible:outline-none"
                     />
                   </div>
+
+                  <div className={`shrink-0 ${FOCUS_RING}`}>
+                    <AdminSelectDropdown<RsvpValue>
+                      value={row.rsvp_status}
+                      onChange={(v) =>
+                        setRows((prev) =>
+                          prev.map((r) => (r.key === row.key ? { ...r, rsvp_status: v } : r))
+                        )
+                      }
+                      options={RSVP_OPTIONS}
+                      className="w-auto"
+                      menuClassName={MENU_WIDE}
+                      buttonClassName={`${DROPDOWN_BTN} border-0 shadow-none`}
+                      menuItemClassName={MENU_ITEM}
+                      renderValue={() => (
+                        <span className="flex min-w-0 items-center gap-2">{rsvpTriggerLabel(row.rsvp_status)}</span>
+                      )}
+                    />
+                  </div>
+
+                  {i > 0 ? (
+                    <div className={`flex shrink-0 ${FOCUS_RING}`}>
+                      <AdminSelectDropdown<RelValue>
+                        value={rel}
+                        onChange={(v) =>
+                          setRows((prev) =>
+                            prev.map((r) => (r.key === row.key ? { ...r, relationship: v } : r))
+                          )
+                        }
+                        options={relationshipOptionsForRow(i)}
+                        className="w-auto"
+                        menuClassName={MENU_WIDE}
+                        buttonClassName={`${DROPDOWN_BTN} border-0 shadow-none`}
+                        menuItemClassName={MENU_ITEM}
+                        renderValue={() => (
+                          <span className="truncate">
+                            {REL_LABELS[rel as Exclude<RelValue, ''>] ?? 'Guest'}
+                          </span>
+                        )}
+                      />
+                    </div>
+                  ) : (
+                    <div className="hidden w-[7rem] shrink-0 sm:block" aria-hidden />
+                  )}
+
+                  {i > 0 ? (
+                    <button
+                      type="button"
+                      title="Remove from party"
+                      onClick={() => void removePartyMemberRow(row, i)}
+                      className="shrink-0 rounded-full px-2 py-1.5 text-[12px] font-medium text-zinc-500 underline decoration-zinc-300 decoration-1 underline-offset-2 hover:text-zinc-800"
+                    >
+                      Remove
+                    </button>
+                  ) : (
+                    <span className="w-14 shrink-0 sm:w-[4.5rem]" aria-hidden />
+                  )}
                 </div>
-                <AdminSelectDropdown<RsvpValue>
-                  value={row.rsvp_status}
-                  onChange={(v) =>
-                    setRows((prev) =>
-                      prev.map((r) => (r.key === row.key ? { ...r, rsvp_status: v } : r))
-                    )
-                  }
-                  options={RSVP_OPTIONS}
-                  className="w-auto shrink-0"
-                  buttonClassName={DROPDOWN_BTN}
-                  menuItemClassName={MENU_ITEM}
-                  renderValue={() => (
-                    <span className="flex min-w-0 items-center gap-2">{rsvpTriggerLabel(row.rsvp_status)}</span>
-                  )}
-                />
-                <AdminSelectDropdown<RelValue>
-                  value={i > 0 && row.relationship === REL_PRIMARY ? 'guest' : row.relationship}
-                  onChange={(v) =>
-                    setRows((prev) =>
-                      prev.map((r) => (r.key === row.key ? { ...r, relationship: v } : r))
-                    )
-                  }
-                  options={relationshipOptionsForRow(i)}
-                  className="w-auto shrink-0"
-                  buttonClassName={DROPDOWN_BTN}
-                  menuItemClassName={MENU_ITEM}
-                  onTriggerKeyDown={onRelTriggerKeyDown(i)}
-                  renderValue={() => (
-                    <span className="truncate">
-                      {i > 0
-                        ? REL_LABELS[row.relationship === REL_PRIMARY ? 'guest' : row.relationship]
-                        : REL_LABELS[row.relationship]}
-                    </span>
-                  )}
-                />
-              </div>
-            ))}
+              )
+            })}
           </div>
+
+          <div className="mt-6 flex items-start gap-2 border-t border-dashed border-zinc-200/90 pt-4">
+            <kbd className="mt-0.5 inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded border border-zinc-200 bg-zinc-50 px-1.5 font-mono text-[11px] font-medium text-zinc-600">
+              Tab
+            </kbd>
+            <p className="text-[12px] leading-relaxed text-zinc-500">
+              After the last guest&apos;s name, press Tab to add another row. Name field is focused
+              automatically.
+            </p>
+          </div>
+
           {mode === 'edit' ? (
             <button
               type="button"

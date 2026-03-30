@@ -20,6 +20,7 @@ type Props<T extends string> = {
   buttonClassName?: string
   align?: 'left' | 'right'
   className?: string
+  menuClassName?: string
   menuItemClassName?: string
   onTriggerKeyDown?: (e: KeyboardEvent<HTMLButtonElement>) => void
 }
@@ -36,6 +37,7 @@ export function AdminSelectDropdown<T extends string>({
   buttonClassName,
   align = 'left',
   className = '',
+  menuClassName,
   menuItemClassName = 'flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-[14px] font-medium text-[#171717] hover:bg-zinc-50',
   onTriggerKeyDown,
 }: Props<T>) {
@@ -45,6 +47,7 @@ export function AdminSelectDropdown<T extends string>({
     <AdminDropdown
       className={className}
       align={align}
+      menuClassName={menuClassName}
       buttonClassName={buttonClassName ?? DEFAULT_BUTTON}
       onTriggerKeyDown={onTriggerKeyDown}
       trigger={

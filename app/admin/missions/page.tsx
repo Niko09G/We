@@ -342,13 +342,19 @@ function ApprovalModeInline({
   iconFilled?: boolean
 }) {
   const manual = mode === 'manual'
+  const approvalTitle = manual
+    ? 'Manual approval: submissions are reviewed before they count.'
+    : 'Auto approval: valid submissions are approved immediately.'
   return (
-    <span className={`inline-flex min-w-0 items-center gap-1.5 ${className}`.trim()}>
+    <span
+      className={`inline-flex min-w-0 items-center gap-1.5 ${className}`.trim()}
+      title={approvalTitle}
+    >
       {iconFilled ? (
         manual ? (
-          <ManualApprovalGlyphFilled className="h-4 w-4 shrink-0 text-zinc-700" />
+          <ManualApprovalGlyphFilled className="h-4 w-4 shrink-0 text-orange-500" />
         ) : (
-          <AutoApprovalGlyphFilled className="h-4 w-4 shrink-0 text-zinc-700" />
+          <AutoApprovalGlyphFilled className="h-4 w-4 shrink-0 text-emerald-600" />
         )
       ) : manual ? (
         <ManualApprovalGlyph className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
@@ -358,6 +364,22 @@ function ApprovalModeInline({
       <span className="truncate">{manual ? 'Manual approval' : 'Auto approval'}</span>
     </span>
   )
+}
+
+function missionCategoryCardTitle(validationType: string): string {
+  const t = String(validationType ?? '').toLowerCase()
+  if (t === 'signature')
+    return 'Signature mission: guests must sign to validate the submission.'
+  if (t === 'photo') return 'Photo mission: guests submit an image for this task.'
+  if (t === 'video') return 'Video mission: guests submit a video clip.'
+  if (t === 'text') return 'Text mission: guests enter a written response.'
+  if (t === 'beatcoin') return 'Beatcoin mission: tied to event currency / rewards.'
+  return 'Mission type'
+}
+
+function submissionsLimitCardTitle(cap: number | null): string {
+  if (cap == null) return 'No per-table limit on attempts for this mission.'
+  return `Each table can submit at most ${cap} attempt${cap === 1 ? '' : 's'} for this mission.`
 }
 
 const MISSION_BUILDER_NEXT_GRADIENT =
@@ -1138,7 +1160,6 @@ export default function MissionsLibraryPage() {
                 </button>
 
                 {filtered.map((m) => {
-                  const status = missionStatusBadge(m.is_active)
                   const assignedCount = (assignmentsByMission[m.id] ?? []).length
                   const cap = effectiveMaxSubmissionsPerTable(m)
                   const coverImage = m.card_cover_image_url?.trim() || m.header_image_url?.trim() || ''
@@ -1146,12 +1167,22 @@ export default function MissionsLibraryPage() {
                     m.card_theme_index != null && MISSION_CARD_BACKGROUNDS[m.card_theme_index]
                       ? MISSION_CARD_BACKGROUNDS[m.card_theme_index]
                       : 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #0ea5e9 100%)'
+                  const limitLabel =
+                    cap === null ? (
+                      'Unlimited'
+                    ) : (
+                      <>
+                        Limited to <span className={MISSION_SIGNATURE_NUM}>{cap}</span>
+                      </>
+                    )
+                  const limitTitle = submissionsLimitCardTitle(cap)
+                  const categoryTitle = missionCategoryCardTitle(m.validation_type)
                   return (
                     <button
                       key={m.id}
                       type="button"
                       onClick={() => openEdit(m)}
-                      className="relative isolate h-[320px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 text-left shadow-sm transform-gpu transition-transform duration-200 ease-out hover:-translate-y-0.5"
+                      className="relative isolate h-[320px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 text-left shadow-none transform-gpu transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md"
                       style={{ background: themeBg }}
                     >
                       {coverImage ? (
@@ -1162,10 +1193,23 @@ export default function MissionsLibraryPage() {
                           className="pointer-events-none absolute inset-0 h-full w-full object-cover"
                         />
                       ) : null}
-                      <span className={`absolute right-3 top-3 z-20 ${status.className}`}>{status.label}</span>
+                      <span
+                        className="absolute right-3 top-3 z-20 max-w-[calc(100%-6rem)] truncate rounded-full bg-white/95 px-2.5 py-0.5 text-[11px] font-semibold text-zinc-800 shadow-sm backdrop-blur-[2px]"
+                        title={limitTitle}
+                      >
+                        {limitLabel}
+                      </span>
                       <div className="relative z-10 flex h-full min-h-0 flex-col p-3">
-                        <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/45 bg-black/25 shadow-sm ring-1 ring-white/35 backdrop-blur-[2px]">
-                          <MissionCategoryTypeIcon type={m.validation_type} size={20} className="h-5 w-5" />
+                        <div
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200/80 bg-white shadow-sm"
+                          title={categoryTitle}
+                        >
+                          <MissionCategoryTypeIcon
+                            type={m.validation_type}
+                            size={20}
+                            className="h-5 w-5"
+                            rasterVariant="color"
+                          />
                         </div>
                         <div className="mt-3 min-w-0">
                           <p className="line-clamp-2 text-[15px] font-semibold leading-snug tracking-tight text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.45)]">
@@ -1178,23 +1222,14 @@ export default function MissionsLibraryPage() {
                         </div>
                         <div className="min-h-0 flex-1" aria-hidden />
                         <div className="mt-auto rounded-xl border border-zinc-200 bg-white px-3 py-2 shadow-sm">
-                          <ApprovalModeInline
-                            mode={m.approval_mode === 'manual' ? 'manual' : 'auto'}
-                            iconFilled
-                            className="text-[13px] font-semibold text-zinc-900"
-                          />
-                          <p className="mt-1.5 flex items-center justify-between gap-2 text-[13px] font-semibold text-zinc-800">
-                            <span>
+                          <p className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                            <ApprovalModeInline
+                              mode={m.approval_mode === 'manual' ? 'manual' : 'auto'}
+                              iconFilled
+                              className="text-[13px] font-semibold text-zinc-900"
+                            />
+                            <span className="text-[13px] font-semibold text-zinc-800">
                               {assignedCount} {assignedCount === 1 ? 'table' : 'tables'}
-                            </span>
-                            <span className="tabular-nums">
-                              {cap === null ? (
-                                'Unlimited'
-                              ) : (
-                                <>
-                                  Limited <span className={MISSION_SIGNATURE_NUM}>{cap}</span>
-                                </>
-                              )}
                             </span>
                           </p>
                         </div>
