@@ -268,6 +268,7 @@ export default function AdminAttendeesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
 
   const [search, setSearch] = useState('')
   const [guestListChip, setGuestListChip] = useState<GuestListChip>('all')
@@ -300,6 +301,7 @@ export default function AdminAttendeesPage() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to load.'
       setError(msg)
+      setToast({ kind: 'error', message: msg })
       if (showPageLoading) {
         setRows([])
         setGroups([])
@@ -313,6 +315,12 @@ export default function AdminAttendeesPage() {
   useEffect(() => {
     void loadAll({ showPageLoading: true })
   }, [loadAll])
+
+  useEffect(() => {
+    if (!toast) return
+    const t = window.setTimeout(() => setToast(null), 2400)
+    return () => window.clearTimeout(t)
+  }, [toast])
 
   const groupNameById = useMemo(() => {
     const m = new Map<string, string>()
@@ -367,9 +375,12 @@ export default function AdminAttendeesPage() {
     try {
       await archiveAttendee(attendeeId)
       setSuccess('Guest archived.')
+      setToast({ kind: 'success', message: 'Guest archived.' })
       await loadAll({ showPageLoading: false })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to archive guest.')
+      const msg = e instanceof Error ? e.message : 'Failed to archive guest.'
+      setError(msg)
+      setToast({ kind: 'error', message: msg })
     }
   }
 
@@ -543,10 +554,8 @@ export default function AdminAttendeesPage() {
                     label: (
                       <>
                         {label}
-                        <span className="tabular-nums opacity-90">
-                          {' ('}
+                        <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-zinc-200 px-1.5 text-[11px] font-semibold tabular-nums text-zinc-700">
                           {countFn(chipCounts[id as GuestListChip])}
-                          {')'}
                         </span>
                       </>
                     ),
@@ -585,13 +594,6 @@ export default function AdminAttendeesPage() {
               </button>
             </div>
           </div>
-
-          {error ? (
-            <p className="shrink-0 px-4 pt-2 text-sm font-medium text-red-600">{error}</p>
-          ) : null}
-          {success ? (
-            <p className="shrink-0 px-4 pt-2 text-sm font-medium text-emerald-700">{success}</p>
-          ) : null}
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {loading ? (
@@ -754,14 +756,47 @@ export default function AdminAttendeesPage() {
               bumpFiltersAfterCreate()
               await loadAll({ showPageLoading: false })
             }}
-            onError={(m) => setError(m)}
+            onError={(m) => {
+              setError(m)
+              setToast({ kind: 'error', message: m })
+            }}
             onSuccess={(m) => {
               setSuccess(m)
               setError(null)
+              setToast({ kind: 'success', message: m })
             }}
           />
         </section>
       </div>
+      {toast ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[70] flex justify-center">
+          <div
+            className={`inline-flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm font-medium shadow-sm animate-[fadeIn_180ms_ease-out] ${
+              toast.kind === 'success'
+                ? 'border-emerald-200 text-emerald-700'
+                : 'border-rose-200 text-rose-700'
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden
+            >
+              {toast.kind === 'success' ? (
+                <path d="m5 12 5 5L20 7" />
+              ) : (
+                <path d="M12 8v5m0 3h.01" />
+              )}
+            </svg>
+            <span>{toast.message}</span>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

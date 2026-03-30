@@ -119,6 +119,8 @@ export function AdminTableTwinSeatMap({
   highlightPartyKey = null,
   previewSeatRange = null,
   previewGhostMembers = null,
+  size = 'compact',
+  showSeatNames = false,
 }: {
   capacity: number
   attendeesAtTable: AttendeeRow[]
@@ -126,6 +128,8 @@ export function AdminTableTwinSeatMap({
   highlightPartyKey?: string | null
   previewSeatRange?: SeatRange | null
   previewGhostMembers?: AttendeeRow[] | null
+  size?: 'compact' | 'large'
+  showSeatNames?: boolean
 }) {
   const bySeat = new Map<number, AttendeeRow>()
   for (const r of attendeesAtTable) {
@@ -139,6 +143,8 @@ export function AdminTableTwinSeatMap({
   const { topCount, bottomStart } = computeSideCounts(capacity)
   const bottomCount = capacity - (bottomStart - 1)
   const { seatPx, gapPx } = seatSizing(capacity)
+  const effectiveSeatPx = size === 'large' ? seatPx + 10 : seatPx
+  const effectiveGapPx = size === 'large' ? gapPx + 4 : gapPx
   const previewGhostInitials = (previewGhostMembers ?? []).map((m) =>
     initialsFromName(m.full_name)
   )
@@ -151,41 +157,48 @@ export function AdminTableTwinSeatMap({
     return undefined
   }
 
-  const rowWidthTop = Math.max(0, topCount) * seatPx + Math.max(0, topCount - 1) * gapPx
+  const rowWidthTop =
+    Math.max(0, topCount) * effectiveSeatPx + Math.max(0, topCount - 1) * effectiveGapPx
   const rowWidthBottom =
-    Math.max(0, bottomCount) * seatPx + Math.max(0, bottomCount - 1) * gapPx
+    Math.max(0, bottomCount) * effectiveSeatPx + Math.max(0, bottomCount - 1) * effectiveGapPx
 
   return (
     <div className="w-full rounded-none bg-transparent p-0">
       <div className="grid gap-1">
         {/* Top row: 1 → N/2 */}
         <SideRow
+          sideName="top"
           sideStart={1}
           sideEnd={topCount}
           rowWidth={rowWidthTop}
-          seatPx={seatPx}
-          gapPx={gapPx}
+          seatPx={effectiveSeatPx}
+          gapPx={effectiveGapPx}
           bySeat={bySeat}
           partiesOnTable={partiesOnTable}
           highlightPartyKey={highlightPartyKey}
           previewSeatRange={previewSeatRange}
           previewGhostInitials={previewGhostInitials}
           partyForSeat={partyForSeat}
+          showSeatNames={showSeatNames}
+          isLarge={size === 'large'}
         />
 
         {/* Bottom row: N/2+1 → N */}
         <SideRow
+          sideName="bottom"
           sideStart={bottomStart}
           sideEnd={capacity}
           rowWidth={rowWidthBottom}
-          seatPx={seatPx}
-          gapPx={gapPx}
+          seatPx={effectiveSeatPx}
+          gapPx={effectiveGapPx}
           bySeat={bySeat}
           partiesOnTable={partiesOnTable}
           highlightPartyKey={highlightPartyKey}
           previewSeatRange={previewSeatRange}
           previewGhostInitials={previewGhostInitials}
           partyForSeat={partyForSeat}
+          showSeatNames={showSeatNames}
+          isLarge={size === 'large'}
         />
       </div>
     </div>
@@ -193,6 +206,7 @@ export function AdminTableTwinSeatMap({
 }
 
 function SideRow({
+  sideName,
   sideStart,
   sideEnd,
   rowWidth,
@@ -204,7 +218,10 @@ function SideRow({
   previewSeatRange,
   previewGhostInitials,
   partyForSeat,
+  showSeatNames,
+  isLarge,
 }: {
+  sideName: 'top' | 'bottom'
   sideStart: number
   sideEnd: number
   rowWidth: number
@@ -216,6 +233,8 @@ function SideRow({
   previewSeatRange: SeatRange | null
   previewGhostInitials: string[]
   partyForSeat: (seatNum: number) => SeatingParty | undefined
+  showSeatNames: boolean
+  isLarge: boolean
 }) {
   const count = Math.max(0, sideEnd - sideStart + 1)
   if (count <= 0) {
@@ -235,10 +254,11 @@ function SideRow({
         className="flex w-full items-center justify-start"
         style={{ width: rowWidth }}
       >
-        <div className="relative h-[72px] w-full">
+        <div className={`relative w-full ${isLarge ? 'h-[108px]' : 'h-[72px]'}`}>
           {/* Party brackets */}
           {partiesOnTable.map((p) => {
             if (p.minSeat == null || p.maxSeat == null) return null
+            if (p.members.length <= 1) return null
             const overlapStart = clamp(p.minSeat, sideStart, sideEnd)
             const overlapEnd = clamp(p.maxSeat, sideStart, sideEnd)
             if (overlapStart > overlapEnd) return null
@@ -277,9 +297,7 @@ function SideRow({
                 {showLabel ? (
                   <span
                     className={`absolute -top-2 left-1/2 -translate-x-1/2 max-w-[86px] -translate-y-0 whitespace-nowrap overflow-hidden text-ellipsis rounded-full px-1.5 py-0.5 text-[9px] font-semibold shadow-sm ${
-                      isActive
-                        ? 'bg-white text-zinc-800'
-                        : 'bg-white/70 text-zinc-500'
+                      isActive ? 'bg-white text-zinc-800' : 'bg-white text-zinc-700'
                     }`}
                   >
                     {p.title}
@@ -291,7 +309,7 @@ function SideRow({
 
           {/* Seats */}
           <div
-            className="absolute left-0 top-5 flex items-center justify-start"
+            className={`absolute left-0 flex items-center justify-start ${isLarge ? 'top-8' : 'top-5'}`}
             style={{ gap: `${gapPx}px` }}
           >
             {Array.from({ length: count }, (_, i) => {
@@ -319,34 +337,44 @@ function SideRow({
                   : 'border-dashed border-zinc-200/70 bg-zinc-50/55'
 
               return (
-                <div
-                  key={seatNum}
-                  title={title}
-                  className={`flex items-center justify-center rounded-full border ${seatClass} ${ringClass}`}
-                  style={{ width: seatPx, height: seatPx }}
-                >
-                  {guest ? (
-                    guest.photo_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={guest.photo_url}
-                        alt=""
-                        className="h-full w-full rounded-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-[10px] font-semibold text-zinc-900">
-                        {initialsFromName(guest.full_name)}
+                <div key={seatNum} className="relative flex flex-col items-center">
+                  {showSeatNames && guest ? (
+                    <span
+                      className={`absolute max-w-[88px] truncate text-center text-[10px] font-medium text-zinc-600 ${
+                        sideName === 'top' ? '-top-5' : 'top-[calc(100%+4px)]'
+                      }`}
+                    >
+                      {guest.full_name.split(/\s+/)[0] ?? guest.full_name}
+                    </span>
+                  ) : null}
+                  <div
+                    title={title}
+                    className={`flex items-center justify-center rounded-full border ${seatClass} ${ringClass}`}
+                    style={{ width: seatPx, height: seatPx }}
+                  >
+                    {guest ? (
+                      guest.photo_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={guest.photo_url}
+                          alt=""
+                          className="h-full w-full rounded-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-[10px] font-semibold text-zinc-900">
+                          {initialsFromName(guest.full_name)}
+                        </span>
+                      )
+                    ) : inPreview ? (
+                      <span className="text-[10px] font-semibold text-zinc-700/80">
+                        {ghostInitial}
                       </span>
-                    )
-                  ) : inPreview ? (
-                    <span className="text-[10px] font-semibold text-zinc-700/80">
-                      {ghostInitial}
-                    </span>
-                  ) : (
-                    <span className={`text-[10px] font-semibold text-zinc-400`}>
-                      {seatNum}
-                    </span>
-                  )}
+                    ) : (
+                      <span className={`text-[10px] font-semibold text-zinc-400`}>
+                        {seatNum}
+                      </span>
+                    )}
+                  </div>
                 </div>
               )
             })}

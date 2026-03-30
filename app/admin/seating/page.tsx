@@ -88,6 +88,158 @@ function RemoveFromTableButton({
   )
 }
 
+function LargeSeatingOverlay({
+  table,
+  rows,
+  parties,
+  highlightPartyKey,
+  previewSeatRange,
+  previewGhostMembers,
+  dragPartyKey,
+  busy,
+  readDragPartyKey,
+  handleDropOnTable,
+  setDragHoverTableId,
+  setDragInsertBeforeKey,
+  setSeatMapHoverTableId,
+  setHoveredPartyKey,
+  startPartyDrag,
+  endPartyDrag,
+  runPlan,
+  onClose,
+}: {
+  table: AdminTableRow | null
+  rows: AttendeeRow[]
+  parties: SeatingParty[]
+  highlightPartyKey: string | null
+  previewSeatRange: { minSeat: number; maxSeat: number } | null
+  previewGhostMembers: AttendeeRow[] | null
+  dragPartyKey: string | null
+  busy: boolean
+  readDragPartyKey: (e: DragEvent) => string
+  handleDropOnTable: (tableId: string, partyKey: string, insertBeforePartyKey: string | null) => void
+  setDragHoverTableId: (v: string | null) => void
+  setDragInsertBeforeKey: (v: string | null) => void
+  setSeatMapHoverTableId: (v: string | null) => void
+  setHoveredPartyKey: (v: string | null) => void
+  startPartyDrag: (e: DragEvent, partyKey: string, canDrag: boolean) => void
+  endPartyDrag: () => void
+  runPlan: (
+    build: () => { updates: SeatingUpdate[]; error?: string },
+    okMessage: string
+  ) => Promise<void>
+  onClose: () => void
+}) {
+  if (!table) return null
+  const tableRows = rows.filter((r) => r.table_id === table.id)
+  const keys = partyKeysOnTableOrdered(rows, table.id)
+  const byKey = new Map(parties.map((p) => [p.key, p]))
+  const list = keys.map((k) => byKey.get(k)).filter((p): p is SeatingParty => Boolean(p))
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 p-4">
+      <div className="flex h-[min(90vh,760px)] w-[min(1120px,96vw)] flex-col overflow-hidden rounded-2xl border border-[#ebebeb] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#ebebeb] px-4 py-3">
+          <div>
+            <h3 className="text-[16px] font-semibold text-zinc-900">{table.name} seating map</h3>
+            <p className="text-[12px] text-zinc-500">Inspect and edit seating at larger scale.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-[#ebebeb] text-zinc-600 hover:bg-zinc-50"
+            aria-label="Close large seating view"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="grid min-h-0 flex-1 grid-cols-[1.6fr_1fr] gap-4 p-4">
+          <div
+            className="rounded-xl border border-[#ebebeb] p-4"
+            onDragOver={(e) => {
+              if (!dragPartyKey) return
+              e.preventDefault()
+              e.stopPropagation()
+              e.dataTransfer.dropEffect = 'move'
+              setSeatMapHoverTableId(table.id)
+              setDragHoverTableId(table.id)
+              setDragInsertBeforeKey(null)
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              const key = readDragPartyKey(e)
+              if (!key) return
+              handleDropOnTable(table.id, key, null)
+            }}
+          >
+            <AdminTableTwinSeatMap
+              capacity={table.capacity}
+              attendeesAtTable={tableRows}
+              partiesOnTable={list}
+              highlightPartyKey={highlightPartyKey}
+              previewSeatRange={previewSeatRange}
+              previewGhostMembers={previewGhostMembers}
+              size="large"
+              showSeatNames
+            />
+          </div>
+
+          <div className="admin-scroll-area min-h-0 overflow-y-auto rounded-xl border border-[#ebebeb] p-2">
+            <ul className="space-y-1.5">
+              {list.map((p) => {
+                const rowDraggable = !busy && !p.splitWarning
+                return (
+                  <li
+                    key={p.key}
+                    draggable={rowDraggable}
+                    onDragStart={(e) => startPartyDrag(e, p.key, rowDraggable)}
+                    onDragEnd={endPartyDrag}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      if (dragPartyKey) {
+                        setDragHoverTableId(table.id)
+                        setDragInsertBeforeKey(p.key)
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      const key = readDragPartyKey(e)
+                      if (!key) return
+                      handleDropOnTable(table.id, key, p.key)
+                    }}
+                    onMouseEnter={() => setHoveredPartyKey(p.key)}
+                    onMouseLeave={() => setHoveredPartyKey(null)}
+                    className={`rounded-xl border px-2 py-2 ${p.splitWarning ? 'border-amber-300 bg-amber-50/80' : 'border-[#ebebeb] bg-[#fafafa]'} ${rowDraggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <PartyAvatarCluster members={p.members} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-semibold text-zinc-900">{p.title}</p>
+                        <p className="text-[11px] font-medium tabular-nums text-zinc-600">
+                          Seats {seatRangeLabel(p)}
+                        </p>
+                      </div>
+                      <RemoveFromTableButton
+                        disabled={busy}
+                        onClick={() =>
+                          void runPlan(() => planUnassignParty(rows, p.key), 'Party removed from table.')
+                        }
+                      />
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminSeatingPage() {
   const [rows, setRows] = useState<AttendeeRow[]>([])
   const [groups, setGroups] = useState<AttendeeGroupRow[]>([])
@@ -109,7 +261,11 @@ export default function AdminSeatingPage() {
   const [hoveredPartyKey, setHoveredPartyKey] = useState<string | null>(null)
   const [selectedPartyKey, setSelectedPartyKey] = useState<string | null>(null)
   const [dockCollapsed, setDockCollapsed] = useState(false)
+  const [largeMapTableId, setLargeMapTableId] = useState<string | null>(null)
+  const [workspaceScrollWidth, setWorkspaceScrollWidth] = useState(0)
   const workspaceRef = useRef<HTMLDivElement>(null)
+  const bottomNavRef = useRef<HTMLDivElement>(null)
+  const syncScrollRef = useRef(false)
   const laneRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   const showToast = useCallback(
@@ -401,6 +557,41 @@ export default function AdminSeatingPage() {
     return computePreviewSeatRangeForDrop(dragPartyKey, seatMapHoverTableId, dragInsertBeforeKey)
   }, [dragPartyKey, seatMapHoverTableId, dragInsertBeforeKey, computePreviewSeatRangeForDrop])
 
+  const syncWorkspaceMetrics = useCallback(() => {
+    const wrap = workspaceRef.current
+    if (!wrap) return
+    setWorkspaceScrollWidth(wrap.scrollWidth)
+  }, [])
+
+  useEffect(() => {
+    syncWorkspaceMetrics()
+    const onResize = () => syncWorkspaceMetrics()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [syncWorkspaceMetrics, rows, tables, dockCollapsed])
+
+  const handleWorkspaceScroll = useCallback(() => {
+    const wrap = workspaceRef.current
+    const nav = bottomNavRef.current
+    if (!wrap || !nav || syncScrollRef.current) return
+    syncScrollRef.current = true
+    nav.scrollLeft = wrap.scrollLeft
+    window.requestAnimationFrame(() => {
+      syncScrollRef.current = false
+    })
+  }, [])
+
+  const handleBottomNavScroll = useCallback(() => {
+    const wrap = workspaceRef.current
+    const nav = bottomNavRef.current
+    if (!wrap || !nav || syncScrollRef.current) return
+    syncScrollRef.current = true
+    wrap.scrollLeft = nav.scrollLeft
+    window.requestAnimationFrame(() => {
+      syncScrollRef.current = false
+    })
+  }, [])
+
   return (
     <div className="admin-page-shell flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <p className="sr-only" aria-live="polite">
@@ -433,6 +624,7 @@ export default function AdminSeatingPage() {
               <div
                 ref={workspaceRef}
                 className="admin-scroll-area min-h-0 flex-1 overflow-x-auto overflow-y-auto"
+                onScroll={handleWorkspaceScroll}
               >
                 <div className="min-h-full min-w-min p-4 pb-6">
                   {splitParties.length > 0 ? (
@@ -533,9 +725,16 @@ export default function AdminSeatingPage() {
                                 {t.name}
                               </h2>
                             </div>
-                            <div className="shrink-0 text-[11px] font-medium tabular-nums text-zinc-500">
+                            <div className="shrink-0 text-center text-[11px] font-medium tabular-nums text-zinc-500">
                               {used} / {cap}
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => setLargeMapTableId(t.id)}
+                              className="inline-flex h-7 shrink-0 cursor-pointer items-center rounded-full border border-[#ebebeb] bg-white px-2.5 text-[11px] font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
+                            >
+                              Large view
+                            </button>
                           </div>
 
                         <div
@@ -647,6 +846,15 @@ export default function AdminSeatingPage() {
                   </div>
                 </div>
               </div>
+              <div className="shrink-0 border-t border-[#ebebeb] px-4 pb-2 pt-1">
+                <div
+                  ref={bottomNavRef}
+                  onScroll={handleBottomNavScroll}
+                  className="h-4 overflow-x-auto overflow-y-hidden rounded-full bg-zinc-100/70"
+                >
+                  <div style={{ width: Math.max(workspaceScrollWidth, 1), height: 1 }} />
+                </div>
+              </div>
             </div>
 
             <aside
@@ -658,7 +866,7 @@ export default function AdminSeatingPage() {
                 type="button"
                 onClick={() => setDockCollapsed((v) => !v)}
                 aria-label={dockCollapsed ? 'Expand party panel' : 'Collapse party panel'}
-                className="absolute -left-4 top-3 z-[70] inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black text-white shadow-sm transition-transform duration-200 hover:scale-[1.04]"
+                className="absolute -left-4 top-1/2 z-[70] inline-flex h-8 w-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black text-white shadow-sm transition-transform duration-200 hover:scale-[1.04]"
               >
                 <svg
                   viewBox="0 0 24 24"
@@ -667,7 +875,7 @@ export default function AdminSeatingPage() {
                   strokeWidth={2.2}
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className={`h-4 w-4 transition-transform ${dockCollapsed ? '' : 'rotate-180'}`}
+                  className={`h-4 w-4 transition-transform ${dockCollapsed ? 'rotate-180' : ''}`}
                   aria-hidden
                 >
                   <path d="m9 18 6-6-6-6" />
@@ -821,6 +1029,28 @@ export default function AdminSeatingPage() {
           </>
         )}
       </section>
+      {largeMapTableId ? (
+        <LargeSeatingOverlay
+          table={plannerTables.find((t) => t.id === largeMapTableId) ?? null}
+          rows={rows}
+          parties={parties}
+          highlightPartyKey={highlightPartyKey}
+          previewSeatRange={previewSeatRange}
+          previewGhostMembers={previewGhostMembers}
+          dragPartyKey={dragPartyKey}
+          busy={busy}
+          readDragPartyKey={readDragPartyKey}
+          handleDropOnTable={handleDropOnTable}
+          setDragHoverTableId={setDragHoverTableId}
+          setDragInsertBeforeKey={setDragInsertBeforeKey}
+          setSeatMapHoverTableId={setSeatMapHoverTableId}
+          setHoveredPartyKey={setHoveredPartyKey}
+          startPartyDrag={startPartyDrag}
+          endPartyDrag={endPartyDrag}
+          runPlan={runPlan}
+          onClose={() => setLargeMapTableId(null)}
+        />
+      ) : null}
       {toast ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[70] flex justify-center">
           <div
