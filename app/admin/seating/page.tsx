@@ -33,6 +33,7 @@ import {
   avatarMembersForPartyStrip,
   seatRangeLabel,
 } from '@/app/admin/seating/_components/seating-planner-shared'
+import { teamPageAdminFormDefaults } from '@/lib/team-page-config'
 
 type DockFilter = 'all' | 'unassigned' | 'assigned' | 'split'
 
@@ -107,6 +108,7 @@ export default function AdminSeatingPage() {
   const [seatMapHoverTableId, setSeatMapHoverTableId] = useState<string | null>(null)
   const [hoveredPartyKey, setHoveredPartyKey] = useState<string | null>(null)
   const [selectedPartyKey, setSelectedPartyKey] = useState<string | null>(null)
+  const [dockCollapsed, setDockCollapsed] = useState(false)
   const workspaceRef = useRef<HTMLDivElement>(null)
   const laneRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
@@ -161,6 +163,19 @@ export default function AdminSeatingPage() {
 
   const tableNameById = useMemo(
     () => new Map(plannerTables.map((t) => [t.id, t.name] as const)),
+    [plannerTables]
+  )
+  const tableAvatarById = useMemo(
+    () =>
+      new Map(
+        plannerTables.map((t) => {
+          const d = teamPageAdminFormDefaults(t.page_config, {
+            tableColor: t.color,
+            tableName: t.name,
+          })
+          return [t.id, d.avatarImageUrl.trim()] as const
+        })
+      ),
     [plannerTables]
   )
 
@@ -441,6 +456,11 @@ export default function AdminSeatingPage() {
                       const used = rowsAtTable(t.id).length
                       const cap = t.capacity
                       const list = partiesOnTable(t.id)
+                      const topSeatMax = Math.floor(cap / 2)
+                      const firstBottomIndex = list.findIndex(
+                        (p) => p.minSeat != null && p.minSeat > topSeatMax
+                      )
+                      const tableAvatarUrl = tableAvatarById.get(t.id) ?? ''
                       const laneFlash = dropFlash === t.id
                       return (
                         <div
@@ -471,11 +491,14 @@ export default function AdminSeatingPage() {
                           <div className="border-b border-[#ebebeb] px-3 py-2.5">
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                              <div
-                                className="h-9 w-9 shrink-0 rounded-full border border-[#ebebeb] shadow-sm"
-                                style={tableSwatchStyle(t.color)}
-                                aria-hidden
-                              />
+                              <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-[#ebebeb] shadow-sm">
+                                {tableAvatarUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={tableAvatarUrl} alt="" className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="h-full w-full" style={tableSwatchStyle(t.color)} aria-hidden />
+                                )}
+                              </div>
                               <h2 className="truncate text-[14px] font-semibold text-zinc-900">
                                 {t.name}
                               </h2>
@@ -484,7 +507,7 @@ export default function AdminSeatingPage() {
                               {used} / {cap}
                             </div>
                           </div>
-                          <div className="mt-3">
+                          <div className="mt-1">
                             <div
                               onDragOver={(e) => {
                                 if (!dragPartyKey) return
@@ -528,17 +551,25 @@ export default function AdminSeatingPage() {
                                 Drag a party here, or assign from the Parties panel.
                               </p>
                             ) : (
-                              list.map((p) => {
+                              list.map((p, idx) => {
                                 const rowDraggable = !busy && !p.splitWarning
                                 return (
-                                  <>
+                                  <div key={p.key} className="contents">
+                                    {firstBottomIndex > 0 && idx === firstBottomIndex ? (
+                                      <div className="mx-1 my-1.5 flex items-center gap-2">
+                                        <div className="h-px flex-1 bg-zinc-200" />
+                                        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                                          Bottom side
+                                        </span>
+                                        <div className="h-px flex-1 bg-zinc-200" />
+                                      </div>
+                                    ) : null}
                                     {dragPartyKey &&
                                     dragHoverTableId === t.id &&
                                     dragInsertBeforeKey === p.key ? (
                                       <div className="mx-1 h-[3px] rounded-full bg-[#3b82f6] shadow-[0_0_0_1px_rgba(59,130,246,0.15)]" />
                                     ) : null}
                                     <div
-                                      key={p.key}
                                       data-party-key={p.key}
                                       draggable={rowDraggable}
                                       onDragStart={(e) => startPartyDrag(e, p.key, rowDraggable)}
@@ -597,7 +628,7 @@ export default function AdminSeatingPage() {
                                       />
                                     </div>
                                     </div>
-                                  </>
+                                  </div>
                                 )
                               })
                             )}
@@ -616,19 +647,35 @@ export default function AdminSeatingPage() {
             </div>
 
             <aside
-              className="flex w-[min(100%,430px)] shrink-0 flex-col border-l border-[#ebebeb] bg-white shadow-[-8px_0_24px_-20px_rgba(0,0,0,0.12)]"
-              onDragOver={(e) => {
-                e.preventDefault()
-                e.dataTransfer.dropEffect = 'move'
-              }}
-              onDrop={(e) => {
-                e.preventDefault()
-                const key = readDragPartyKey(e)
-                if (!key) return
-                void runPlan(() => planUnassignParty(rows, key), 'Party removed from table.')
-              }}
+              className={`flex shrink-0 flex-col border-l border-[#ebebeb] bg-white shadow-[-8px_0_24px_-20px_rgba(0,0,0,0.12)] transition-[width] duration-200 ${
+                dockCollapsed ? 'w-14' : 'w-[min(100%,430px)]'
+              }`}
             >
-              <div className="shrink-0 space-y-3 border-b border-[#ebebeb] px-4 py-3">
+              <div className="shrink-0 space-y-3 border-b border-[#ebebeb] px-3 py-3">
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setDockCollapsed((v) => !v)}
+                    className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-[#ebebeb] bg-white text-zinc-600 transition-colors hover:bg-zinc-50"
+                    title={dockCollapsed ? 'Expand party panel' : 'Collapse party panel'}
+                    aria-label={dockCollapsed ? 'Expand party panel' : 'Collapse party panel'}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className={`h-4 w-4 transition-transform ${dockCollapsed ? 'rotate-180' : ''}`}
+                      aria-hidden
+                    >
+                      <path d="m15 18-6-6 6-6" />
+                    </svg>
+                  </button>
+                </div>
+                {!dockCollapsed ? (
+                  <>
                 <div className="relative">
                   <svg
                     viewBox="0 0 24 24"
@@ -667,33 +714,18 @@ export default function AdminSeatingPage() {
                     label: (
                       <>
                         {label}
-                        <span className="ml-2 inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-zinc-600">
-                          [{n}]
+                        <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-zinc-200 px-1.5 text-[11px] font-semibold tabular-nums text-zinc-700">
+                          {n}
                         </span>
                       </>
                     ),
                   }))}
                 />
-                <div
-                  className="rounded-lg border border-dashed border-[#dcdcdc] bg-[#f9fafb] px-3 py-2.5 text-center text-[11px] font-medium text-zinc-600"
-                  onDragOver={(e) => {
-                    e.preventDefault()
-                    e.dataTransfer.dropEffect = 'move'
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    const key = readDragPartyKey(e)
-                    if (!key) return
-                    void runPlan(
-                      () => planUnassignParty(rows, key),
-                      'Party removed from table.'
-                    )
-                  }}
-                >
-                  Drop on this zone to unseat from table
-                </div>
+                  </>
+                ) : null}
               </div>
-              <div className="admin-scroll-area min-h-0 flex-1 overflow-y-auto px-3 py-3">
+              {!dockCollapsed ? (
+                <div className="admin-scroll-area min-h-0 flex-1 overflow-y-auto px-3 py-3">
                 <ul className="space-y-2">
                   {filteredDockParties.map((p) => {
                     const assignedTable =
@@ -780,7 +812,31 @@ export default function AdminSeatingPage() {
                 {filteredDockParties.length === 0 ? (
                   <p className="py-8 text-center text-[13px] text-zinc-500">No parties match.</p>
                 ) : null}
-              </div>
+                </div>
+              ) : (
+                <div className="flex min-h-0 flex-1 items-start justify-center pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setDockCollapsed(false)}
+                    className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-[#ebebeb] bg-white text-zinc-600 transition-colors hover:bg-zinc-50"
+                    title="Show parties panel"
+                    aria-label="Show parties panel"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-4 w-4"
+                      aria-hidden
+                    >
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </aside>
           </>
         )}

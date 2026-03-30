@@ -102,10 +102,10 @@ function seatSizing(capacity: number): { seatPx: number; gapPx: number } {
   const maxSide = Math.max(topCount, bottomCount, 1)
 
   // Keep seats circular and legible across capacities.
-  if (maxSide >= 16) return { seatPx: 14, gapPx: 4 }
-  if (maxSide >= 12) return { seatPx: 16, gapPx: 5 }
-  if (maxSide >= 8) return { seatPx: 18, gapPx: 6 }
-  return { seatPx: 22, gapPx: 7 }
+  if (maxSide >= 16) return { seatPx: 16, gapPx: 5 }
+  if (maxSide >= 12) return { seatPx: 18, gapPx: 6 }
+  if (maxSide >= 8) return { seatPx: 20, gapPx: 7 }
+  return { seatPx: 24, gapPx: 8 }
 }
 
 function clamp(n: number, a: number, b: number): number {
@@ -139,8 +139,6 @@ export function AdminTableTwinSeatMap({
   const { topCount, bottomStart } = computeSideCounts(capacity)
   const bottomCount = capacity - (bottomStart - 1)
   const { seatPx, gapPx } = seatSizing(capacity)
-  const labelClass = capacity >= 30 ? 'text-[7px]' : capacity >= 18 ? 'text-[8px]' : 'text-[9px]'
-
   const previewGhostInitials = (previewGhostMembers ?? []).map((m) =>
     initialsFromName(m.full_name)
   )
@@ -158,13 +156,8 @@ export function AdminTableTwinSeatMap({
     Math.max(0, bottomCount) * seatPx + Math.max(0, bottomCount - 1) * gapPx
 
   return (
-    <div className="rounded-xl border border-[#ebebeb] bg-white p-2.5">
-      <div className="flex justify-between px-2">
-        <span className={`font-semibold text-zinc-500 ${labelClass}`}>Side A</span>
-        <span className={`font-semibold text-zinc-500 ${labelClass}`}>Side B</span>
-      </div>
-
-      <div className="mt-2 grid gap-2">
+    <div className="rounded-lg border border-[#ebebeb] bg-white px-1.5 py-1">
+      <div className="grid gap-1.5">
         {/* Side A (top row): 1 → N/2 */}
         <SideRow
           sideLabel="Side A"
@@ -246,7 +239,7 @@ function SideRow({
         className="mx-auto flex items-center justify-center"
         style={{ width: rowWidth }}
       >
-        <div className="relative h-[54px] w-full">
+        <div className="relative h-[62px] w-full">
           {/* Party brackets */}
           {partiesOnTable.map((p) => {
             if (p.minSeat == null || p.maxSeat == null) return null
@@ -287,7 +280,7 @@ function SideRow({
                 />
                 {showLabel ? (
                   <span
-                    className={`absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-semibold shadow-sm ${
+                    className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-semibold shadow-sm ${
                       isActive
                         ? 'bg-white text-zinc-800'
                         : 'bg-white/70 text-zinc-500'
@@ -302,7 +295,7 @@ function SideRow({
 
           {/* Seats */}
           <div
-            className="absolute left-0 top-4 flex items-center justify-start"
+            className="absolute left-0 top-5 flex items-center justify-start"
             style={{ gap: `${gapPx}px` }}
           >
             {Array.from({ length: count }, (_, i) => {
@@ -337,9 +330,18 @@ function SideRow({
                   style={{ width: seatPx, height: seatPx }}
                 >
                   {guest ? (
-                    <span className="text-[10px] font-semibold text-zinc-900">
-                      {initialsFromName(guest.full_name)}
-                    </span>
+                    guest.photo_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={guest.photo_url}
+                        alt=""
+                        className="h-full w-full rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-[10px] font-semibold text-zinc-900">
+                        {initialsFromName(guest.full_name)}
+                      </span>
+                    )
                   ) : inPreview ? (
                     <span className="text-[10px] font-semibold text-zinc-700/80">
                       {ghostInitial}
