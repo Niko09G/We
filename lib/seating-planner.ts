@@ -178,11 +178,29 @@ function countOccupancy(
   ).length
 }
 
-/** Party keys currently on this table (from row state), ordered by min seat then key. */
-export function partyKeysOnTableOrdered(
-  rows: AttendeeRow[],
-  tableId: string
-): string[] {
+/** Stored in `tables.page_config` — drag row order for the admin planner (not guest UI). */
+const SEATING_PARTY_KEY_ORDER = 'seating_party_key_order'
+
+export function readPartyKeyOrderFromPageConfig(page_config: unknown): string[] | null {
+  if (!page_config || typeof page_config !== 'object' || Array.isArray(page_config)) return null
+  const raw = (page_config as Record<string, unknown>)[SEATING_PARTY_KEY_ORDER]
+  if (!Array.isArray(raw)) return null
+  return raw.filter((x): x is string => typeof x === 'string')
+}
+
+export function mergePartyKeyOrderIntoPageConfig(
+  page_config: unknown | null,
+  partyKeyOrder: string[]
+): Record<string, unknown> {
+  const base =
+    page_config && typeof page_config === 'object' && !Array.isArray(page_config)
+      ? { ...(page_config as Record<string, unknown>) }
+      : {}
+  base[SEATING_PARTY_KEY_ORDER] = partyKeyOrder
+  return base
+}
+
+function computePartyKeysFallbackOrder(rows: AttendeeRow[], tableId: string): string[] {
   const onTable = rows.filter((r) => r.table_id === tableId)
   const keyToMembers = new Map<string, AttendeeRow[]>()
   for (const r of onTable) {
@@ -199,6 +217,76 @@ export function partyKeysOnTableOrdered(
   })
   entries.sort((a, b) => a.minSeat - b.minSeat || a.key.localeCompare(b.key))
   return entries.map((e) => e.key)
+}
+
+/**
+ * Party keys on this table. When `preferredOrder` is set (from `page_config`), it defines
+ * planner row order; remaining keys append in fallback order (min seat, then key).
+ */
+export function partyKeysOnTableOrdered(
+  rows: AttendeeRow[],
+  tableId: string,
+  preferredOrder?: string[] | null
+): string[] {
+  const fallback = computePartyKeysFallbackOrder(rows, tableId)
+  if (!preferredOrder?.length) return fallback
+
+  const present = new Set(fallback)
+  const out: string[] = []
+  for (const k of preferredOrder) {
+    if (present.has(k)) {
+      out.push(k)
+      present.delete(k)
+    }
+  }
+  for (const k of fallback) {
+    if (present.has(k)) out.push(k)
+  }
+  return out
+}
+
+export type SeatingLaneOrderPatch = { tableId: string; partyKeyOrder: string[] }
+
+function computeReorderedPartyKeys(
+  keys: string[],
+  partyKey: string,
+  insertBeforePartyKey: string | null
+): string[] {
+  const dragIdx = keys.indexOf(partyKey)
+  if (dragIdx < 0) return keys
+  if (insertBeforePartyKey != null && insertBeforePartyKey === partyKey) return keys
+
+  const next = [...keys]
+  next.splice(dragIdx, 1)
+  if (insertBeforePartyKey == null) {
+    next.push(partyKey)
+    return next
+  }
+  const targetIdx = next.indexOf(insertBeforePartyKey)
+  if (targetIdx < 0) {
+    next.push(partyKey)
+    return next
+  }
+  next.splice(targetIdx, 0, partyKey)
+  return next
+}
+
+function insertPartyKeyIntoLaneOrder(
+  baseOrder: string[],
+  partyKey: string,
+  insertBeforePartyKey: string | null
+): string[] {
+  const without = baseOrder.filter((k) => k !== partyKey)
+  if (insertBeforePartyKey == null) {
+    return [...without, partyKey]
+  }
+  const idx = without.indexOf(insertBeforePartyKey)
+  if (idx < 0) {
+    return [...without, partyKey]
+  }
+  const next = [...without]
+  next.splice(idx, 0, partyKey)
+  return next
 }
 
 /** Assign contiguous seats 1..N following party key order. */
@@ -303,22 +391,15 @@ export function planAssignPartyToTable(
     }
   }
 
-  const affected = new Set<string>()
-  if (sourceTableId) affected.add(sourceTableId)
-  affected.add(targetTableId)
-
-  for (const tid of affected) {
-    const keys = partyKeysOnTableOrdered(next, tid)
-    renumberTableSeats(next, tid, keys)
-  }
-
+  // Main planner no longer repacks seat_number — precise seats are set in the large overlay only.
   return { updates: diffSeating(before, next), error: undefined }
 }
 
 export function planUnassignParty(
   before: AttendeeRow[],
-  partyKey: string
-): { updates: SeatingUpdate[]; error?: string } {
+  partyKey: string,
+  orderByTableId: Map<string, string[]>
+): { updates: SeatingUpdate[]; lanePatches: SeatingLaneOrderPatch[]; error?: string } {
   const memberIds = new Set<string>()
   const sourceTables = new Set<string>()
   for (const r of before) {
@@ -328,7 +409,7 @@ export function planUnassignParty(
     }
   }
   if (memberIds.size === 0) {
-    return { updates: [], error: 'Party not found.' }
+    return { updates: [], lanePatches: [], error: 'Party not found.' }
   }
 
   const next = cloneRows(before)
@@ -340,104 +421,102 @@ export function planUnassignParty(
     }
   }
 
+  const lanePatches: SeatingLaneOrderPatch[] = []
   for (const tid of sourceTables) {
-    const keys = partyKeysOnTableOrdered(next, tid)
-    renumberTableSeats(next, tid, keys)
+    const hint = orderByTableId.get(tid)
+    const cur = partyKeysOnTableOrdered(before, tid, hint)
+    lanePatches.push({ tableId: tid, partyKeyOrder: cur.filter((k) => k !== partyKey) })
   }
 
-  return { updates: diffSeating(before, next), error: undefined }
+  return { updates: diffSeating(before, next), lanePatches, error: undefined }
 }
 
 export function planMovePartyOnTable(
   before: AttendeeRow[],
   tableId: string,
   partyKey: string,
-  direction: 'up' | 'down'
-): { updates: SeatingUpdate[]; error?: string } {
-  const keys = partyKeysOnTableOrdered(before, tableId)
+  direction: 'up' | 'down',
+  orderByTableId: Map<string, string[]>
+): { updates: SeatingUpdate[]; lanePatches: SeatingLaneOrderPatch[]; error?: string } {
+  const hint = orderByTableId.get(tableId)
+  const keys = partyKeysOnTableOrdered(before, tableId, hint)
   const i = keys.indexOf(partyKey)
   if (i < 0) {
-    return { updates: [], error: 'Party is not on this table.' }
+    return { updates: [], lanePatches: [], error: 'Party is not on this table.' }
   }
   const j = direction === 'up' ? i - 1 : i + 1
   if (j < 0 || j >= keys.length) {
-    return { updates: [], error: undefined }
+    return { updates: [], lanePatches: [], error: undefined }
   }
   const swapped = [...keys]
   ;[swapped[i], swapped[j]] = [swapped[j]!, swapped[i]!]
-
-  const next = cloneRows(before)
-  renumberTableSeats(next, tableId, swapped)
-  return { updates: diffSeating(before, next), error: undefined }
-}
-
-/** Mutates `next` — reorder party rows then renumber seats (same table only). */
-export function reorderPartyKeysOnTableInPlace(
-  next: AttendeeRow[],
-  tableId: string,
-  partyKey: string,
-  insertBeforePartyKey: string | null
-): void {
-  const keys = [...partyKeysOnTableOrdered(next, tableId)]
-  const dragIdx = keys.indexOf(partyKey)
-  if (dragIdx < 0) return
-
-  if (insertBeforePartyKey != null && insertBeforePartyKey === partyKey) {
-    return
+  return {
+    updates: [],
+    lanePatches: [{ tableId, partyKeyOrder: swapped }],
+    error: undefined,
   }
-
-  if (insertBeforePartyKey == null) {
-    keys.splice(dragIdx, 1)
-    keys.push(partyKey)
-  } else {
-    const targetIdx = keys.indexOf(insertBeforePartyKey)
-    if (targetIdx < 0) return
-    keys.splice(dragIdx, 1)
-    const insertAt = dragIdx < targetIdx ? targetIdx - 1 : targetIdx
-    keys.splice(insertAt, 0, partyKey)
-  }
-
-  renumberTableSeats(next, tableId, keys)
 }
 
 /**
- * Drag/drop: place party on a table, optionally before another party row.
- * Applies assign in one step, then reorder relative to `insertBeforePartyKey` when set.
+ * Drag/drop: assign party to `targetTableId` (clears their seat numbers), merge into lane order.
  */
 export function planDropPartyAtTablePosition(
   before: AttendeeRow[],
   partyKey: string,
   targetTableId: string,
   capacity: number,
-  insertBeforePartyKey: string | null
-): { updates: SeatingUpdate[]; error?: string } {
+  insertBeforePartyKey: string | null,
+  orderByTableId: Map<string, string[]>
+): { updates: SeatingUpdate[]; lanePatches: SeatingLaneOrderPatch[]; error?: string } {
+  const memberRows = before.filter((r) => partyKeyForRow(r) === partyKey)
+  const sourceTableId =
+    memberRows.length && memberRows.every((r) => r.table_id === memberRows[0]!.table_id)
+      ? memberRows[0]!.table_id
+      : memberRows.find((r) => r.table_id != null)?.table_id ?? null
+
   const assignRes = planAssignPartyToTable(before, partyKey, targetTableId, capacity)
-  if (assignRes.error) return assignRes
-
-  const next = cloneRows(before)
-  for (const u of assignRes.updates) {
-    const row = next.find((x) => x.id === u.id)
-    if (row) {
-      row.table_id = u.table_id
-      row.seat_number = u.seat_number
-    }
+  if (assignRes.error) {
+    return { updates: [], lanePatches: [], error: assignRes.error }
   }
 
-  if (insertBeforePartyKey != null) {
-    reorderPartyKeysOnTableInPlace(next, targetTableId, partyKey, insertBeforePartyKey)
+  const lanePatches: SeatingLaneOrderPatch[] = []
+  const targetHint = orderByTableId.get(targetTableId)
+  const targetBase = partyKeysOnTableOrdered(before, targetTableId, targetHint)
+  lanePatches.push({
+    tableId: targetTableId,
+    partyKeyOrder: insertPartyKeyIntoLaneOrder(targetBase, partyKey, insertBeforePartyKey),
+  })
+
+  if (sourceTableId && sourceTableId !== targetTableId) {
+    const sourceHint = orderByTableId.get(sourceTableId)
+    const sourceBase = partyKeysOnTableOrdered(before, sourceTableId, sourceHint)
+    lanePatches.push({
+      tableId: sourceTableId,
+      partyKeyOrder: sourceBase.filter((k) => k !== partyKey),
+    })
   }
 
-  return { updates: diffSeating(before, next), error: undefined }
+  return { updates: assignRes.updates, lanePatches, error: undefined }
 }
 
-/** Reorder a party already on `tableId` (same-table drag) or move to end when `insertBeforePartyKey` is null. */
+/** Reorder party rows on the table (lane order only — no seat_number writes). */
 export function planReorderPartyInTable(
   before: AttendeeRow[],
   tableId: string,
   partyKey: string,
-  insertBeforePartyKey: string | null
-): { updates: SeatingUpdate[]; error?: string } {
-  const next = cloneRows(before)
-  reorderPartyKeysOnTableInPlace(next, tableId, partyKey, insertBeforePartyKey)
-  return { updates: diffSeating(before, next), error: undefined }
+  insertBeforePartyKey: string | null,
+  orderByTableId: Map<string, string[]>
+): { updates: SeatingUpdate[]; lanePatches: SeatingLaneOrderPatch[]; error?: string } {
+  const hint = orderByTableId.get(tableId)
+  const cur = partyKeysOnTableOrdered(before, tableId, hint)
+  return {
+    updates: [],
+    lanePatches: [
+      {
+        tableId,
+        partyKeyOrder: computeReorderedPartyKeys(cur, partyKey, insertBeforePartyKey),
+      },
+    ],
+    error: undefined,
+  }
 }

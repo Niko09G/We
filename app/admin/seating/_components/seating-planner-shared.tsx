@@ -1,5 +1,7 @@
 'use client'
 
+import { useLayoutEffect, useRef, useState } from 'react'
+
 import type { AttendeeRow } from '@/lib/admin-attendees'
 import {
   computePartyExtraGuestsCount,
@@ -48,6 +50,46 @@ export function PartyMetaLine({ party }: { party: SeatingParty }) {
 function initialsFromName(fullName: string): string {
   const first = fullName.trim().split(/\s+/).filter(Boolean)[0]?.[0] ?? '?'
   return first.toUpperCase()
+}
+
+export function AttendeeSeatAvatar({
+  attendee,
+  size = 28,
+  className = '',
+}: {
+  attendee: AttendeeRow
+  size?: number
+  className?: string
+}) {
+  const dim = `${size}px`
+  return (
+    <div
+      className={`shrink-0 overflow-hidden rounded-full border border-[#ebebeb] bg-zinc-100 ${className}`}
+      style={{ width: dim, height: dim }}
+      aria-hidden
+    >
+      {attendee.photo_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={attendee.photo_url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-zinc-500">
+          {initialsFromName(attendee.full_name)}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function partyGroupSeatingComplete(p: SeatingParty): boolean {
+  if (p.members.length <= 1) return true
+  const tid = p.uniformTableId
+  if (!tid) return false
+  return p.members.every(
+    (m) =>
+      m.table_id === tid &&
+      typeof m.seat_number === 'number' &&
+      Number.isFinite(m.seat_number)
+  )
 }
 
 export function PartyAvatarCluster({
@@ -133,10 +175,25 @@ export function AdminTableTwinSeatMap({
   size?: 'compact' | 'large'
   showSeatNames?: boolean
   /** Precision UX (e.g. large overlay): click seat to assign. Coexists with map drag/drop elsewhere. */
-  onSeatClick?: ((seatNum: number, guest: AttendeeRow | null) => void) | null
+  onSeatClick?:
+    | ((seatNum: number, guest: AttendeeRow | null, anchor: DOMRectReadOnly) => void)
+    | null
   /** Seat numbers locked for assignment (session UI; persist later). */
   lockedSeatNums?: ReadonlySet<number> | null
 }) {
+  const fillRef = useRef<HTMLDivElement>(null)
+  const [fillW, setFillW] = useState(0)
+
+  useLayoutEffect(() => {
+    if (size !== 'large') return
+    const el = fillRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setFillW(el.clientWidth))
+    ro.observe(el)
+    setFillW(el.clientWidth)
+    return () => ro.disconnect()
+  }, [size, capacity])
+
   const bySeat = new Map<number, AttendeeRow>()
   for (const r of attendeesAtTable) {
     const n = r.seat_number
@@ -149,8 +206,25 @@ export function AdminTableTwinSeatMap({
   const { topCount, bottomStart } = computeSideCounts(capacity)
   const bottomCount = capacity - (bottomStart - 1)
   const { seatPx, gapPx } = seatSizing(capacity)
-  const effectiveSeatPx = size === 'large' ? seatPx + 10 : seatPx
-  const effectiveGapPx = size === 'large' ? gapPx + 4 : gapPx
+  let effectiveSeatPxTop = size === 'large' ? seatPx + 10 : seatPx
+  let effectiveSeatPxBottom = effectiveSeatPxTop
+  let effectiveGapPx = size === 'large' ? gapPx + 4 : gapPx
+
+  if (size === 'large' && fillW > 0 && topCount > 0 && bottomCount > 0) {
+    const inner = Math.max(0, fillW - 4)
+    effectiveGapPx = gapPx
+    effectiveSeatPxTop = clamp(
+      Math.floor((inner - (topCount - 1) * effectiveGapPx) / topCount),
+      26,
+      58
+    )
+    effectiveSeatPxBottom = clamp(
+      Math.floor((inner - (bottomCount - 1) * effectiveGapPx) / bottomCount),
+      26,
+      58
+    )
+  }
+
   const previewGhostInitials = (previewGhostMembers ?? []).map((m) =>
     initialsFromName(m.full_name)
   )
@@ -164,20 +238,22 @@ export function AdminTableTwinSeatMap({
   }
 
   const rowWidthTop =
-    Math.max(0, topCount) * effectiveSeatPx + Math.max(0, topCount - 1) * effectiveGapPx
+    Math.max(0, topCount) * effectiveSeatPxTop +
+    Math.max(0, topCount - 1) * effectiveGapPx
   const rowWidthBottom =
-    Math.max(0, bottomCount) * effectiveSeatPx + Math.max(0, bottomCount - 1) * effectiveGapPx
+    Math.max(0, bottomCount) * effectiveSeatPxBottom +
+    Math.max(0, bottomCount - 1) * effectiveGapPx
 
   return (
-    <div className="w-full rounded-none bg-transparent p-0">
-      <div className="grid gap-1">
+    <div ref={size === 'large' ? fillRef : undefined} className="w-full min-w-0 rounded-none bg-transparent p-0">
+      <div className="grid w-full min-w-0 gap-1">
         {/* Top row: 1 → N/2 */}
         <SideRow
           sideName="top"
           sideStart={1}
           sideEnd={topCount}
           rowWidth={rowWidthTop}
-          seatPx={effectiveSeatPx}
+          seatPx={effectiveSeatPxTop}
           gapPx={effectiveGapPx}
           bySeat={bySeat}
           partiesOnTable={partiesOnTable}
@@ -197,7 +273,7 @@ export function AdminTableTwinSeatMap({
           sideStart={bottomStart}
           sideEnd={capacity}
           rowWidth={rowWidthBottom}
-          seatPx={effectiveSeatPx}
+          seatPx={effectiveSeatPxBottom}
           gapPx={effectiveGapPx}
           bySeat={bySeat}
           partiesOnTable={partiesOnTable}
@@ -247,7 +323,9 @@ function SideRow({
   partyForSeat: (seatNum: number) => SeatingParty | undefined
   showSeatNames: boolean
   isLarge: boolean
-  onSeatClick: ((seatNum: number, guest: AttendeeRow | null) => void) | null
+  onSeatClick:
+    | ((seatNum: number, guest: AttendeeRow | null, anchor: DOMRectReadOnly) => void)
+    | null
   lockedSeatNums: ReadonlySet<number> | null
 }) {
   const count = Math.max(0, sideEnd - sideStart + 1)
@@ -286,13 +364,19 @@ function SideRow({
 
             const isActive = highlightPartyKey != null && p.key === highlightPartyKey
             const isSplit = p.splitWarning
-            const colorClass = isActive
-              ? isSplit
-                ? 'border-amber-500/90'
-                : 'border-[#5b38f2]/90'
-              : isSplit
-                ? 'border-amber-300/70'
-                : 'border-zinc-300/80'
+            const linkedComplete = partyGroupSeatingComplete(p)
+            const colorClass =
+              linkedComplete && !isSplit
+                ? isActive
+                  ? 'border-emerald-500/95'
+                  : 'border-emerald-500/55'
+                : isActive
+                  ? isSplit
+                    ? 'border-amber-500/90'
+                    : 'border-[#5b38f2]/90'
+                  : isSplit
+                    ? 'border-amber-300/70'
+                    : 'border-zinc-300/80'
 
             const centerSeat = (p.minSeat + p.maxSeat) / 2
             const showLabel = width >= seatPx * 2 && centerSeat >= sideStart && centerSeat <= sideEnd
@@ -373,7 +457,7 @@ function SideRow({
                         ? (e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault()
-                              onSeatClick(seatNum, guest ?? null)
+                              onSeatClick(seatNum, guest ?? null, (e.currentTarget as HTMLElement).getBoundingClientRect())
                             }
                           }
                         : undefined
@@ -383,10 +467,15 @@ function SideRow({
                         ? (e) => {
                             e.preventDefault()
                             e.stopPropagation()
-                            onSeatClick(seatNum, guest ?? null)
+                            onSeatClick(
+                              seatNum,
+                              guest ?? null,
+                              (e.currentTarget as HTMLElement).getBoundingClientRect()
+                            )
                           }
                         : undefined
                     }
+                    data-seat-control
                     className={`flex items-center justify-center rounded-full border ${seatClass} ${ringClass} ${onSeatClick ? 'cursor-pointer transition-transform hover:scale-[1.04]' : ''}`}
                     style={{ width: seatPx, height: seatPx }}
                   >

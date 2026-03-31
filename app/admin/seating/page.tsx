@@ -16,19 +16,23 @@ import {
   type AttendeeRow,
 } from '@/lib/admin-attendees'
 import { listAttendeeGroups, type AttendeeGroupRow } from '@/lib/admin-attendee-groups'
-import { listTablesForAdmin, type AdminTableRow } from '@/lib/admin-tables'
+import { listTablesForAdmin, updateTable, type AdminTableRow } from '@/lib/admin-tables'
 import { AdminFilterRowSegmented } from '@/app/admin/_components/AdminFilterRowSegmented'
 import {
   buildSeatingParties,
+  mergePartyKeyOrderIntoPageConfig,
   partyKeysOnTableOrdered,
   planDropPartyAtTablePosition,
   planReorderPartyInTable,
   planUnassignParty,
+  readPartyKeyOrderFromPageConfig,
+  type SeatingLaneOrderPatch,
   type SeatingParty,
   type SeatingUpdate,
 } from '@/lib/seating-planner'
 import {
   AdminTableTwinSeatMap,
+  AttendeeSeatAvatar,
   PartyAvatarCluster,
   PartyMetaLine,
   avatarMembersForPartyStrip,
@@ -113,6 +117,7 @@ type SeatPanelState = {
   seatNum: number
   occupant: AttendeeRow | null
   mode: 'view' | 'assign'
+  anchor: DOMRectReadOnly
 }
 
 function LargeSeatingOverlay({
@@ -120,6 +125,7 @@ function LargeSeatingOverlay({
   rows,
   parties,
   tableNameById,
+  partyKeyOrderByTableId,
   highlightPartyKey,
   previewSeatRange,
   previewGhostMembers,
@@ -133,7 +139,7 @@ function LargeSeatingOverlay({
   setHoveredPartyKey,
   startPartyDrag,
   endPartyDrag,
-  runPlan,
+  runSeatingMutation,
   reloadRows,
   showToast,
   onClose,
@@ -142,6 +148,7 @@ function LargeSeatingOverlay({
   rows: AttendeeRow[]
   parties: SeatingParty[]
   tableNameById: Map<string, string>
+  partyKeyOrderByTableId: Map<string, string[]>
   highlightPartyKey: string | null
   previewSeatRange: { minSeat: number; maxSeat: number } | null
   previewGhostMembers: AttendeeRow[] | null
@@ -155,8 +162,12 @@ function LargeSeatingOverlay({
   setHoveredPartyKey: (v: string | null) => void
   startPartyDrag: (e: DragEvent, partyKey: string, canDrag: boolean) => void
   endPartyDrag: () => void
-  runPlan: (
-    build: () => { updates: SeatingUpdate[]; error?: string },
+  runSeatingMutation: (
+    build: () => {
+      updates: SeatingUpdate[]
+      lanePatches?: SeatingLaneOrderPatch[]
+      error?: string
+    },
     okMessage: string
   ) => Promise<void>
   reloadRows: () => Promise<void>
@@ -167,14 +178,30 @@ function LargeSeatingOverlay({
 
   const [seatPanel, setSeatPanel] = useState<SeatPanelState | null>(null)
   const [assignSearch, setAssignSearch] = useState('')
+  const [assignScope, setAssignScope] = useState<'all' | 'unassigned'>('all')
   const [assignBusy, setAssignBusy] = useState(false)
   const [lockedSeats, setLockedSeats] = useState<Set<number>>(new Set())
+  const assignPanelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setLockedSeats(new Set())
     setSeatPanel(null)
     setAssignSearch('')
+    setAssignScope('all')
   }, [tableId])
+
+  useEffect(() => {
+    if (!seatPanel || seatPanel.mode !== 'assign') return
+    const onDocClick = (e: Event) => {
+      const t = e.target as HTMLElement | null
+      if (!t) return
+      if (assignPanelRef.current?.contains(t)) return
+      if (t.closest('[data-seat-control]')) return
+      setSeatPanel(null)
+    }
+    document.addEventListener('click', onDocClick, true)
+    return () => document.removeEventListener('click', onDocClick, true)
+  }, [seatPanel])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -196,18 +223,11 @@ function LargeSeatingOverlay({
 
   const list = useMemo(() => {
     if (!tableId || !table) return []
-    const keys = partyKeysOnTableOrdered(rows, tableId)
+    const hint = readPartyKeyOrderFromPageConfig(table.page_config)
+    const keys = partyKeysOnTableOrdered(rows, tableId, hint)
     const byKey = new Map(parties.map((p) => [p.key, p]))
     return keys.map((k) => byKey.get(k)).filter((p): p is SeatingParty => Boolean(p))
   }, [table, tableId, rows, parties])
-
-  const fromThisTableUnseated = useMemo(
-    () =>
-      [...tableRows]
-        .filter((r) => r.seat_number == null)
-        .sort((a, b) => a.full_name.localeCompare(b.full_name, undefined, { sensitivity: 'base' })),
-    [tableRows]
-  )
 
   const assignNeedle = assignSearch.trim().toLowerCase()
   const allAttendeesFiltered = useMemo(() => {
@@ -221,6 +241,29 @@ function LargeSeatingOverlay({
         (r.email ?? '').toLowerCase().includes(assignNeedle)
     )
   }, [rows, assignNeedle])
+
+  const assignPickerRows = useMemo(() => {
+    if (assignScope === 'unassigned') {
+      return allAttendeesFiltered.filter((r) => !r.table_id)
+    }
+    return allAttendeesFiltered
+  }, [allAttendeesFiltered, assignScope])
+
+  const assignPanelStyle = useMemo((): CSSProperties | undefined => {
+    if (!seatPanel) return undefined
+    const a = seatPanel.anchor
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1120
+    const vh = typeof window !== 'undefined' ? window.innerHeight : 700
+    const pw = Math.min(300, vw - 24)
+    let left = a.left + a.width / 2 - pw / 2
+    left = Math.max(10, Math.min(left, vw - pw - 10))
+    let top = a.bottom + 8
+    const estH = 360
+    if (top + estH > vh - 12) {
+      top = Math.max(10, a.top - estH - 8)
+    }
+    return { position: 'fixed', left, top, width: pw, zIndex: 100 }
+  }, [seatPanel])
 
   const assignGuestToSeat = useCallback(
     async (attendeeId: string, seatNum: number) => {
@@ -279,6 +322,13 @@ function LargeSeatingOverlay({
 
   if (!table) return null
 
+  const overlayTeamDefaults = teamPageAdminFormDefaults(table.page_config, {
+    tableColor: table.color,
+    tableName: table.name,
+  })
+  const overlayGradient = `linear-gradient(145deg, ${overlayTeamDefaults.tableGradTop.trim()}, ${overlayTeamDefaults.tableGradBottom.trim()})`
+  const overlayAvatarUrl = overlayTeamDefaults.avatarImageUrl.trim()
+
   const seatLocked = seatPanel ? lockedSeats.has(seatPanel.seatNum) : false
 
   return (
@@ -294,17 +344,38 @@ function LargeSeatingOverlay({
         aria-labelledby="large-seating-title"
         onClick={(e: MouseEvent) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-[#ebebeb] px-4 py-3">
-          <div className="min-w-0 pr-3">
-            <h3 id="large-seating-title" className="truncate text-[16px] font-semibold text-zinc-900">
-              {table.name} seating map
-            </h3>
-            <p className="text-[12px] text-zinc-500">Click a seat to assign precisely. Drag parties still works.</p>
+        <div
+          className="flex shrink-0 items-center justify-between gap-3 border-b border-white/20 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]"
+          style={{
+            backgroundImage: overlayGradient,
+            textShadow: '0 1px 2px rgba(0,0,0,0.35)',
+          }}
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/45 shadow-sm ring-1 ring-black/15">
+              {overlayAvatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={overlayAvatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div
+                  className="h-full w-full bg-white/25"
+                  aria-hidden
+                />
+              )}
+            </div>
+            <div className="min-w-0">
+              <h3 id="large-seating-title" className="truncate text-[16px] font-semibold text-white">
+                {table.name}
+              </h3>
+              <p className="truncate text-[12px] font-medium text-white/90">
+                Large seating — place guests on exact seats
+              </p>
+            </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-black text-white"
+            className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/70 bg-white text-zinc-900 shadow-sm"
             aria-label="Close large seating view"
           >
             <svg
@@ -322,9 +393,9 @@ function LargeSeatingOverlay({
           </button>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-3 pb-3 pt-2">
           <div
-            className="relative shrink-0 rounded-xl border border-[#ebebeb] p-4"
+            className="relative min-h-0 w-full min-w-0 shrink-0 rounded-xl border border-[#ebebeb] bg-[#fafafa] px-2 py-2 sm:px-3 sm:py-3"
             onDragOver={(e) => {
               if (!dragPartyKey) return
               e.preventDefault()
@@ -351,177 +422,223 @@ function LargeSeatingOverlay({
               size="large"
               showSeatNames
               lockedSeatNums={lockedSeats}
-              onSeatClick={(seatNum, guest) => {
+              onSeatClick={(seatNum, guest, anchor) => {
                 setAssignSearch('')
+                setAssignScope('all')
                 setSeatPanel({
                   seatNum,
                   occupant: guest,
                   mode: guest ? 'view' : 'assign',
+                  anchor,
                 })
               }}
             />
 
             {seatPanel ? (
-              <div className="absolute right-3 top-3 z-20 w-[min(100%,300px)] rounded-xl border border-[#ebebeb] bg-white p-3 shadow-lg">
-                <div className="mb-2 flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                      Seat {seatPanel.seatNum}
-                    </p>
-                    {seatPanel.mode === 'view' && seatPanel.occupant ? (
-                      <p className="mt-1 truncate text-[13px] font-semibold text-zinc-900">
-                        {seatPanel.occupant.full_name}
-                      </p>
-                    ) : (
-                      <p className="mt-1 text-[13px] font-semibold text-zinc-900">Assign guest</p>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSeatPanel(null)}
-                    className="shrink-0 cursor-pointer text-[18px] font-light leading-none text-zinc-400 hover:text-zinc-700"
-                    aria-label="Close seat panel"
-                  >
-                    ×
-                  </button>
-                </div>
-
+              <div
+                ref={assignPanelRef}
+                style={assignPanelStyle}
+                className="max-h-[min(52vh,400px)] rounded-xl border border-[#ebebeb] bg-white p-2.5 shadow-xl"
+                onClick={(e: MouseEvent) => e.stopPropagation()}
+              >
                 {seatPanel.mode === 'view' && seatPanel.occupant ? (
-                  <div className="space-y-2 border-t border-zinc-100 pt-2">
-                    <p className="text-[11px] text-zinc-600">
-                      {attendeeSeatContextLine(
-                        seatPanel.occupant,
-                        tableNameById,
-                        table.id,
-                        table.name
-                      )}
-                    </p>
-                    {seatLocked ? (
-                      <p className="text-[11px] font-medium text-amber-800">Seat is locked.</p>
-                    ) : null}
-                    <div className="flex flex-wrap gap-1.5">
+                  <>
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                          Seat {seatPanel.seatNum}
+                        </p>
+                        <p className="mt-0.5 truncate text-[13px] font-semibold text-zinc-900">
+                          {seatPanel.occupant.full_name}
+                        </p>
+                      </div>
                       <button
                         type="button"
-                        disabled={assignBusy || seatLocked}
-                        onClick={() =>
-                          setSeatPanel({
-                            seatNum: seatPanel.seatNum,
-                            occupant: seatPanel.occupant,
-                            mode: 'assign',
-                          })
-                        }
-                        className="cursor-pointer rounded-full border border-[#ebebeb] bg-white px-2.5 py-1 text-[11px] font-semibold text-zinc-800 hover:bg-zinc-50 disabled:pointer-events-none disabled:opacity-40"
+                        onClick={() => setSeatPanel(null)}
+                        className="shrink-0 cursor-pointer text-[18px] font-light leading-none text-zinc-400 hover:text-zinc-700"
+                        aria-label="Close seat panel"
                       >
-                        Replace
-                      </button>
-                      <button
-                        type="button"
-                        disabled={assignBusy || seatLocked}
-                        onClick={() => void removeOccupantFromSeat(seatPanel.occupant!.id)}
-                        className="cursor-pointer rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-800 hover:bg-rose-100 disabled:pointer-events-none disabled:opacity-40"
-                      >
-                        Remove from seat
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const sn = seatPanel.seatNum
-                          const willLock = !lockedSeats.has(sn)
-                          setLockedSeats((prev) => {
-                            const next = new Set(prev)
-                            if (willLock) next.add(sn)
-                            else next.delete(sn)
-                            return next
-                          })
-                          showToast(
-                            willLock ? 'Seat locked (this session).' : 'Seat unlocked (this session).',
-                            'success'
-                          )
-                        }}
-                        className="cursor-pointer rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] font-semibold text-zinc-800 hover:bg-zinc-100"
-                      >
-                        {seatLocked ? 'Unlock seat' : 'Lock seat'}
+                        ×
                       </button>
                     </div>
-                  </div>
+                    <div className="space-y-2 border-t border-zinc-100 pt-2">
+                      <p className="text-[11px] text-zinc-600">
+                        {attendeeSeatContextLine(
+                          seatPanel.occupant,
+                          tableNameById,
+                          table.id,
+                          table.name
+                        )}
+                      </p>
+                      {seatLocked ? (
+                        <p className="text-[11px] font-medium text-amber-800">Seat is locked.</p>
+                      ) : null}
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          disabled={assignBusy || seatLocked}
+                          onClick={() =>
+                            setSeatPanel({
+                              seatNum: seatPanel.seatNum,
+                              occupant: seatPanel.occupant,
+                              mode: 'assign',
+                              anchor: seatPanel.anchor,
+                            })
+                          }
+                          className="cursor-pointer rounded-full border border-[#ebebeb] bg-white px-2.5 py-1 text-[11px] font-semibold text-zinc-800 hover:bg-zinc-50 disabled:pointer-events-none disabled:opacity-40"
+                        >
+                          Replace
+                        </button>
+                        <button
+                          type="button"
+                          disabled={assignBusy || seatLocked}
+                          onClick={() => void removeOccupantFromSeat(seatPanel.occupant!.id)}
+                          className="cursor-pointer rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-800 hover:bg-rose-100 disabled:pointer-events-none disabled:opacity-40"
+                        >
+                          Remove from seat
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const sn = seatPanel.seatNum
+                            const willLock = !lockedSeats.has(sn)
+                            setLockedSeats((prev) => {
+                              const next = new Set(prev)
+                              if (willLock) next.add(sn)
+                              else next.delete(sn)
+                              return next
+                            })
+                            showToast(
+                              willLock
+                                ? 'Seat locked (this session).'
+                                : 'Seat unlocked (this session).',
+                              'success'
+                            )
+                          }}
+                          className="cursor-pointer rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] font-semibold text-zinc-800 hover:bg-zinc-100"
+                        >
+                          {seatLocked ? 'Unlock seat' : 'Lock seat'}
+                        </button>
+                      </div>
+                    </div>
+                  </>
                 ) : (
-                  <div className="max-h-[min(52vh,380px)] space-y-3 overflow-y-auto border-t border-zinc-100 pt-2">
-                    {seatLocked ? (
-                      <p className="text-[11px] font-medium text-amber-800">Unlock seat to assign.</p>
-                    ) : null}
-                    <div>
-                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                        From this table
-                      </p>
-                      {fromThisTableUnseated.length === 0 ? (
-                        <p className="text-[11px] text-zinc-500">Everyone here has a seat number.</p>
-                      ) : (
-                        <ul className="space-y-1">
-                          {fromThisTableUnseated.map((a) => (
-                            <li key={a.id}>
-                              <button
-                                type="button"
-                                disabled={assignBusy || seatLocked}
-                                onClick={() =>
-                                  void assignGuestToSeat(a.id, seatPanel.seatNum)
-                                }
-                                className="flex w-full cursor-pointer flex-col rounded-lg border border-[#ebebeb] bg-[#fafafa] px-2 py-1.5 text-left hover:bg-zinc-100 disabled:pointer-events-none disabled:opacity-40"
-                              >
-                                <span className="truncate text-[12px] font-medium text-zinc-900">
-                                  {a.full_name}
-                                </span>
-                                <span className="text-[10px] text-zinc-500">
-                                  {table.name} – no seat yet
-                                </span>
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                  <>
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <p className="text-[13px] font-semibold text-zinc-900">Assign guest</p>
+                      <button
+                        type="button"
+                        onClick={() => setSeatPanel(null)}
+                        className="shrink-0 cursor-pointer text-[18px] font-light leading-none text-zinc-400 hover:text-zinc-700"
+                        aria-label="Close assign panel"
+                      >
+                        ×
+                      </button>
                     </div>
-                    <div>
-                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                        All attendees
-                      </p>
+                    {seatLocked ? (
+                      <p className="mb-2 text-[11px] font-medium text-amber-800">Unlock seat to assign.</p>
+                    ) : null}
+                    <div className="mb-2 flex rounded-lg border border-[#ebebeb] bg-zinc-50/80 p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setAssignScope('all')}
+                        className={`flex-1 cursor-pointer rounded-md py-1 text-[11px] font-semibold ${
+                          assignScope === 'all'
+                            ? 'bg-white text-zinc-900 shadow-sm'
+                            : 'text-zinc-500 hover:text-zinc-800'
+                        }`}
+                      >
+                        All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAssignScope('unassigned')}
+                        className={`flex-1 cursor-pointer rounded-md py-1 text-[11px] font-semibold ${
+                          assignScope === 'unassigned'
+                            ? 'bg-white text-zinc-900 shadow-sm'
+                            : 'text-zinc-500 hover:text-zinc-800'
+                        }`}
+                      >
+                        Unassigned
+                      </button>
+                    </div>
+                    <div className="relative mb-2">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400"
+                        aria-hidden
+                      >
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-3.5-3.5" />
+                      </svg>
                       <input
                         value={assignSearch}
                         onChange={(e) => setAssignSearch(e.target.value)}
-                        placeholder="Search…"
-                        className="mb-2 h-8 w-full rounded-lg border border-[#ebebeb] px-2 text-[12px] outline-none focus:border-zinc-400"
+                        placeholder="Search guest…"
+                        className="h-8 w-full rounded-lg border border-[#ebebeb] bg-white pl-8 pr-2 text-[12px] outline-none focus:border-zinc-400"
                       />
-                      <ul className="space-y-1">
-                        {allAttendeesFiltered.slice(0, 80).map((a) => (
+                    </div>
+                    <ul className="max-h-[min(42vh,320px)] space-y-1 overflow-y-auto">
+                      {assignPickerRows.slice(0, 80).map((a) => {
+                        const placed = Boolean(a.table_id)
+                        return (
                           <li key={a.id}>
                             <button
                               type="button"
                               disabled={assignBusy || seatLocked}
-                              onClick={() =>
-                                void assignGuestToSeat(a.id, seatPanel.seatNum)
-                              }
-                              className="flex w-full cursor-pointer flex-col rounded-lg border border-[#ebebeb] bg-white px-2 py-1.5 text-left hover:bg-zinc-50 disabled:pointer-events-none disabled:opacity-40"
+                              onClick={() => void assignGuestToSeat(a.id, seatPanel.seatNum)}
+                              className={`relative flex w-full cursor-pointer items-center gap-2 rounded-lg border px-2 py-1.5 text-left transition-colors hover:bg-zinc-50 disabled:pointer-events-none disabled:opacity-40 ${
+                                placed ? 'border-emerald-200/80 bg-emerald-50/40' : 'border-[#ebebeb] bg-white'
+                              }`}
                             >
-                              <span className="truncate text-[12px] font-medium text-zinc-900">
-                                {a.full_name}
-                              </span>
-                              <span className="truncate text-[10px] text-zinc-500">
-                                {attendeeSeatContextLine(a, tableNameById, table.id, table.name)}
-                              </span>
+                              <AttendeeSeatAvatar attendee={a} size={28} />
+                              <div className="min-w-0 flex-1">
+                                <span className="block truncate text-[12px] font-medium text-zinc-900">
+                                  {a.full_name}
+                                </span>
+                                <span className="block truncate text-[10px] text-zinc-500">
+                                  {attendeeSeatContextLine(a, tableNameById, table.id, table.name)}
+                                </span>
+                              </div>
+                              {placed ? (
+                                <span
+                                  className="pointer-events-none flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-700"
+                                  aria-hidden
+                                >
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2.5}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="h-3 w-3"
+                                  >
+                                    <path d="m5 12 5 5L20 7" />
+                                  </svg>
+                                </span>
+                              ) : null}
                             </button>
                           </li>
-                        ))}
-                      </ul>
-                      {allAttendeesFiltered.length > 80 ? (
-                        <p className="mt-1 text-[10px] text-zinc-400">Refine search to see more.</p>
-                      ) : null}
-                    </div>
-                  </div>
+                        )
+                      })}
+                    </ul>
+                    {assignPickerRows.length > 80 ? (
+                      <p className="mt-1 text-[10px] text-zinc-400">Refine search to see more.</p>
+                    ) : null}
+                  </>
                 )}
               </div>
             ) : null}
           </div>
 
-          <div className="admin-scroll-area min-h-0 flex-1 overflow-y-auto rounded-xl border border-[#ebebeb] p-3">
-            <div className="grid grid-cols-5 gap-2">
+          <div className="admin-scroll-area min-h-0 flex-1 overflow-y-auto rounded-xl border border-[#ebebeb] p-2.5">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {list.map((p) => {
                 const rowDraggable = !busy && !p.splitWarning
                 return (
@@ -547,25 +664,26 @@ function LargeSeatingOverlay({
                     }}
                     onMouseEnter={() => setHoveredPartyKey(p.key)}
                     onMouseLeave={() => setHoveredPartyKey(null)}
-                    className={`flex min-w-0 flex-col gap-1 rounded-xl border px-2 py-2 ${p.splitWarning ? 'border-amber-300 bg-amber-50/80' : 'border-[#ebebeb] bg-[#fafafa]'} ${rowDraggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                    className={`flex min-w-0 flex-col gap-0.5 rounded-xl border px-2 py-1.5 ${p.splitWarning ? 'border-amber-300 bg-amber-50/80' : 'border-[#ebebeb] bg-[#fafafa]'} ${rowDraggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
                   >
                     <div className="flex items-center gap-1.5">
                       <PartyAvatarCluster members={p.members} size="sm" />
-                      <p className="min-w-0 flex-1 truncate text-[12px] font-semibold text-zinc-900">
+                      <p className="min-w-0 flex-1 truncate text-[12px] font-semibold leading-tight text-zinc-900">
                         {p.title}
                       </p>
-                    </div>
-                    <p className="text-[10px] font-medium tabular-nums text-zinc-600">
-                      {seatRangeLabel(p)}
-                    </p>
-                    <div className="mt-auto flex justify-end pt-0.5">
                       <RemoveFromTableButton
                         disabled={busy}
                         onClick={() =>
-                          void runPlan(() => planUnassignParty(rows, p.key), 'Party removed from table.')
+                          void runSeatingMutation(
+                            () => planUnassignParty(rows, p.key, partyKeyOrderByTableId),
+                            'Party removed from table.'
+                          )
                         }
                       />
                     </div>
+                    <p className="pl-8 text-[10px] font-medium tabular-nums leading-tight text-zinc-600">
+                      {seatRangeLabel(p)}
+                    </p>
                   </div>
                 )
               })}
@@ -671,6 +789,15 @@ export default function AdminSeatingPage() {
     [plannerTables]
   )
 
+  const partyKeyOrderByTableId = useMemo(() => {
+    const m = new Map<string, string[]>()
+    for (const t of plannerTables) {
+      const o = readPartyKeyOrderFromPageConfig(t.page_config)
+      if (o && o.length > 0) m.set(t.id, o)
+    }
+    return m
+  }, [plannerTables])
+
   const tableGradientById = useMemo(
     () =>
       new Map(
@@ -728,7 +855,8 @@ export default function AdminSeatingPage() {
   }, [parties, dockFilter, searchNeedle])
 
   function partiesOnTable(tableId: string): SeatingParty[] {
-    const keys = partyKeysOnTableOrdered(rows, tableId)
+    const hint = partyKeyOrderByTableId.get(tableId)
+    const keys = partyKeysOnTableOrdered(rows, tableId, hint)
     const byKey = new Map(parties.map((p) => [p.key, p]))
     return keys
       .map((k) => byKey.get(k))
@@ -758,23 +886,38 @@ export default function AdminSeatingPage() {
     [scrollTableIntoWorkspace]
   )
 
-  async function runPlan(
-    build: () => { updates: SeatingUpdate[]; error?: string },
+  async function runSeatingMutation(
+    build: () => {
+      updates: SeatingUpdate[]
+      lanePatches?: SeatingLaneOrderPatch[]
+      error?: string
+    },
     okMessage: string
   ) {
-    const { updates, error: planError } = build()
+    const { updates, lanePatches = [], error: planError } = build()
     if (planError) {
       setError(null)
       showToast(planError, 'error')
       return
     }
-    if (updates.length === 0) {
+    if (updates.length === 0 && lanePatches.length === 0) {
       showToast('No changes.', 'success')
       return
     }
     setBusy(true)
     try {
       await applySeatingUpdates(updates)
+      const byTable = new Map<string, SeatingLaneOrderPatch>()
+      for (const p of lanePatches) byTable.set(p.tableId, p)
+      await Promise.all(
+        [...byTable.values()].map(async (patch) => {
+          const trow = tables.find((x) => x.id === patch.tableId)
+          if (!trow) return
+          await updateTable(patch.tableId, {
+            page_config: mergePartyKeyOrderIntoPageConfig(trow.page_config, patch.partyKeyOrder),
+          })
+        })
+      )
       showToast(okMessage, 'success')
       await loadAll()
     } catch (e) {
@@ -810,15 +953,29 @@ export default function AdminSeatingPage() {
     const onThisTable = party.uniformTableId === tableId
 
     if (onThisTable) {
-      void runPlan(
-        () => planReorderPartyInTable(rows, tableId, partyKey, insertBeforePartyKey),
-        'Seating updated.'
+      void runSeatingMutation(
+        () =>
+          planReorderPartyInTable(
+            rows,
+            tableId,
+            partyKey,
+            insertBeforePartyKey,
+            partyKeyOrderByTableId
+          ),
+        'Row order updated.'
       )
     } else {
-      void runPlan(
+      void runSeatingMutation(
         () =>
-          planDropPartyAtTablePosition(rows, partyKey, tableId, cap, insertBeforePartyKey),
-        'Seating updated.'
+          planDropPartyAtTablePosition(
+            rows,
+            partyKey,
+            tableId,
+            cap,
+            insertBeforePartyKey,
+            partyKeyOrderByTableId
+          ),
+        'Party placed on table.'
       )
     }
   }
@@ -864,7 +1021,11 @@ export default function AdminSeatingPage() {
       const dragged = partyByKey.get(partyKey)
       if (!dragged) return null
 
-      const keysOnTable = partyKeysOnTableOrdered(rows, tableId)
+      const keysOnTable = partyKeysOnTableOrdered(
+        rows,
+        tableId,
+        partyKeyOrderByTableId.get(tableId)
+      )
       const keysWithoutDragged = keysOnTable.filter((k) => k !== partyKey)
 
       const safeInsert =
@@ -901,7 +1062,7 @@ export default function AdminSeatingPage() {
       if (maxSeat > cap) return null
       return { minSeat, maxSeat }
     },
-    [plannerTables, rows, partyByKey]
+    [plannerTables, rows, partyByKey, partyKeyOrderByTableId]
   )
 
   const previewSeatRange = useMemo(() => {
@@ -1034,7 +1195,6 @@ export default function AdminSeatingPage() {
                                 e.preventDefault()
                                 e.stopPropagation()
                                 e.dataTransfer.dropEffect = 'move'
-                                setSeatMapHoverTableId(t.id)
                                 setDragHoverTableId(t.id)
                                 setDragInsertBeforeKey(null)
                               }}
@@ -1044,12 +1204,8 @@ export default function AdminSeatingPage() {
                                 attendeesAtTable={rowsAtTable(t.id)}
                                 partiesOnTable={list}
                                 highlightPartyKey={highlightPartyKey}
-                                previewSeatRange={
-                                  seatMapHoverTableId === t.id ? previewSeatRange : null
-                                }
-                                previewGhostMembers={
-                                  seatMapHoverTableId === t.id ? previewGhostMembers : null
-                                }
+                                previewSeatRange={null}
+                                previewGhostMembers={null}
                               />
                             </div>
                           </div>
@@ -1165,15 +1321,19 @@ export default function AdminSeatingPage() {
                                             </span>
                                           ) : null}
                                         </div>
-                                        <p className="mt-0.5 text-[11px] font-medium tabular-nums text-zinc-600">
-                                          Seats {seatRangeLabel(p)}
+                                        <p className="mt-0.5 text-[11px] text-zinc-600">
+                                          <PartyMetaLine party={p} />
+                                          <span className="text-zinc-400"> · </span>
+                                          <span className="font-medium text-zinc-500">
+                                            Exact seats in large view
+                                          </span>
                                         </p>
                                       </div>
                                       <RemoveFromTableButton
                                         disabled={busy}
                                         onClick={() =>
-                                          void runPlan(
-                                            () => planUnassignParty(rows, p.key),
+                                          void runSeatingMutation(
+                                            () => planUnassignParty(rows, p.key, partyKeyOrderByTableId),
                                             'Party removed from table.'
                                           )
                                         }
@@ -1196,14 +1356,14 @@ export default function AdminSeatingPage() {
                   </div>
                 </div>
               </div>
-              <div className="shrink-0 border-t border-[#ebebeb] bg-white px-4 py-2.5">
-                <div className="flex items-center gap-2.5">
-                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+              <div className="shrink-0 border-t border-[#ebebeb] bg-white px-4 py-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-zinc-400">
                     Pan
                   </span>
                   <div
                     ref={scrubTrackRef}
-                    className="relative h-9 min-w-0 flex-1 rounded-full border border-zinc-200/80 bg-zinc-100/90 px-1"
+                    className="relative h-5 min-w-0 flex-1 rounded-full border border-zinc-200 bg-zinc-100 px-0.5"
                     onPointerDown={(e) => {
                       if ((e.target as HTMLElement).closest('[data-scrub-thumb]')) return
                       const wrap = workspaceRef.current
@@ -1221,7 +1381,7 @@ export default function AdminSeatingPage() {
                       (() => {
                         const maxScroll = Math.max(1, scrubMetrics.sw - scrubMetrics.cw)
                         const thumbPct = Math.max(
-                          12,
+                          14,
                           Math.min(100, (scrubMetrics.cw / scrubMetrics.sw) * 100)
                         )
                         const leftPct = Math.max(
@@ -1236,7 +1396,7 @@ export default function AdminSeatingPage() {
                             aria-valuemin={0}
                             aria-valuemax={Math.round(maxScroll)}
                             aria-valuenow={Math.round(scrubMetrics.sl)}
-                            className="absolute top-1 bottom-1 cursor-grab touch-none rounded-full bg-zinc-600 shadow-sm active:cursor-grabbing"
+                            className="absolute top-0.5 bottom-0.5 cursor-grab touch-none rounded-full bg-zinc-950 shadow-sm active:cursor-grabbing"
                             style={{ width: `${thumbPct}%`, left: `${leftPct}%` }}
                             onPointerDown={(e) => {
                               e.preventDefault()
@@ -1249,7 +1409,7 @@ export default function AdminSeatingPage() {
                               const max = Math.max(0, wrap.scrollWidth - wrap.clientWidth)
                               const trackW = track.clientWidth
                               const thumbW = Math.max(
-                                40,
+                                28,
                                 (wrap.clientWidth / wrap.scrollWidth) * trackW
                               )
                               const dragRange = Math.max(1, trackW - thumbW)
@@ -1269,11 +1429,17 @@ export default function AdminSeatingPage() {
                               window.addEventListener('pointermove', onMove)
                               window.addEventListener('pointerup', onUp)
                             }}
-                          />
+                          >
+                            <span className="pointer-events-none absolute inset-0 flex items-center justify-center gap-px">
+                              <span className="h-2 w-px rounded-full bg-white/40" />
+                              <span className="h-2 w-px rounded-full bg-white/40" />
+                              <span className="h-2 w-px rounded-full bg-white/40" />
+                            </span>
+                          </div>
                         )
                       })()
                     ) : (
-                      <div className="pointer-events-none absolute inset-x-1 top-1 bottom-1 rounded-full bg-zinc-200/70" />
+                      <div className="pointer-events-none absolute inset-x-0.5 top-0.5 bottom-0.5 rounded-full bg-zinc-200/80" />
                     )}
                   </div>
                 </div>
@@ -1457,6 +1623,8 @@ export default function AdminSeatingPage() {
           table={plannerTables.find((t) => t.id === largeMapTableId) ?? null}
           rows={rows}
           parties={parties}
+          tableNameById={tableNameById}
+          partyKeyOrderByTableId={partyKeyOrderByTableId}
           highlightPartyKey={highlightPartyKey}
           previewSeatRange={previewSeatRange}
           previewGhostMembers={previewGhostMembers}
@@ -1470,8 +1638,7 @@ export default function AdminSeatingPage() {
           setHoveredPartyKey={setHoveredPartyKey}
           startPartyDrag={startPartyDrag}
           endPartyDrag={endPartyDrag}
-          runPlan={runPlan}
-          tableNameById={tableNameById}
+          runSeatingMutation={runSeatingMutation}
           reloadRows={loadAll}
           showToast={showToast}
           onClose={() => setLargeMapTableId(null)}
