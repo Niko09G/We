@@ -30,10 +30,10 @@ type GuestWithTable = SeatFinderGuest & {
 }
 
 const TABLE_LAYOUT_SLOTS = [
-  { key: 'gold', x: 52, y: 18, expectedName: 'gold' },
-  { key: 'blue', x: 52, y: 35, expectedName: 'blue' },
-  { key: 'red', x: 52, y: 52, expectedName: 'red' },
-  { key: 'green', x: 52, y: 69, expectedName: 'green' },
+  { key: 'gold', x: 38, y: 18, expectedName: 'gold' },
+  { key: 'blue', x: 38, y: 35, expectedName: 'blue' },
+  { key: 'red', x: 38, y: 52, expectedName: 'red' },
+  { key: 'green', x: 38, y: 69, expectedName: 'green' },
 ] as const
 
 const LANDMARKS = [
@@ -86,7 +86,7 @@ function MapTableGlyph({ color }: { color: string }) {
     <svg className="shrink-0" width={17} height={17} viewBox="0 0 24 24" aria-hidden>
       <path
         fill={color}
-        d="M3 5.5h18v3.5H3V5.5zM5 9h4v11H5V9zm10 0h4v11h-4V9z"
+        d="M3 5.5h18v3.5H3V5.5zM5.5 9h3.5v11H5.5V9zm9.5 0h3.5v11H15V9z"
       />
     </svg>
   )
@@ -136,11 +136,7 @@ function tableFillStyle(slotKey: (typeof TABLE_LAYOUT_SLOTS)[number]['key']): {
   }
 }
 
-/**
- * Two guides only (zinc-200, 1px — matches map frame):
- * - vertical: lobby/reception (left) vs table stack (right)
- * - horizontal: table band (top) vs kitchen/bar (bottom)
- */
+/** Subtle interior guides — matches `border-zinc-200` map frame; rendered behind tables/labels/seats. */
 function SeatMapGuidelines() {
   const w = WORLD_W
   const h = WORLD_H
@@ -153,8 +149,11 @@ function SeatMapGuidelines() {
       aria-hidden
     >
       <g stroke="#e4e4e7" strokeWidth={1} fill="none" strokeLinecap="round" strokeLinejoin="round">
-        <line x1={w * 0.295} y1={28} x2={w * 0.295} y2={h - 36} />
-        <line x1={16} y1={h * 0.765} x2={w - 16} y2={h * 0.765} />
+        <line x1={w * 0.22} y1={42} x2={w * 0.22} y2={h - 44} />
+        <line x1={w * 0.5} y1={52} x2={w * 0.5} y2={h - 52} />
+        <line x1={20} y1={h * 0.28} x2={w - 20} y2={h * 0.28} />
+        <line x1={20} y1={h * 0.42} x2={w - 20} y2={h * 0.42} />
+        <line x1={20} y1={h * 0.58} x2={w - 20} y2={h * 0.58} />
       </g>
     </svg>
   )
@@ -167,7 +166,6 @@ export function SeatingMapPanel({
   layout = 'page',
   showSectionHeading = true,
   sectionTitle = 'Find your seat',
-  viewerAccentColor = null,
 }: {
   className?: string
   layout?: 'page' | 'embedded'
@@ -175,8 +173,6 @@ export function SeatingMapPanel({
   showSectionHeading?: boolean
   /** Team/table page can override (e.g. “Find your people”); standalone seat page keeps default. */
   sectionTitle?: string
-  /** Team page theme primary — selected seat ring + result-bar icons when set. */
-  viewerAccentColor?: string | null
 }) {
   const [rows, setRows] = useState<GuestWithTable[]>([])
   const [loading, setLoading] = useState(true)
@@ -312,13 +308,6 @@ export function SeatingMapPanel({
     if (idx < 0) return null
     return TABLE_LAYOUT_SLOTS[idx]!.key
   }, [selectedGuest, tableBySlot])
-
-  const resultBarIconAccent = useMemo(() => {
-    const v = viewerAccentColor?.trim()
-    if (v) return v
-    if (selectedGuestSlotKey) return TABLE_SOLID_ACCENT_BY_SLOT[selectedGuestSlotKey]
-    return '#71717a'
-  }, [viewerAccentColor, selectedGuestSlotKey])
 
   const matching = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -676,10 +665,6 @@ export function SeatingMapPanel({
               const isSelectedTable = Boolean(table && selectedGuest?.table_id === table.id)
               const tableStyle = tableFillStyle(slot.key)
               const slotAccent = TABLE_SOLID_ACCENT_BY_SLOT[slot.key]
-              const ringAccent =
-                viewerAccentColor && viewerAccentColor.trim()
-                  ? viewerAccentColor.trim()
-                  : slotAccent
 
               return (
                 <div
@@ -730,19 +715,19 @@ export function SeatingMapPanel({
                                   seatRefs.current[g.id] = el
                                 }}
                                 onClick={() => selectGuest(g)}
-                                className={`absolute z-10 flex h-9 w-9 -translate-x-1/2 items-center justify-center overflow-hidden rounded-full text-[10px] font-extrabold leading-none transition-[transform,box-shadow] duration-200 ${
+                                className={`absolute z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center overflow-hidden rounded-full border-2 text-[10px] font-extrabold leading-none transition-[transform,box-shadow] duration-200 ${
                                   pos.isTop
                                     ? 'top-0 -translate-y-1/2'
                                     : 'bottom-0 translate-y-1/2'
                                 } ${
                                   isSelectedSeat
-                                    ? 'animate-seat-selected-glow z-30 scale-110 border-0 bg-white'
-                                    : 'border-2 border-zinc-300 bg-white shadow-sm hover:border-zinc-400'
+                                    ? 'animate-seat-selected-glow z-30 scale-110 border-white bg-white'
+                                    : 'border-zinc-300 bg-white shadow-sm hover:border-zinc-400'
                                 }`}
                                 style={{
                                   left: `${pos.leftPct}%`,
                                   ...(isSelectedSeat
-                                    ? ({ ['--seat-accent' as string]: ringAccent } as React.CSSProperties)
+                                    ? ({ ['--seat-accent' as string]: slotAccent } as React.CSSProperties)
                                     : undefined),
                                 }}
                                 title={`${g.full_name} · Seat ${g.seat_number}`}
@@ -799,13 +784,25 @@ export function SeatingMapPanel({
                 <p className="truncate text-base font-semibold text-black">{selectedGuest.full_name}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm font-medium text-black">
                   <span className="flex min-w-0 max-w-full flex-1 basis-0 items-center gap-2">
-                    <MapTableGlyph color={resultBarIconAccent} />
+                    <MapTableGlyph
+                      color={
+                        selectedGuestSlotKey
+                          ? TABLE_SOLID_ACCENT_BY_SLOT[selectedGuestSlotKey]
+                          : '#71717a'
+                      }
+                    />
                     <span className="min-w-0 break-words leading-snug text-black [overflow-wrap:anywhere]">
                       {selectedGuest.table_name}
                     </span>
                   </span>
                   <span className="inline-flex shrink-0 items-center gap-2 pr-1">
-                    <MapSeatGlyph color={resultBarIconAccent} />
+                    <MapSeatGlyph
+                      color={
+                        selectedGuestSlotKey
+                          ? TABLE_SOLID_ACCENT_BY_SLOT[selectedGuestSlotKey]
+                          : '#71717a'
+                      }
+                    />
                     <span className="whitespace-nowrap pr-1 text-black">Seat {selectedGuest.seat_number}</span>
                   </span>
                 </div>

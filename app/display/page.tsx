@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RewardUnitIcon } from '@/components/reward/RewardUnitIcon'
 import { useRewardUnit } from '@/components/reward/RewardUnitProvider'
 import {
@@ -10,6 +10,8 @@ import {
 } from '@/lib/greetings-admin'
 import { fetchLeaderboardBundle, type LeaderboardEntry, type RecentActivityItem } from '@/lib/leaderboard'
 import { rewardUnitCompactLabel } from '@/lib/reward-unit'
+import { supabase } from '@/lib/supabase/client'
+import { resolveTeamPageConfig } from '@/lib/team-page-config'
 
 const ROTATE_INTERVAL_MS = 10_000
 const POLL_INTERVAL_MS = 30_000
@@ -28,6 +30,52 @@ function teamColorTint(hex: string | null): string | null {
 }
 
 const MEDALS = ['🥇', '🥈', '🥉'] as const
+
+function tableInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase()
+  return (parts[0]?.slice(0, 2) ?? '?').toUpperCase()
+}
+
+function tableAvatarFallbackBg(seed: string): string {
+  const colors = ['#f59e0b', '#3b82f6', '#8b5cf6', '#14b8a6', '#ef4444', '#22c55e']
+  let n = 0
+  for (let i = 0; i < seed.length; i += 1) n += seed.charCodeAt(i)
+  return colors[n % colors.length] ?? '#71717a'
+}
+
+function TeamAvatar({
+  name,
+  avatarUrl,
+  tableColor,
+}: {
+  name: string
+  avatarUrl: string | null
+  tableColor: string | null
+}) {
+  const url = avatarUrl?.trim()
+  return (
+    <span className="inline-flex h-7 w-7 shrink-0 overflow-hidden rounded-full border border-zinc-700/80 bg-zinc-800">
+      {url ? (
+        <img src={url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span
+          className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-white"
+          style={{
+            backgroundColor:
+              tableColor?.trim() && /^#?[0-9a-fA-F]{3,6}$/.test(tableColor.trim())
+                ? tableColor.trim().startsWith('#')
+                  ? tableColor.trim()
+                  : `#${tableColor.trim()}`
+                : tableAvatarFallbackBg(name),
+          }}
+        >
+          {tableInitials(name)}
+        </span>
+      )}
+    </span>
+  )
+}
 
 function ImageWithFallback({
   src,
@@ -75,6 +123,7 @@ export default function DisplayPage() {
     Record<string, { delta?: number; rankUp?: boolean }>
   >({})
   const [recentEnterIds, setRecentEnterIds] = useState<Set<string>>(() => new Set())
+  const [tableAvatars, setTableAvatars] = useState<Record<string, string>>({})
   const containerRef = useRef<HTMLDivElement>(null)
   /** Row currently on the big screen; used to increment display_count on rotation. */
   const displayedGreetingRef = useRef<GreetingRow | null>(null)
@@ -138,7 +187,7 @@ export default function DisplayPage() {
       const { leaderboard: next, recentActivity: recent } = await fetchLeaderboardBundle(3)
       const prev = prevLeaderboardRef.current
       const nextRowAnim: Record<string, { delta?: number; rankUp?: boolean }> = {}
-      let nextRecentEnter = new Set<string>()
+      const nextRecentEnter = new Set<string>()
 
       if (prev && prev.length > 0 && next.length > 0) {
         const oldRank = new Map(prev.map((e, i) => [e.tableId, i]))
@@ -209,6 +258,37 @@ export default function DisplayPage() {
     return () => clearInterval(id)
   }, [fetchLeaderboardData])
 
+  const leaderboardTableIdsKey = useMemo(() => {
+    if (!leaderboard?.length) return ''
+    return [...new Set(leaderboard.map((entry) => entry.tableId))].sort().join(',')
+  }, [leaderboard])
+
+  useEffect(() => {
+    if (!leaderboardTableIdsKey) return
+    let cancelled = false
+    const ids = leaderboardTableIdsKey.split(',')
+    void (async () => {
+      const { data, error } = await supabase
+        .from('tables')
+        .select('id, name, color, page_config')
+        .in('id', ids)
+      if (cancelled || error || !data) return
+      const next: Record<string, string> = {}
+      for (const row of data) {
+        const resolved = resolveTeamPageConfig(row.page_config, {
+          tableColor: (row as { color?: string | null }).color ?? null,
+          tableName: row.name as string,
+        })
+        const url = resolved.hero.avatarImage.url?.trim()
+        if (url) next[row.id as string] = url
+      }
+      setTableAvatars(next)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [leaderboardTableIdsKey])
+
   useEffect(() => {
     return () => {
       if (animClearRef.current) clearTimeout(animClearRef.current)
@@ -241,9 +321,9 @@ export default function DisplayPage() {
   }
 
   const pointsCellClass = (rank: number) => {
-    if (rank === 1) return 'text-2xl font-bold tabular-nums text-white tracking-tight'
-    if (rank <= 3) return 'text-xl font-bold tabular-nums text-zinc-50 tracking-tight'
-    return 'text-base font-semibold tabular-nums text-zinc-200'
+    if (rank === 1) return 'text-xl font-bold tabular-nums text-white tracking-tight'
+    if (rank <= 3) return 'text-lg font-bold tabular-nums text-zinc-50 tracking-tight'
+    return 'text-sm font-semibold tabular-nums text-zinc-200'
   }
 
   const LeaderboardPanel = ({ showFullscreenButton = true }: { showFullscreenButton?: boolean }) => (
@@ -281,24 +361,27 @@ export default function DisplayPage() {
           <p className="py-6 text-center text-sm text-zinc-500">No completions yet</p>
         )}
         {leaderboard && leaderboard.length > 0 && (
-          <table className="w-full text-left text-sm">
+          <table className="w-full table-fixed text-left text-sm">
+            <colgroup>
+              <col className="w-[3.25rem]" />
+              <col />
+              <col className="w-[5.5rem]" />
+            </colgroup>
             <thead className="sticky top-0 z-[1] bg-zinc-900/95 backdrop-blur-sm">
               <tr className="border-b border-zinc-700/80 text-xs font-medium uppercase tracking-wider text-zinc-500">
                 <th className="pb-3 pr-2 pl-1 font-mono">#</th>
-                <th className="pb-3 pr-2">Table</th>
-                <th className="pb-3 pr-2">
-                  <span className="inline-flex items-center gap-1">
+                <th className="pb-3 pr-2">Team</th>
+                <th className="pb-3 pl-1 text-right">
+                  <span className="inline-flex items-center justify-end gap-1">
                     <RewardUnitIcon size={12} displayVariant="onDark" />
                     <span>{rewardUnitCompactLabel(rewardUnit)}</span>
                   </span>
                 </th>
-                <th className="pb-3">Completed</th>
               </tr>
             </thead>
             <tbody>
               {leaderboard.map((entry, index) => {
                 const rank = index + 1
-                const totalMissions = entry.completedCount + entry.remainingCount
                 const anim = rowAnim[entry.tableId]
                 const glow = anim?.delta != null ? 'animate-[lbRowGlow_1.4s_ease-out]' : ''
                 const rankLift = anim?.rankUp ? 'animate-[lbRankLift_1.15s_ease-out]' : ''
@@ -316,12 +399,12 @@ export default function DisplayPage() {
                       leftBorderStyle ? '' : 'border-l-zinc-500/70'
                     } ${glow} ${rankLift}`}
                   >
-                    <td className={`py-3 pr-2 pl-1 ${rankCellClass(rank)}`}>
-                      <span className="inline-flex items-center gap-1.5 tabular-nums">
+                    <td className={`py-2.5 pr-2 pl-1 align-middle ${rankCellClass(rank)}`}>
+                      <span className="inline-flex items-center gap-1 tabular-nums">
                         {rank <= 3 && (
                           <span
                             className={`select-none leading-none ${
-                              rank === 1 ? 'text-lg' : 'text-base'
+                              rank === 1 ? 'text-2xl' : 'text-xl'
                             }`}
                             aria-hidden
                           >
@@ -331,32 +414,29 @@ export default function DisplayPage() {
                         <span>{rank}</span>
                       </span>
                     </td>
-                    <td className="py-3 pr-2 font-medium text-zinc-200 max-w-[72px] text-sm">
-                      <span className="flex min-w-0 items-center">
-                        <span className="truncate">{entry.tableName}</span>
+                    <td className="py-2.5 pr-2 align-middle font-medium text-zinc-200 text-sm">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <TeamAvatar
+                          name={entry.tableName}
+                          avatarUrl={tableAvatars[entry.tableId] ?? null}
+                          tableColor={entry.tableColor}
+                        />
+                        <span className="min-w-0 break-words leading-snug">{entry.tableName}</span>
                       </span>
                     </td>
-                    <td className={`py-3 pr-2 ${pointsCellClass(rank)}`}>
-                      <span className="inline-flex items-center gap-1">
-                        <RewardUnitIcon size={14} displayVariant="onDark" />
+                    <td className={`py-2.5 pl-1 text-right align-middle ${pointsCellClass(rank)}`}>
+                      <span className="inline-flex items-center justify-end gap-1">
+                        <RewardUnitIcon size={13} displayVariant="onDark" />
                         <span className="tabular-nums">{entry.totalPoints}</span>
                         {anim?.delta != null && anim.delta > 0 && (
                           <span
-                            className="text-[11px] font-medium text-amber-200/85 tabular-nums animate-[lbPointsPop_1.35s_ease-out]"
+                            className="text-[10px] font-medium text-amber-200/85 tabular-nums animate-[lbPointsPop_1.35s_ease-out]"
                             aria-hidden
                           >
                             +{anim.delta}
                           </span>
                         )}
                       </span>
-                    </td>
-                    <td className="py-3 pr-1">
-                      <span className="text-[10px] text-zinc-500">Completed: </span>
-                      <span className="text-sm font-semibold tabular-nums text-zinc-100">
-                        {entry.completedCount}
-                      </span>
-                      <span className="text-xs text-zinc-500"> / </span>
-                      <span className="text-xs tabular-nums text-zinc-500">{totalMissions}</span>
                     </td>
                   </tr>
                 )
