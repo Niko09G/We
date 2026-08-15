@@ -80,7 +80,7 @@ export function GreetingSpeechBubble({
           <p className="text-2xl font-bold leading-tight tracking-tight text-zinc-900 md:text-3xl">
             {isMission ? teamName : displayName}
           </p>
-          <p className="mt-3 text-xl font-medium italic leading-relaxed text-zinc-800 whitespace-pre-wrap md:text-2xl">
+          <p className="mt-3 text-4xl font-medium leading-relaxed text-zinc-800 whitespace-pre-wrap md:text-4xl">
             {greeting.message}
           </p>
           {!isMission ? (

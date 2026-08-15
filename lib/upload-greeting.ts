@@ -30,13 +30,14 @@ export async function uploadGreetingImage(
   blob: Blob,
   contentType: string
 ): Promise<string> {
-  const ext =
-    contentType === 'image/webp' ? 'webp' : contentType === 'image/png' ? 'png' : 'jpg'
-  const path = `${uuidv4()}.${ext}`
+  if (contentType !== 'image/webp') {
+    throw new Error('Greeting image upload expects WebP content.')
+  }
+  const path = `${uuidv4()}.webp`
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
-    .upload(path, blob, { contentType, upsert: false })
+    .upload(path, blob, { contentType: 'image/webp', upsert: false })
 
   if (uploadError) {
     throw new Error(uploadError.message || 'Upload failed.')

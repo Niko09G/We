@@ -2,6 +2,8 @@
 
 import { useCallback, useRef, useState } from 'react'
 
+import { WEBP_UPLOAD_QUALITY } from '@/lib/image-compress'
+
 type SignaturePadRef = {
   getBlob: () => Promise<Blob | null>
   clear: () => void
@@ -64,8 +66,8 @@ export function SignaturePad({
     return new Promise((resolve) => {
       canvas.toBlob(
         (blob) => resolve(blob),
-        'image/png',
-        0.92
+        'image/webp',
+        WEBP_UPLOAD_QUALITY
       )
     })
   }, [hasDrawn])

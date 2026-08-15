@@ -118,7 +118,7 @@ const TeamCard = forwardRef<HTMLDivElement, TeamCardProps>(function TeamCard(
         </div>
 
         <div className="pointer-events-none absolute inset-y-0 right-4 z-10 flex items-center gap-2">
-          <RewardUnitIcon size={28} displayVariant="onDark" />
+          <RewardUnitIcon size={48} className="h-12 w-12" displayVariant="onDark" />
           <span className="text-3xl font-bold tabular-nums tracking-tight text-white">
             {entry.totalPoints}
           </span>

@@ -69,12 +69,14 @@ export async function uploadMissionSubmissionImage(
   blob: Blob,
   contentType: string
 ): Promise<string> {
-  const ext = contentType === 'image/webp' ? 'webp' : contentType === 'image/png' ? 'png' : 'jpg'
-  const path = `${uuidv4()}.${ext}`
+  if (contentType !== 'image/webp') {
+    throw new Error('Image upload expects WebP content.')
+  }
+  const path = `${uuidv4()}.webp`
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
-    .upload(path, blob, { contentType, upsert: false })
+    .upload(path, blob, { contentType: 'image/webp', upsert: false })
 
   if (uploadError) {
     throw new Error(uploadError.message || 'Image upload failed.')
@@ -108,13 +110,16 @@ export async function uploadMissionSubmissionVideo(
   return publicUrl
 }
 
-/** Upload signature pad image (PNG); returns public URL. Store in submission_data.signature_image_url. */
+/** Upload signature pad image (WebP); returns public URL. Store in submission_data.signature_image_url. */
 export async function uploadMissionSubmissionSignatureImage(blob: Blob): Promise<string> {
-  const path = `signatures/${uuidv4()}.png`
+  if (blob.type !== 'image/webp') {
+    throw new Error('Signature upload expects WebP content.')
+  }
+  const path = `signatures/${uuidv4()}.webp`
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
-    .upload(path, blob, { contentType: 'image/png', upsert: false })
+    .upload(path, blob, { contentType: 'image/webp', upsert: false })
 
   if (uploadError) {
     throw new Error(uploadError.message || 'Signature upload failed.')

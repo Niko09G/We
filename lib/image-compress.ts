@@ -1,12 +1,13 @@
 /**
  * Browser-side image compression before Supabase Storage upload.
- * All raster uploads are converted to WebP (~0.8 quality) with usage-based max dimensions.
+ * All raster uploads are converted to WebP with aggressive compression and usage-based max dimensions.
  */
 
-const WEBP_QUALITY = 0.8
+export const WEBP_UPLOAD_QUALITY = 0.68
+const WEBP_QUALITY = WEBP_UPLOAD_QUALITY
 const ICON_MAX_DIMENSION = 256
-const HERO_MAX_DIMENSION = 600
-const PHOTO_MAX_DIMENSION = 1280
+const HERO_MAX_DIMENSION = 500
+const PHOTO_MAX_DIMENSION = 1080
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
 
@@ -78,12 +79,12 @@ export async function compressIconImage(file: File): Promise<CompressResult> {
   return compressToWebp(file, ICON_MAX_DIMENSION)
 }
 
-/** Team avatars and hero images — max 600px. */
+/** Team avatars and hero images — max 500px. */
 export async function compressHeroImage(file: File): Promise<CompressResult> {
   return compressToWebp(file, HERO_MAX_DIMENSION)
 }
 
-/** Greeting and photo mission uploads — max 1280px. */
+/** Greeting and photo mission uploads — max 1080px. */
 export async function compressPhotoImage(file: File): Promise<CompressResult> {
   return compressToWebp(file, PHOTO_MAX_DIMENSION)
 }
@@ -93,12 +94,12 @@ export async function compressImage(file: File): Promise<CompressResult> {
   return compressPhotoImage(file)
 }
 
-/** Avatar-specific transform: resize to max 600px and encode as WebP. */
+/** Avatar-specific transform: resize to max 500px and encode as WebP. */
 export async function compressAvatarImage(file: File): Promise<AvatarCompressResult> {
   return compressHeroImage(file)
 }
 
-/** Avatar transform with centered square crop, max 600px, encoded as WebP. */
+/** Avatar transform with centered square crop, max 500px, encoded as WebP. */
 export async function compressAvatarSquareImage(file: File): Promise<AvatarCompressResult> {
   assertMaxFileSize(file)
   if (!isAcceptedImageFile(file)) {
