@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase/client'
 import type { MissionsTableRow } from '@/lib/missions-schema'
 import { isRepeatableAutoMission } from '@/lib/mission-limits'
@@ -51,118 +52,32 @@ export type LeaderboardEntry = {
 }
 
 export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
-  const [tablesRes, missionsRes, completionsRes, approvedSubsRes] = await Promise.all([
-    supabase.from('tables').select('id,name,color').eq('is_archived', false).order('name'),
-    supabase
-      .from('missions')
-      .select(
-        'id,points,allow_multiple_submissions,max_submissions_per_table,points_per_submission,approval_mode,validation_type'
-      )
-      .order('id'),
-    supabase.from('completions').select('id,table_id,mission_id,created_at'),
-    supabase
-      .from('mission_submissions')
-      .select('id,table_id,mission_id,approved_at,submission_type,submission_data')
-      .eq('status', 'approved'),
-  ])
-
-  if (tablesRes.error) throw new Error(tablesRes.error.message || 'Failed to load tables.')
-  if (missionsRes.error) throw new Error(missionsRes.error.message || 'Failed to load missions.')
-  if (completionsRes.error) throw new Error(completionsRes.error.message || 'Failed to load completions.')
-  if (approvedSubsRes.error)
-    throw new Error(approvedSubsRes.error.message || 'Failed to load approved submissions.')
-
-  const tables = (tablesRes.data ?? []).map((t) => ({
-    id: t.id as string,
-    name: t.name as string,
-    color: ((t as { color?: string | null }).color as string | null) ?? null,
-  })) as TableRow[]
-  const missions = (missionsRes.data ?? []) as MissionRow[]
-  const completions = (completionsRes.data ?? []) as CompletionRow[]
-  const approvedSubs = (approvedSubsRes.data ?? []) as ApprovedSubmissionRow[]
-
-  const oneTimeMissionPoints = new Map<string, number>()
-  const repeatableMissionPoints = new Map<string, number>()
-  const beatcoinMissionIds = new Set<string>()
-  missions.forEach((m) => {
-    if (m.validation_type === 'beatcoin') {
-      beatcoinMissionIds.add(m.id)
-      return
-    }
-    if (
-      isRepeatableAutoMission({
-        approval_mode: m.approval_mode,
-        max_submissions_per_table: m.max_submissions_per_table,
-        allow_multiple_submissions: m.allow_multiple_submissions,
-      })
-    ) {
-      repeatableMissionPoints.set(
-        m.id,
-        m.points_per_submission != null ? m.points_per_submission : m.points ?? 0
-      )
-    } else {
-      oneTimeMissionPoints.set(m.id, m.points ?? 0)
-    }
-  })
-  const allMissionIds = new Set(missions.map((m) => m.id))
-  const totalMissions = allMissionIds.size
-
-  const entries: LeaderboardEntry[] = tables.map((table) => {
-    const tableCompletions = completions.filter((c) => c.table_id === table.id)
-    const completedCount = tableCompletions.filter((c) =>
-      allMissionIds.has(c.mission_id)
-    ).length
-    const oneTimePoints = tableCompletions.reduce(
-      (sum, c) => sum + (oneTimeMissionPoints.get(c.mission_id) ?? 0),
-      0
-    )
-    const repeatablePoints = approvedSubs
-      .filter((s) => s.table_id === table.id)
-      .reduce((sum, s) => {
-        if (beatcoinMissionIds.has(s.mission_id)) {
-          const raw = (s.submission_data as { points_awarded?: unknown } | null)?.points_awarded
-          const n = typeof raw === 'number' ? raw : Number(raw)
-          return sum + (Number.isFinite(n) ? n : 0)
-        }
-        if (repeatableMissionPoints.has(s.mission_id)) {
-          return sum + (repeatableMissionPoints.get(s.mission_id) ?? 0)
-        }
-        return sum
-      }, 0)
-    const totalPoints = oneTimePoints + repeatablePoints
-    const remainingCount = Math.max(0, totalMissions - completedCount)
-    return {
-      tableId: table.id,
-      tableName: table.name,
-      tableColor: table.color,
-      totalPoints,
-      completedCount,
-      remainingCount,
-    }
-  })
-
-  entries.sort((a, b) => {
-    if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints
-    if (b.completedCount !== a.completedCount) return b.completedCount - a.completedCount
-    return a.tableName.localeCompare(b.tableName, undefined, { sensitivity: 'base' })
-  })
-  return entries
+  const { leaderboard } = await fetchLeaderboardBundleWithClient(supabase, 0)
+  return leaderboard
 }
 
 /** Leaderboard + last N completions (single fetch). */
 export async function fetchLeaderboardBundle(
   recentLimit = 3
 ): Promise<{ leaderboard: LeaderboardEntry[]; recentActivity: RecentActivityItem[] }> {
+  return fetchLeaderboardBundleWithClient(supabase, recentLimit)
+}
+
+/** Server or client: lightweight JSON scores + recent activity (no images). */
+export async function fetchLeaderboardBundleWithClient(
+  client: SupabaseClient,
+  recentLimit = 3
+): Promise<{ leaderboard: LeaderboardEntry[]; recentActivity: RecentActivityItem[] }> {
   const [tablesRes, missionsRes, completionsRes, approvedSubsRes] = await Promise.all([
-    supabase.from('tables').select('id,name,color').eq('is_archived', false).order('name'),
-    supabase
+    client.from('tables').select('id,name,color').eq('is_archived', false).order('name'),
+    client
       .from('missions')
       .select(
         'id,points,title,allow_multiple_submissions,max_submissions_per_table,points_per_submission,approval_mode,validation_type'
       )
       .order('title'),
-    supabase.from('completions').select('id,table_id,mission_id,created_at'),
-    supabase
+    client.from('completions').select('id,table_id,mission_id,created_at'),
+    client
       .from('mission_submissions')
       .select('id,table_id,mission_id,approved_at,submission_type,submission_data')
       .eq('status', 'approved'),
