@@ -16,6 +16,11 @@ import {
   prettyMb,
 } from '@/lib/upload-constraints'
 import {
+  compressIconImage,
+  isAcceptedImageFile,
+  webpUploadFile,
+} from '@/lib/image-compress'
+import {
   DEFAULT_REWARD_UNIT,
   fetchRewardUnitConfig,
   setRewardUnitConfig,
@@ -23,6 +28,8 @@ import {
 } from '@/lib/reward-unit'
 import {
   fetchGuestEmblemsConfig,
+  normalizeRankEmblemsToSlots,
+  rankEmblemRowForSlot,
   setGuestEmblemsConfig,
   type GuestEmblemsSettingsValue,
 } from '@/lib/guest-emblem-config'
@@ -55,7 +62,7 @@ export default function AdminSettingsPage() {
         fetchGuestEmblemsConfig(),
       ])
       setForm(c)
-      setRankEmblems(emblemCfg.rank_emblems ?? [])
+      setRankEmblems(normalizeRankEmblemsToSlots(emblemCfg.rank_emblems ?? []))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load settings.')
     } finally {
@@ -89,8 +96,8 @@ export default function AdminSettingsPage() {
   }
 
   async function uploadMainIcon(file: File) {
-    if (file.type !== 'image/png' && file.type !== 'image/webp') {
-      setError('Main icon must be PNG or WEBP.')
+    if (!isAcceptedImageFile(file)) {
+      setError('Main icon must be JPG, PNG, or WebP.')
       return
     }
     if (file.size > MAX_ICON_UPLOAD_BYTES) {
@@ -102,7 +109,9 @@ export default function AdminSettingsPage() {
     setSuccess(null)
     try {
       const previous = form.icon_main_url
-      const publicUrl = await uploadRewardUnitIcon(file)
+      const { blob } = await compressIconImage(file)
+      const uploadFile = webpUploadFile(blob, 'reward-unit-main')
+      const publicUrl = await uploadRewardUnitIcon(uploadFile)
       await removeRewardUnitIconByPublicUrl(previous)
       setForm((s) => ({ ...s, icon_main_url: publicUrl }))
       setSuccess('Main icon uploaded. Click Save to publish.')
@@ -114,8 +123,8 @@ export default function AdminSettingsPage() {
   }
 
   async function uploadAltIcon(index: 0 | 1 | 2, file: File) {
-    if (file.type !== 'image/png' && file.type !== 'image/webp') {
-      setError(`Support icon ${index + 1} must be PNG or WEBP.`)
+    if (!isAcceptedImageFile(file)) {
+      setError(`Support icon ${index + 1} must be JPG, PNG, or WebP.`)
       return
     }
     if (file.size > MAX_ICON_UPLOAD_BYTES) {
@@ -127,7 +136,9 @@ export default function AdminSettingsPage() {
     setSuccess(null)
     try {
       const previous = form.icon_alt_urls[index] ?? null
-      const publicUrl = await uploadRewardUnitIcon(file)
+      const { blob } = await compressIconImage(file)
+      const uploadFile = webpUploadFile(blob, `reward-unit-alt-${index + 1}`)
+      const publicUrl = await uploadRewardUnitIcon(uploadFile)
       await removeRewardUnitIconByPublicUrl(previous)
       setForm((s) => {
         const next = [...s.icon_alt_urls]
@@ -165,8 +176,8 @@ export default function AdminSettingsPage() {
   }
 
   async function uploadRankEmblem(slot: RankSlot, file: File) {
-    if (file.type !== 'image/png' && file.type !== 'image/webp') {
-      setError(`Rank emblem ${slot + 1} must be PNG or WEBP.`)
+    if (!isAcceptedImageFile(file)) {
+      setError(`Rank emblem ${slot + 1} must be JPG, PNG, or WebP.`)
       return
     }
     if (file.size > MAX_ICON_UPLOAD_BYTES) {
@@ -177,9 +188,11 @@ export default function AdminSettingsPage() {
     setError(null)
     setSuccess(null)
     try {
-      const next = [...(rankEmblems ?? [])]
+      const next = normalizeRankEmblemsToSlots(rankEmblems ?? [])
       const previous = next[slot]?.emblem_url ?? null
-      const publicUrl = await uploadGuestEmblem(file)
+      const { blob } = await compressIconImage(file)
+      const uploadFile = webpUploadFile(blob, `rank-emblem-${slot + 1}`)
+      const publicUrl = await uploadGuestEmblem(uploadFile)
       await removeGuestEmblemByPublicUrl(previous)
       next[slot] = {
         ...rankSlotBounds(slot),
@@ -197,7 +210,7 @@ export default function AdminSettingsPage() {
   async function removeRankEmblem(slot: RankSlot) {
     setError(null)
     setSuccess(null)
-    const next = [...(rankEmblems ?? [])]
+    const next = normalizeRankEmblemsToSlots(rankEmblems ?? [])
     const prev = next[slot]?.emblem_url ?? null
     next[slot] = { ...rankSlotBounds(slot), emblem_url: '' }
     setRankEmblems(next)
@@ -206,7 +219,7 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <div className="admin-page-shell space-y-6">
+    <div className="admin-page-shell min-h-screen space-y-6 overflow-y-auto pb-24">
       <div>
         <h1 className="admin-page-title text-zinc-900 dark:text-zinc-100">Settings</h1>
         <p className="admin-gap-page-title-intro admin-intro">
@@ -229,7 +242,7 @@ export default function AdminSettingsPage() {
         <h2 className="admin-section-title text-zinc-900 dark:text-zinc-100">Event currency</h2>
         <p className="admin-meta-text">
           Static game UI uses the main icon. Support icons are reserved for reward animations.
-          Upload PNG/WEBP files (same coin, different angles).
+          Upload JPG, PNG, or WebP files (converted to WebP on upload). Same coin, different angles.
         </p>
 
         {loading ? (
@@ -279,7 +292,7 @@ export default function AdminSettingsPage() {
                     {uploadingSlot === 'main' ? 'Uploading…' : 'Upload main icon'}
                     <input
                       type="file"
-                      accept="image/png,image/webp"
+                      accept="image/jpeg,image/jpg,image/png,image/webp"
                       className="sr-only"
                       disabled={uploadingSlot === 'main'}
                       onChange={(e) => {
@@ -324,7 +337,7 @@ export default function AdminSettingsPage() {
                       {uploadingSlot === `alt-${idx + 1}` ? 'Uploading…' : 'Upload support icon'}
                       <input
                         type="file"
-                        accept="image/png,image/webp"
+                        accept="image/jpeg,image/jpg,image/png,image/webp"
                         className="sr-only"
                         disabled={uploadingSlot === `alt-${idx + 1}`}
                         onChange={(e) => {
@@ -378,7 +391,7 @@ export default function AdminSettingsPage() {
         </p>
         <div className="mt-4 space-y-3">
           {RANK_SLOT_INDICES.map((idx) => {
-            const row = rankEmblems?.[idx]
+            const row = rankEmblemRowForSlot(rankEmblems, idx)
             const url = row?.emblem_url?.trim() || ''
             const label = `#${idx + 1}`
             return (
@@ -403,7 +416,7 @@ export default function AdminSettingsPage() {
                     {uploadingSlot === `rank-${idx + 1}` ? 'Uploading…' : 'Upload emblem'}
                     <input
                       type="file"
-                      accept="image/png,image/webp"
+                      accept="image/jpeg,image/jpg,image/png,image/webp"
                       className="sr-only"
                       disabled={uploadingSlot === `rank-${idx + 1}`}
                       onChange={(e) => {

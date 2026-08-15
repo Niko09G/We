@@ -26,6 +26,12 @@ import {
 } from '@/lib/mission-image-assets'
 import { MAX_IMAGE_UPLOAD_BYTES, prettyMb } from '@/lib/upload-constraints'
 import {
+  compressIconImage,
+  compressPhotoImage,
+  isAcceptedImageFile,
+  webpUploadFile,
+} from '@/lib/image-compress'
+import {
   MISSION_CARD_BACKGROUNDS,
   MISSION_CARD_THEME_LABELS,
 } from '@/lib/guest-missions-gradients'
@@ -304,6 +310,10 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
   }
 
   async function uploadCardCover(file: File) {
+    if (!isAcceptedImageFile(file)) {
+      setBannerError('Use JPG, PNG, or WebP.')
+      return
+    }
     if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
       setBannerError(`Image is too large. Max ${prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.`)
       return
@@ -312,7 +322,9 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
     setBannerError(null)
     try {
       const prev = form.card_cover_image_url.trim() || null
-      const url = await uploadMissionCardCoverAsset(file)
+      const { blob } = await compressPhotoImage(file)
+      const uploadFile = webpUploadFile(blob, 'mission-card-cover')
+      const url = await uploadMissionCardCoverAsset(uploadFile)
       await removeMissionImageAssetByPublicUrl(prev)
       setForm((s) => ({ ...s, card_cover_image_url: url }))
     } catch (e) {
@@ -323,6 +335,10 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
   }
 
   async function uploadOverlay(file: File) {
+    if (!isAcceptedImageFile(file)) {
+      setBannerError('Use JPG, PNG, or WebP.')
+      return
+    }
     if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
       setBannerError(`Image is too large. Max ${prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.`)
       return
@@ -331,7 +347,9 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
     setBannerError(null)
     try {
       const prev = form.header_image_url.trim() || null
-      const url = await uploadMissionImageAsset(file)
+      const { blob } = await compressIconImage(file)
+      const uploadFile = webpUploadFile(blob, 'mission-header')
+      const url = await uploadMissionImageAsset(uploadFile)
       await removeMissionImageAssetByPublicUrl(prev)
       setForm((s) => ({ ...s, header_image_url: url }))
     } catch (e) {

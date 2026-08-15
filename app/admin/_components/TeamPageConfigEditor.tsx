@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import type { TeamPageAdminFormValues } from '@/lib/team-page-config'
-import { compressImage, isAcceptedImageFile } from '@/lib/image-compress'
+import { compressHeroImage, isAcceptedImageFile, webpUploadFile } from '@/lib/image-compress'
 import {
   removeTeamHeroImageByPublicUrl,
   uploadTeamHeroImage,
@@ -153,10 +153,8 @@ export function TeamPageConfigEditor({
                 const previous = value.heroImageUrl.trim() || null
                 setHeroUploading(true)
                 try {
-                  const { blob, contentType } = await compressImage(file)
-                  const uploadFile = new File([blob], `hero.${contentType.split('/')[1] ?? 'jpg'}`, {
-                    type: contentType,
-                  })
+                  const { blob } = await compressHeroImage(file)
+                  const uploadFile = webpUploadFile(blob, 'team-hero')
                   const url = await uploadTeamHeroImage(uploadFile, tableName)
                   patch({ heroImageUrl: url })
                   await removeTeamHeroImageByPublicUrl(previous)

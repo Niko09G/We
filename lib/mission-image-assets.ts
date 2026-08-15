@@ -7,10 +7,11 @@ const PREFIX_CARD_COVER = 'mission-card-covers'
 
 const UPLOAD_PREFIXES = [PREFIX, PREFIX_CARD_COVER] as const
 
-function extForContentType(contentType: string): 'jpg' | 'png' | 'webp' {
-  if (contentType === 'image/png') return 'png'
-  if (contentType === 'image/webp') return 'webp'
-  return 'jpg'
+function extForContentType(contentType: string): 'webp' {
+  if (contentType !== 'image/webp') {
+    throw new Error('Mission image upload expects WebP content.')
+  }
+  return 'webp'
 }
 
 function storagePathFromPublicUrl(publicUrl: string): string | null {
@@ -26,13 +27,8 @@ async function uploadToPrefix(
   prefix: typeof PREFIX | typeof PREFIX_CARD_COVER
 ): Promise<string> {
   const contentType = file.type
-  if (
-    contentType !== 'image/jpeg' &&
-    contentType !== 'image/jpg' &&
-    contentType !== 'image/png' &&
-    contentType !== 'image/webp'
-  ) {
-    throw new Error('Mission image must be JPG, PNG, or WEBP.')
+  if (contentType !== 'image/webp') {
+    throw new Error('Mission image must be WebP.')
   }
   const path = `${prefix}/${uuidv4()}.${extForContentType(contentType)}`
   const { error: uploadError } = await supabase.storage

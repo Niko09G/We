@@ -1,12 +1,12 @@
 /**
- * Browser-side image compression for greeting uploads.
- * Resizes to max width 1600px, targets JPEG (or PNG when transparency needed), ~0.75–0.82 quality.
+ * Browser-side image compression before Supabase Storage upload.
+ * All raster uploads are converted to WebP (~0.8 quality) with usage-based max dimensions.
  */
 
-const MAX_WIDTH = 1600
-const JPEG_QUALITY = 0.8
-const PNG_QUALITY = 0.82
-const TARGET_MAX_BYTES = 1_000_000 // 1MB
+const WEBP_QUALITY = 0.8
+const ICON_MAX_DIMENSION = 256
+const HERO_MAX_DIMENSION = 600
+const PHOTO_MAX_DIMENSION = 1280
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
 
@@ -26,83 +26,41 @@ export function assertMaxFileSize(file: File): void {
   }
 }
 
-function hasTransparency(file: File): boolean {
-  return file.type === 'image/png' || file.type === 'image/webp'
-}
-
 export interface CompressResult {
-  blob: Blob
-  contentType: string
-}
-
-export interface AvatarCompressResult {
   blob: Blob
   contentType: 'image/webp'
 }
 
-/**
- * Compress image in the browser: max width 1600, preserve aspect ratio,
- * JPEG (or PNG if transparency). Quality ~0.75–0.82. Aim under 1MB.
- */
-export async function compressImage(file: File): Promise<CompressResult> {
-  assertMaxFileSize(file)
-  if (!isAcceptedImageFile(file)) {
-    throw new Error('Invalid image type. Use JPG, PNG, or WebP.')
+export type AvatarCompressResult = CompressResult
+
+function scaledDimensionsMaxSide(
+  naturalWidth: number,
+  naturalHeight: number,
+  maxDimension: number
+): { width: number; height: number } {
+  const maxSide = Math.max(naturalWidth, naturalHeight)
+  if (maxSide <= maxDimension) {
+    return { width: naturalWidth, height: naturalHeight }
   }
-
-  const keepAlpha = hasTransparency(file)
-  const contentType = keepAlpha ? 'image/png' : 'image/jpeg'
-  const quality = keepAlpha ? PNG_QUALITY : JPEG_QUALITY
-
-  const img = await loadImage(file)
-  const { width, height } = scaledDimensions(img.naturalWidth, img.naturalHeight, MAX_WIDTH)
-
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('Could not get canvas context.')
-
-  ctx.drawImage(img, 0, 0, width, height)
-
-  let blob: Blob
-  if (keepAlpha) {
-    blob = await canvasToBlob(canvas, 'image/png', PNG_QUALITY)
-  } else {
-    blob = await canvasToBlob(canvas, 'image/jpeg', JPEG_QUALITY)
+  const scale = maxDimension / maxSide
+  return {
+    width: Math.max(1, Math.round(naturalWidth * scale)),
+    height: Math.max(1, Math.round(naturalHeight * scale)),
   }
-
-  // If still over 1MB, recompress at lower quality (JPEG only)
-  if (!keepAlpha && blob.size > TARGET_MAX_BYTES) {
-    const img2 = await loadImageFromBlob(blob)
-    const c2 = document.createElement('canvas')
-    c2.width = width
-    c2.height = height
-    const ctx2 = c2.getContext('2d')
-    if (ctx2) {
-      ctx2.drawImage(img2, 0, 0, width, height)
-      blob = await canvasToBlob(c2, 'image/jpeg', 0.72)
-    }
-  }
-
-  return { blob, contentType }
 }
 
-const AVATAR_MAX_DIMENSION = 512
-const AVATAR_WEBP_QUALITY = 0.8
-
-/** Avatar-specific transform: resize to max 512px and encode as WebP. */
-export async function compressAvatarImage(file: File): Promise<AvatarCompressResult> {
+async function compressToWebp(file: File, maxDimension: number): Promise<CompressResult> {
   assertMaxFileSize(file)
   if (!isAcceptedImageFile(file)) {
     throw new Error('Invalid image type. Use JPG, PNG, or WebP.')
   }
 
   const img = await loadImage(file)
-  const maxSide = Math.max(img.naturalWidth, img.naturalHeight)
-  const scale = maxSide > AVATAR_MAX_DIMENSION ? AVATAR_MAX_DIMENSION / maxSide : 1
-  const width = Math.max(1, Math.round(img.naturalWidth * scale))
-  const height = Math.max(1, Math.round(img.naturalHeight * scale))
+  const { width, height } = scaledDimensionsMaxSide(
+    img.naturalWidth,
+    img.naturalHeight,
+    maxDimension
+  )
 
   const canvas = document.createElement('canvas')
   canvas.width = width
@@ -111,11 +69,36 @@ export async function compressAvatarImage(file: File): Promise<AvatarCompressRes
   if (!ctx) throw new Error('Could not get canvas context.')
   ctx.drawImage(img, 0, 0, width, height)
 
-  const blob = await canvasToBlob(canvas, 'image/webp', AVATAR_WEBP_QUALITY)
+  const blob = await canvasToBlob(canvas, 'image/webp', WEBP_QUALITY)
   return { blob, contentType: 'image/webp' }
 }
 
-/** Avatar transform with centered square crop, max 512, encoded as WebP. */
+/** Rank emblems, reward-unit icons, mission header icons — max 256px. */
+export async function compressIconImage(file: File): Promise<CompressResult> {
+  return compressToWebp(file, ICON_MAX_DIMENSION)
+}
+
+/** Team avatars and hero images — max 600px. */
+export async function compressHeroImage(file: File): Promise<CompressResult> {
+  return compressToWebp(file, HERO_MAX_DIMENSION)
+}
+
+/** Greeting and photo mission uploads — max 1280px. */
+export async function compressPhotoImage(file: File): Promise<CompressResult> {
+  return compressToWebp(file, PHOTO_MAX_DIMENSION)
+}
+
+/** @deprecated Use `compressPhotoImage` — kept for existing call sites. */
+export async function compressImage(file: File): Promise<CompressResult> {
+  return compressPhotoImage(file)
+}
+
+/** Avatar-specific transform: resize to max 600px and encode as WebP. */
+export async function compressAvatarImage(file: File): Promise<AvatarCompressResult> {
+  return compressHeroImage(file)
+}
+
+/** Avatar transform with centered square crop, max 600px, encoded as WebP. */
 export async function compressAvatarSquareImage(file: File): Promise<AvatarCompressResult> {
   assertMaxFileSize(file)
   if (!isAcceptedImageFile(file)) {
@@ -126,7 +109,7 @@ export async function compressAvatarSquareImage(file: File): Promise<AvatarCompr
   const side = Math.min(img.naturalWidth, img.naturalHeight)
   const srcX = Math.floor((img.naturalWidth - side) / 2)
   const srcY = Math.floor((img.naturalHeight - side) / 2)
-  const outSide = Math.min(AVATAR_MAX_DIMENSION, side)
+  const outSide = Math.min(HERO_MAX_DIMENSION, side)
 
   const canvas = document.createElement('canvas')
   canvas.width = outSide
@@ -135,8 +118,13 @@ export async function compressAvatarSquareImage(file: File): Promise<AvatarCompr
   if (!ctx) throw new Error('Could not get canvas context.')
   ctx.drawImage(img, srcX, srcY, side, side, 0, 0, outSide, outSide)
 
-  const blob = await canvasToBlob(canvas, 'image/webp', AVATAR_WEBP_QUALITY)
+  const blob = await canvasToBlob(canvas, 'image/webp', WEBP_QUALITY)
   return { blob, contentType: 'image/webp' }
+}
+
+export function webpUploadFile(blob: Blob, baseName: string): File {
+  const safe = baseName.replace(/\.[^.]+$/, '').trim() || 'image'
+  return new File([blob], `${safe}.webp`, { type: 'image/webp' })
 }
 
 function loadImage(file: File): Promise<HTMLImageElement> {
@@ -153,37 +141,6 @@ function loadImage(file: File): Promise<HTMLImageElement> {
     }
     img.src = url
   })
-}
-
-function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob)
-    const img = new Image()
-    img.onload = () => {
-      URL.revokeObjectURL(url)
-      resolve(img)
-    }
-    img.onerror = () => {
-      URL.revokeObjectURL(url)
-      reject(new Error('Failed to load image.'))
-    }
-    img.src = url
-  })
-}
-
-function scaledDimensions(
-  naturalWidth: number,
-  naturalHeight: number,
-  maxWidth: number
-): { width: number; height: number } {
-  if (naturalWidth <= maxWidth) {
-    return { width: naturalWidth, height: naturalHeight }
-  }
-  const scale = maxWidth / naturalWidth
-  return {
-    width: maxWidth,
-    height: Math.round(naturalHeight * scale),
-  }
 }
 
 function canvasToBlob(

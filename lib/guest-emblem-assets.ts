@@ -4,8 +4,11 @@ import { supabase } from '@/lib/supabase/client'
 const BUCKET = 'mission-submissions'
 const PREFIX = 'guest-emblems'
 
-function extForContentType(contentType: string): 'png' | 'webp' {
-  return contentType === 'image/png' ? 'png' : 'webp'
+function extForContentType(contentType: string): 'webp' {
+  if (contentType !== 'image/webp') {
+    throw new Error('Emblem upload expects WebP content.')
+  }
+  return 'webp'
 }
 
 function storagePathFromPublicUrl(publicUrl: string): string | null {
@@ -18,8 +21,8 @@ function storagePathFromPublicUrl(publicUrl: string): string | null {
 
 export async function uploadGuestEmblem(file: File): Promise<string> {
   const contentType = file.type
-  if (contentType !== 'image/png' && contentType !== 'image/webp') {
-    throw new Error('Please upload PNG or WEBP.')
+  if (contentType !== 'image/webp') {
+    throw new Error('Please upload a WebP image.')
   }
   const path = `${PREFIX}/${uuidv4()}.${extForContentType(contentType)}`
   const { error: uploadError } = await supabase.storage

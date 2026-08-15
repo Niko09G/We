@@ -69,12 +69,7 @@ export async function uploadMissionSubmissionImage(
   blob: Blob,
   contentType: string
 ): Promise<string> {
-  const ext =
-    contentType === 'image/png'
-      ? 'png'
-      : contentType === 'image/webp'
-        ? 'webp'
-        : 'jpg'
+  const ext = contentType === 'image/webp' ? 'webp' : contentType === 'image/png' ? 'png' : 'jpg'
   const path = `${uuidv4()}.${ext}`
 
   const { error: uploadError } = await supabase.storage

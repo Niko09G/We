@@ -39,6 +39,12 @@ import {
   uploadMissionImageAsset,
 } from '@/lib/mission-image-assets'
 import { MAX_IMAGE_UPLOAD_BYTES, prettyMb } from '@/lib/upload-constraints'
+import {
+  compressIconImage,
+  compressPhotoImage,
+  isAcceptedImageFile,
+  webpUploadFile,
+} from '@/lib/image-compress'
 import { effectiveMaxSubmissionsPerTable } from '@/lib/mission-limits'
 import { clamp, normalizeHex, hexToHsv, hsvToHex } from '@/lib/admin-color-picker'
 import {
@@ -653,6 +659,10 @@ export default function MissionsLibraryPage() {
   }
 
   async function uploadCardCover(file: File) {
+    if (!isAcceptedImageFile(file)) {
+      showToast('Use JPG, PNG, or WebP.', 'error')
+      return
+    }
     if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
       showToast(`Image is too large. Max ${prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.`, 'error')
       return
@@ -660,7 +670,9 @@ export default function MissionsLibraryPage() {
     setUploadSlot('card')
     try {
       const prev = form.card_cover_image_url.trim() || null
-      const url = await uploadMissionCardCoverAsset(file)
+      const { blob } = await compressPhotoImage(file)
+      const uploadFile = webpUploadFile(blob, 'mission-card-cover')
+      const url = await uploadMissionCardCoverAsset(uploadFile)
       await removeMissionImageAssetByPublicUrl(prev)
       setForm((s) => ({ ...s, card_cover_image_url: url }))
     } catch (e) {
@@ -671,6 +683,10 @@ export default function MissionsLibraryPage() {
   }
 
   async function uploadHeaderImage(file: File) {
+    if (!isAcceptedImageFile(file)) {
+      showToast('Use JPG, PNG, or WebP.', 'error')
+      return
+    }
     if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
       showToast(`Image is too large. Max ${prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.`, 'error')
       return
@@ -678,7 +694,9 @@ export default function MissionsLibraryPage() {
     setUploadSlot('overlay')
     try {
       const prev = form.header_image_url.trim() || null
-      const url = await uploadMissionImageAsset(file)
+      const { blob } = await compressIconImage(file)
+      const uploadFile = webpUploadFile(blob, 'mission-header')
+      const url = await uploadMissionImageAsset(uploadFile)
       await removeMissionImageAssetByPublicUrl(prev)
       setForm((s) => ({ ...s, header_image_url: url }))
     } catch (e) {

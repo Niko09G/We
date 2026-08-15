@@ -13,7 +13,7 @@ import {
   teamPageAdminFormDefaults,
   type TeamPageAdminFormValues,
 } from '@/lib/team-page-config'
-import { compressAvatarSquareImage, compressImage, isAcceptedImageFile } from '@/lib/image-compress'
+import { compressAvatarSquareImage, compressHeroImage, isAcceptedImageFile, webpUploadFile } from '@/lib/image-compress'
 import { removeTeamHeroImageByPublicUrl, uploadTeamHeroImage } from '@/lib/team-hero-image-assets'
 import { clamp, normalizeHex, hexToHsv, hsvToHex } from '@/lib/admin-color-picker'
 import {
@@ -613,9 +613,8 @@ export default function TablesAdminPage() {
     setHeroUploading(true)
     try {
       const previous = formTheme.heroImageUrl.trim() || null
-      const { blob, contentType } = await compressImage(file)
-      const ext = contentType.split('/')[1] ?? 'jpg'
-      const uploadFile = new File([blob], `hero.${ext}`, { type: contentType })
+      const { blob } = await compressHeroImage(file)
+      const uploadFile = webpUploadFile(blob, 'table-hero')
       const url = await uploadTeamHeroImage(uploadFile, formName || 'table')
       setFormTheme((prev) => ({ ...prev, heroImageUrl: url }))
       await removeTeamHeroImageByPublicUrl(previous)

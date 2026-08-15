@@ -29,7 +29,7 @@ function RankEmblem({
       <img
         src={emblemUrl}
         alt={`Rank ${rank}`}
-        className="h-14 w-14 shrink-0 object-contain drop-shadow-[0_3px_12px_rgba(0,0,0,0.3)]"
+        className="h-[5.25rem] w-[5.25rem] shrink-0 object-contain drop-shadow-[0_3px_12px_rgba(0,0,0,0.3)]"
       />
     )
   }
@@ -37,7 +37,7 @@ function RankEmblem({
   if (rank === 1) {
     return (
       <span
-        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-amber-600 text-2xl font-black text-amber-950 shadow-[0_3px_12px_rgba(0,0,0,0.3)] ring-[3px] ring-white/50"
+        className="flex h-[5.25rem] w-[5.25rem] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-amber-600 text-3xl font-black text-amber-950 shadow-[0_3px_12px_rgba(0,0,0,0.3)] ring-[3px] ring-white/50"
         aria-label="Rank 1"
       >
         1
@@ -47,7 +47,7 @@ function RankEmblem({
   if (rank === 2) {
     return (
       <span
-        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-zinc-200 to-zinc-400 text-2xl font-black text-zinc-800 shadow-[0_3px_12px_rgba(0,0,0,0.25)] ring-[3px] ring-white/40"
+        className="flex h-[5.25rem] w-[5.25rem] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-zinc-200 to-zinc-400 text-3xl font-black text-zinc-800 shadow-[0_3px_12px_rgba(0,0,0,0.25)] ring-[3px] ring-white/40"
         aria-label="Rank 2"
       >
         2
@@ -57,7 +57,7 @@ function RankEmblem({
   if (rank === 3) {
     return (
       <span
-        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-300 to-orange-600 text-2xl font-black text-orange-950 shadow-[0_3px_12px_rgba(0,0,0,0.25)] ring-[3px] ring-white/35"
+        className="flex h-[5.25rem] w-[5.25rem] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-300 to-orange-600 text-3xl font-black text-orange-950 shadow-[0_3px_12px_rgba(0,0,0,0.25)] ring-[3px] ring-white/35"
         aria-label="Rank 3"
       >
         3
@@ -66,7 +66,7 @@ function RankEmblem({
   }
   return (
     <span
-      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-black/30 text-2xl font-bold text-white ring-[3px] ring-white/25"
+      className="flex h-[5.25rem] w-[5.25rem] shrink-0 items-center justify-center rounded-full bg-black/30 text-3xl font-bold text-white ring-[3px] ring-white/25"
       aria-label={`Rank ${rank}`}
     >
       {rank}

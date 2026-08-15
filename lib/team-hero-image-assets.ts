@@ -41,7 +41,7 @@ async function listHeroFileNames(): Promise<Set<string>> {
   return out
 }
 
-function nextAvailableName(base: string, existing: Set<string>, ext: 'jpg' | 'png' | 'webp'): string {
+function nextAvailableName(base: string, existing: Set<string>, ext: 'webp'): string {
   const first = `${base}.${ext}`
   if (!existing.has(first)) return first
   let n = 2
@@ -49,21 +49,17 @@ function nextAvailableName(base: string, existing: Set<string>, ext: 'jpg' | 'pn
   return `${base}-${n}.${ext}`
 }
 
-function extForContentType(contentType: string): 'jpg' | 'png' | 'webp' {
-  if (contentType === 'image/png') return 'png'
-  if (contentType === 'image/webp') return 'webp'
-  return 'jpg'
+function extForContentType(contentType: string): 'webp' {
+  if (contentType !== 'image/webp') {
+    throw new Error('Hero image upload expects WebP content.')
+  }
+  return 'webp'
 }
 
 export async function uploadTeamHeroImage(file: File, tableName: string): Promise<string> {
   const contentType = file.type
-  if (
-    contentType !== 'image/jpeg' &&
-    contentType !== 'image/jpg' &&
-    contentType !== 'image/png' &&
-    contentType !== 'image/webp'
-  ) {
-    throw new Error('Hero image must be JPG, PNG, or WEBP.')
+  if (contentType !== 'image/webp') {
+    throw new Error('Hero image must be WebP.')
   }
 
   const base = sanitizeBaseName(tableName)

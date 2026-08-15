@@ -30,7 +30,8 @@ export async function uploadGreetingImage(
   blob: Blob,
   contentType: string
 ): Promise<string> {
-  const ext = contentType === 'image/png' ? 'png' : 'jpg'
+  const ext =
+    contentType === 'image/webp' ? 'webp' : contentType === 'image/png' ? 'png' : 'jpg'
   const path = `${uuidv4()}.${ext}`
 
   const { error: uploadError } = await supabase.storage

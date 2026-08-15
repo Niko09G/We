@@ -91,16 +91,49 @@ export function parseGuestEmblems(value: unknown): GuestEmblemsSettingsValue {
   }
 }
 
+const RANK_EMBLEM_SLOT_COUNT = 6
+
+/** Normalize stored rank rows into fixed slots #1–#6 (index = rank − 1). */
+export function normalizeRankEmblemsToSlots(
+  rows: GuestEmblemsSettingsValue['rank_emblems']
+): Array<{ min_rank: number; max_rank: number; emblem_url: string }> {
+  const byRank = new Map<number, string>()
+  for (const row of rows ?? []) {
+    if (row.min_rank !== row.max_rank) continue
+    const url = cleanUrl(row.emblem_url)
+    if (url) byRank.set(row.min_rank, url)
+  }
+  return Array.from({ length: RANK_EMBLEM_SLOT_COUNT }, (_, slot) => {
+    const rank = slot + 1
+    return {
+      min_rank: rank,
+      max_rank: rank,
+      emblem_url: byRank.get(rank) ?? '',
+    }
+  })
+}
+
+export function rankEmblemRowForSlot(
+  rows: GuestEmblemsSettingsValue['rank_emblems'],
+  slot: number
+): { min_rank: number; max_rank: number; emblem_url: string } | null {
+  const rank = slot + 1
+  if (rank < 1 || rank > RANK_EMBLEM_SLOT_COUNT) return null
+  const row = (rows ?? []).find((r) => r.min_rank === rank && r.max_rank === rank)
+  if (!row) return null
+  return row
+}
+
+/** Resolve emblem for an exact rank only — never falls back to a neighboring rank slot. */
 export function resolveRankEmblemUrl(
   settings: GuestEmblemsSettingsValue,
   rank: number | null
 ): string | null {
   if (rank == null || !Number.isFinite(rank) || rank < 1) return null
   const rows = settings.rank_emblems ?? []
-  for (const row of rows) {
-    if (rank >= row.min_rank && rank <= row.max_rank) return row.emblem_url
-  }
-  return null
+  const exact = rows.find((row) => row.min_rank === rank && row.max_rank === rank)
+  if (!exact) return null
+  return cleanUrl(exact.emblem_url)
 }
 
 export async function fetchGuestEmblemsConfig(): Promise<GuestEmblemsSettingsValue> {
