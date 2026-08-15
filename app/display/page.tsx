@@ -12,7 +12,7 @@ import {
   type DisplayTeamVisual,
 } from '@/lib/display-team-visuals'
 import {
-  fetchNextFairGreetingForDisplay,
+  fetchDisplayGreetings,
   recordGreetingDisplayed,
   type GreetingRow,
 } from '@/lib/greetings-admin'
@@ -28,6 +28,37 @@ const DISPLAY_GRID_CLASS = 'grid h-screen w-screen grid-cols-[8.6fr_3.4fr] gap-6
 const GREETING_ROTATE_MS = 10_000
 const LIVE_POLL_MS = 25_000
 const RECENT_FETCH_LIMIT = 8
+
+function sortGreetingsNewestFirst(rows: GreetingRow[]): GreetingRow[] {
+  return [...rows].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )
+}
+
+function greetingFromRealtimeRow(row: Record<string, unknown>): GreetingRow | null {
+  const id = typeof row.id === 'string' ? row.id : null
+  const message = typeof row.message === 'string' ? row.message : null
+  const image_url = typeof row.image_url === 'string' ? row.image_url : null
+  const status = typeof row.status === 'string' ? row.status : null
+  const created_at = typeof row.created_at === 'string' ? row.created_at : null
+  if (!id || !message || !image_url || !status || !created_at) return null
+  if (status !== 'ready') return null
+  return {
+    id,
+    message,
+    image_url,
+    status,
+    created_at,
+    name: typeof row.name === 'string' ? row.name : null,
+    source_type:
+      row.source_type === 'mission' || row.source_type === 'upload'
+        ? row.source_type
+        : undefined,
+    table_id: typeof row.table_id === 'string' ? row.table_id : null,
+    table_name: typeof row.table_name === 'string' ? row.table_name : null,
+    table_color: typeof row.table_color === 'string' ? row.table_color : null,
+  }
+}
 
 function ImageWithFallback({
   src,
@@ -80,8 +111,10 @@ async function fetchLiveBundle(): Promise<{
 }
 
 export default function DisplayPage() {
-  const [currentGreeting, setCurrentGreeting] = useState<GreetingRow | null>(null)
+  const [greetings, setGreetings] = useState<GreetingRow[]>([])
+  const [currentIndex, setCurrentIndex] = useState(0)
   const [greetingLoading, setGreetingLoading] = useState(true)
+  const [rotationEpoch, setRotationEpoch] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[] | null>(null)
   const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([])
@@ -96,35 +129,112 @@ export default function DisplayPage() {
 
   const containerRef = useRef<HTMLDivElement>(null)
   const mainCanvasRef = useRef<HTMLDivElement>(null)
-  const displayedGreetingRef = useRef<GreetingRow | null>(null)
+  const greetingsRef = useRef<GreetingRow[]>([])
+  const currentIndexRef = useRef(0)
+  const rotateIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const prevLeaderboardRef = useRef<LeaderboardEntry[] | null>(null)
   const teamCardRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const animClearRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const feedItems = useMomentumFeed(recentActivity)
 
+  const currentGreeting = useMemo(() => {
+    if (greetings.length === 0) return null
+    const idx = ((currentIndex % greetings.length) + greetings.length) % greetings.length
+    return greetings[idx] ?? null
+  }, [greetings, currentIndex])
+
   const greetingTeamVisual = useMemo(() => {
     if (!currentGreeting?.table_id) return null
     return teamVisuals[currentGreeting.table_id] ?? null
   }, [currentGreeting, teamVisuals])
 
-  const loadInitialGreeting = useCallback(async () => {
+  const bumpRotationTimer = useCallback(() => {
+    setRotationEpoch((n) => n + 1)
+  }, [])
+
+  const queueNewGreeting = useCallback(
+    (row: GreetingRow) => {
+      if (row.status !== 'ready') return
+
+      setGreetings((prev) => {
+        const withoutDup = prev.filter((g) => g.id !== row.id)
+        const next = sortGreetingsNewestFirst([row, ...withoutDup])
+        greetingsRef.current = next
+        return next
+      })
+      currentIndexRef.current = 0
+      setCurrentIndex(0)
+      bumpRotationTimer()
+    },
+    [bumpRotationTimer]
+  )
+
+  const loadGreetings = useCallback(async () => {
     try {
-      const rows = await fetchNextFairGreetingForDisplay(1)
-      const next = rows[0] ?? null
-      displayedGreetingRef.current = next
-      setCurrentGreeting(next)
+      const rows = sortGreetingsNewestFirst(await fetchDisplayGreetings())
+      greetingsRef.current = rows
+      setGreetings(rows)
+      currentIndexRef.current = 0
+      setCurrentIndex(0)
+      bumpRotationTimer()
     } catch {
-      displayedGreetingRef.current = null
-      setCurrentGreeting(null)
+      greetingsRef.current = []
+      setGreetings([])
+      currentIndexRef.current = 0
+      setCurrentIndex(0)
     } finally {
       setGreetingLoading(false)
     }
-  }, [])
+  }, [bumpRotationTimer])
 
   useEffect(() => {
-    void loadInitialGreeting()
-  }, [loadInitialGreeting])
+    void loadGreetings()
+  }, [loadGreetings])
+
+  useEffect(() => {
+    greetingsRef.current = greetings
+  }, [greetings])
+
+  useEffect(() => {
+    currentIndexRef.current = currentIndex
+  }, [currentIndex])
+
+  useEffect(() => {
+    if (rotateIntervalRef.current) {
+      clearInterval(rotateIntervalRef.current)
+      rotateIntervalRef.current = null
+    }
+
+    if (greetings.length === 0) return
+
+    const id = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+
+      const list = greetingsRef.current
+      if (list.length <= 1) return
+
+      const prevIdx =
+        ((currentIndexRef.current % list.length) + list.length) % list.length
+      const prevGreeting = list[prevIdx]
+      if (prevGreeting) {
+        void recordGreetingDisplayed(prevGreeting.id).catch(() => {
+          /* RPC or columns not migrated yet */
+        })
+      }
+
+      const nextIdx = (prevIdx + 1) % list.length
+      currentIndexRef.current = nextIdx
+      setCurrentIndex(nextIdx)
+    }, GREETING_ROTATE_MS)
+
+    rotateIntervalRef.current = id
+
+    return () => {
+      clearInterval(id)
+      if (rotateIntervalRef.current === id) rotateIntervalRef.current = null
+    }
+  }, [greetings.length, rotationEpoch])
 
   useEffect(() => {
     let cancelled = false
@@ -142,30 +252,58 @@ export default function DisplayPage() {
   }, [])
 
   useEffect(() => {
-    const id = window.setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
-      const prevId = displayedGreetingRef.current?.id ?? null
-      void (async () => {
-        if (prevId) {
-          try {
-            await recordGreetingDisplayed(prevId)
-          } catch {
-            /* RPC or columns not migrated yet */
-          }
+    const channel = supabase
+      .channel('display-greetings')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'greetings' },
+        (payload) => {
+          const row = greetingFromRealtimeRow(
+            payload.new as Record<string, unknown>
+          )
+          if (row) queueNewGreeting(row)
         }
-        try {
-          const rows = await fetchNextFairGreetingForDisplay(1)
-          const next = rows[0] ?? null
-          displayedGreetingRef.current = next
-          setCurrentGreeting(next)
-        } catch {
-          displayedGreetingRef.current = null
-          setCurrentGreeting(null)
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'greetings' },
+        (payload) => {
+          const deletedId =
+            typeof (payload.old as { id?: unknown }).id === 'string'
+              ? (payload.old as { id: string }).id
+              : null
+          if (!deletedId) return
+
+          setGreetings((prev) => {
+            const removeIdx = prev.findIndex((g) => g.id === deletedId)
+            if (removeIdx === -1) return prev
+
+            const next = prev.filter((g) => g.id !== deletedId)
+            greetingsRef.current = next
+
+            let newIdx = currentIndexRef.current
+            if (next.length === 0) {
+              newIdx = 0
+            } else {
+              if (removeIdx < newIdx) newIdx -= 1
+              else if (removeIdx === newIdx && newIdx >= next.length) {
+                newIdx = next.length - 1
+              }
+              if (newIdx >= next.length) newIdx = next.length - 1
+            }
+
+            currentIndexRef.current = newIdx
+            setCurrentIndex(newIdx)
+            return next
+          })
         }
-      })()
-    }, GREETING_ROTATE_MS)
-    return () => window.clearInterval(id)
-  }, [])
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [queueNewGreeting])
 
   const spawnScoreCelebration = useCallback(
     (deltas: Array<{ tableId: string; delta: number }>) => {

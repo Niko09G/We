@@ -47,9 +47,21 @@ export async function listGreetings(): Promise<GreetingRow[]> {
 const DISPLAY_SELECT =
   'id,name,message,image_url,status,created_at,source_type,table_id,table_name,table_color,display_count,last_displayed_at'
 
+/** Ready greetings for the big screen, newest first (client-side rotation queue). */
+export async function fetchDisplayGreetings(): Promise<GreetingRow[]> {
+  const { data, error } = await supabase
+    .from('greetings')
+    .select(DISPLAY_SELECT)
+    .eq('status', 'ready')
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(error.message || 'Failed to load greetings.')
+  return (data ?? []) as GreetingRow[]
+}
+
 /**
- * Big screen only: next ready greeting by fair rotation — fewest `display_count`,
- * then newest `created_at` (new items surface quickly among ties; older rows still get turns).
+ * @deprecated Big screen now rotates client-side via `fetchDisplayGreetings`.
+ * Kept for compatibility — next ready greeting by fair rotation.
  */
 export async function fetchNextFairGreetingForDisplay(
   limit = 1

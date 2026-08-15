@@ -6,7 +6,7 @@ const SELECT =
 
 /**
  * Ready greetings for **mobile / guest** surfaces only: newest first, fixed window (no display_count rotation).
- * Big screen (`/display`) uses fair rotation in `greetings-admin` (`fetchNextFairGreetingForDisplay`).
+ * Big screen (`/display`) loads the full queue via `fetchDisplayGreetings` in `greetings-admin`.
  */
 export async function listReadyGreetingsNewestFirst(
   limit?: number
