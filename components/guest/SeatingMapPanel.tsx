@@ -10,11 +10,11 @@ import {
 } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import {
-  computeSideCounts,
+  computeFourSideCounts,
   guestTableSeatMapMetrics,
   MAX_SEAT_MAP_CAPACITY,
-  seatSizing,
-  seatSizingForRowWidth,
+  seatSizingForRowWidthWithSideCounts,
+  seatSizingForSideCounts,
 } from '@/lib/seat-map-layout'
 import { teamPageAdminFormDefaults } from '@/lib/team-page-config'
 
@@ -212,13 +212,67 @@ function GuestTableSeatMap({
     return m
   }, [guests, safeCapacity])
 
-  const { topCount, bottomStart } = computeSideCounts(safeCapacity)
-  const baseSizing = seatSizing(safeCapacity)
+  const { leftEndSeat, topStart, topCount, rightEndSeat, bottomStart, bottomCount } =
+    computeFourSideCounts(safeCapacity)
+  const baseSizing = seatSizingForSideCounts(topCount, bottomCount)
   const topSizing =
-    rowW > 0 ? seatSizingForRowWidth(safeCapacity, rowW, 'top') : baseSizing
+    rowW > 0 && topCount > 0
+      ? seatSizingForRowWidthWithSideCounts(topCount, bottomCount, rowW, 'top')
+      : baseSizing
   const bottomSizing =
-    rowW > 0 ? seatSizingForRowWidth(safeCapacity, rowW, 'bottom') : baseSizing
-  const layoutMetrics = guestTableSeatMapMetrics(topSizing, bottomSizing)
+    rowW > 0 && bottomCount > 0
+      ? seatSizingForRowWidthWithSideCounts(topCount, bottomCount, rowW, 'bottom')
+      : baseSizing
+  const endCapSeatPx = Math.max(topSizing.seatPx, bottomSizing.seatPx)
+  const layoutMetrics = guestTableSeatMapMetrics(topSizing, bottomSizing, {
+    seatPx: leftEndSeat != null || rightEndSeat != null ? endCapSeatPx : 0,
+  })
+
+  const renderSeat = (seatNum: number, size: number) => {
+    const guest = bySeat.get(seatNum)
+    const isSelected = guest?.id === selectedGuestId
+
+    if (!guest) {
+      return (
+        <div
+          key={seatNum}
+          aria-hidden
+          className="shrink-0 rounded-full"
+          style={{ width: size, height: size }}
+        />
+      )
+    }
+
+    return (
+      <button
+        key={guest.id}
+        type="button"
+        onClick={() => onSelectGuest(guest)}
+        className={`shrink-0 overflow-hidden rounded-full border-2 transition-[box-shadow] duration-200 ${
+          isSelected
+            ? 'animate-seat-selected-glow z-30 border-white bg-white'
+            : 'border-zinc-300 bg-white shadow-sm hover:border-zinc-400'
+        }`}
+        style={{
+          width: size,
+          height: size,
+          ...(isSelected
+            ? ({ ['--seat-accent' as string]: tableAccent } as React.CSSProperties)
+            : undefined),
+        }}
+        title={`${guest.full_name} · Seat ${guest.seat_number}`}
+      >
+        {guest.photo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={guest.photo_url} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <span className="flex h-full w-full items-center justify-center bg-zinc-200 text-[9px] font-bold text-zinc-700">
+            {getInitials(guest.full_name)}
+          </span>
+        )}
+      </button>
+    )
+  }
 
   const renderSide = (
     sideStart: number,
@@ -229,57 +283,17 @@ function GuestTableSeatMap({
     if (count <= 0) return null
 
     return (
-      <div className="mx-auto flex max-w-full items-center justify-center" style={{ gap: `${sizing.gapPx}px` }}>
-        {Array.from({ length: count }, (_, i) => {
-          const seatNum = sideStart + i
-          const guest = bySeat.get(seatNum)
-          const isSelected = guest?.id === selectedGuestId
-          const size = sizing.seatPx
-
-          if (!guest) {
-            return (
-              <div
-                key={seatNum}
-                aria-hidden
-                className="shrink-0 rounded-full"
-                style={{ width: size, height: size }}
-              />
-            )
-          }
-
-          return (
-            <button
-              key={guest.id}
-              type="button"
-              onClick={() => onSelectGuest(guest)}
-              className={`shrink-0 overflow-hidden rounded-full border-2 transition-[box-shadow] duration-200 ${
-                isSelected
-                  ? 'animate-seat-selected-glow z-30 border-white bg-white'
-                  : 'border-zinc-300 bg-white shadow-sm hover:border-zinc-400'
-              }`}
-              style={{
-                width: size,
-                height: size,
-                ...(isSelected
-                  ? ({ ['--seat-accent' as string]: tableAccent } as React.CSSProperties)
-                  : undefined),
-              }}
-              title={`${guest.full_name} · Seat ${guest.seat_number}`}
-            >
-              {guest.photo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={guest.photo_url} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <span className="flex h-full w-full items-center justify-center bg-zinc-200 text-[9px] font-bold text-zinc-700">
-                  {getInitials(guest.full_name)}
-                </span>
-              )}
-            </button>
-          )
-        })}
+      <div
+        className="mx-auto flex max-w-full items-center justify-center"
+        style={{ gap: `${sizing.gapPx}px` }}
+      >
+        {Array.from({ length: count }, (_, i) => renderSeat(sideStart + i, sizing.seatPx))}
       </div>
     )
   }
+
+  const topEnd = topCount > 0 ? topStart + topCount - 1 : topStart - 1
+  const bottomEnd = bottomCount > 0 ? bottomStart + bottomCount - 1 : bottomStart - 1
 
   return (
     <div
@@ -288,21 +302,43 @@ function GuestTableSeatMap({
       style={{
         paddingTop: layoutMetrics.edgePaddingTop,
         paddingBottom: layoutMetrics.edgePaddingBottom,
+        paddingLeft: layoutMetrics.edgePaddingLeft,
+        paddingRight: layoutMetrics.edgePaddingRight,
       }}
     >
       <div
         className="relative w-full"
         style={{ minHeight: layoutMetrics.centerBandPx }}
       >
-        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-[2] flex -translate-y-1/2 items-center justify-center px-10">
-          {tableLabel}
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-[2] flex -translate-y-1/2 items-center justify-center gap-2 px-1">
+          {leftEndSeat != null ? (
+            <div
+              className="pointer-events-auto shrink-0"
+              style={{ marginRight: `-${Math.ceil(endCapSeatPx / 4)}px` }}
+            >
+              {renderSeat(leftEndSeat, endCapSeatPx)}
+            </div>
+          ) : null}
+          <div className="min-w-0 flex-1 px-2 text-center">{tableLabel}</div>
+          {rightEndSeat != null ? (
+            <div
+              className="pointer-events-auto shrink-0"
+              style={{ marginLeft: `-${Math.ceil(endCapSeatPx / 4)}px` }}
+            >
+              {renderSeat(rightEndSeat, endCapSeatPx)}
+            </div>
+          ) : null}
         </div>
-        <div className="pointer-events-auto absolute inset-x-0 top-0 z-[3] -translate-y-1/2 px-0.5">
-          {renderSide(1, topCount, topSizing)}
-        </div>
-        <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-[3] translate-y-1/2 px-0.5">
-          {renderSide(bottomStart, safeCapacity, bottomSizing)}
-        </div>
+        {topCount > 0 ? (
+          <div className="pointer-events-auto absolute inset-x-0 top-0 z-[3] -translate-y-1/2 px-0.5">
+            {renderSide(topStart, topEnd, topSizing)}
+          </div>
+        ) : null}
+        {bottomCount > 0 ? (
+          <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-[3] translate-y-1/2 px-0.5">
+            {renderSide(bottomStart, bottomEnd, bottomSizing)}
+          </div>
+        ) : null}
       </div>
     </div>
   )
