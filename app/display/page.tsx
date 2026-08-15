@@ -338,9 +338,9 @@ export default function DisplayPage() {
     return (
       <div
         ref={containerRef}
-        className="flex h-screen w-screen items-stretch gap-4 bg-zinc-950 p-4 md:gap-5 md:p-5"
+        className="grid h-screen w-screen grid-cols-12 bg-zinc-950"
       >
-        <div className="flex min-w-0 flex-[3] items-center justify-center rounded-2xl bg-zinc-900/50">
+        <div className="col-span-8 flex min-w-0 items-center justify-center bg-zinc-900/50">
           <span className="text-zinc-500">Loading…</span>
         </div>
         <LeaderboardSidebar
@@ -361,11 +361,11 @@ export default function DisplayPage() {
   return (
     <div
       ref={containerRef}
-      className="flex h-screen w-screen items-stretch gap-4 bg-zinc-950 p-4 md:gap-5 md:p-5"
+      className="grid h-screen w-screen grid-cols-12 bg-zinc-950"
     >
       <div
         ref={mainCanvasRef}
-        className="relative min-w-0 flex-[3] overflow-hidden rounded-2xl bg-zinc-900"
+        className="relative col-span-8 min-w-0 overflow-hidden bg-zinc-900"
       >
         {!currentGreeting ? (
           <div className="flex h-full w-full flex-col items-center justify-center px-8">

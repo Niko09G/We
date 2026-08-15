@@ -46,21 +46,21 @@ export function GreetingSpeechBubble({
 
   return (
     <div
-      className="absolute bottom-5 left-5 z-20 flex max-w-[min(58%,520px)] items-end gap-2 animate-[greetingTextIn_0.45s_ease-out]"
+      className="absolute bottom-10 left-8 z-20 flex max-w-[min(72%,900px)] items-end gap-5 animate-[greetingTextIn_0.45s_ease-out]"
       aria-live="polite"
     >
       <div
-        className="relative z-10 shrink-0 rounded-full border-2 border-white/90 p-0.5 shadow-[0_4px_16px_rgba(0,0,0,0.28)]"
+        className="relative z-10 shrink-0 rounded-full border-[3px] border-white/90 p-1 shadow-[0_6px_24px_rgba(0,0,0,0.32)]"
         style={{ background: gradientCss }}
         aria-hidden
       >
-        <div className="h-11 w-11 overflow-hidden rounded-full bg-white/15">
+        <div className="h-24 w-24 overflow-hidden rounded-full bg-white/15">
           {avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
           ) : (
             <span
-              className="flex h-full w-full items-center justify-center text-sm font-bold text-white"
+              className="flex h-full w-full items-center justify-center text-2xl font-bold text-white"
               style={{
                 backgroundColor: tableColor ?? fallbackAvatarBg(displayName),
               }}
@@ -73,16 +73,21 @@ export function GreetingSpeechBubble({
 
       <div className="relative min-w-0 flex-1">
         <div
-          className="absolute -left-1.5 bottom-4 h-3 w-3 rotate-45 bg-white shadow-sm"
+          className="absolute -left-2.5 bottom-10 h-5 w-5 rotate-45 bg-white shadow-sm"
           aria-hidden
         />
-        <div className="rounded-2xl rounded-bl-md bg-white px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.22)]">
-          <p className="text-base font-medium leading-relaxed text-zinc-900 whitespace-pre-wrap md:text-lg">
+        <div className="rounded-3xl rounded-bl-lg bg-white px-8 py-6 shadow-[0_12px_48px_rgba(0,0,0,0.28)]">
+          <p className="text-2xl font-bold leading-tight tracking-tight text-zinc-900 md:text-3xl">
+            {isMission ? teamName : displayName}
+          </p>
+          <p className="mt-3 text-xl font-medium italic leading-relaxed text-zinc-800 whitespace-pre-wrap md:text-2xl">
             {greeting.message}
           </p>
-          <p className="mt-1.5 text-xs font-semibold tracking-wide text-zinc-500">
-            {isMission ? teamName : `— ${displayName}`}
-          </p>
+          {!isMission ? (
+            <p className="mt-3 text-base font-semibold tracking-wide text-zinc-500">
+              — {displayName}
+            </p>
+          ) : null}
         </div>
       </div>
     </div>

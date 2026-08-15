@@ -19,7 +19,7 @@ function RankEmblem({ rank }: { rank: number }) {
   if (rank === 1) {
     return (
       <span
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-amber-600 text-sm font-black text-amber-950 shadow-[0_2px_8px_rgba(0,0,0,0.25)] ring-2 ring-white/50"
+        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-amber-600 text-2xl font-black text-amber-950 shadow-[0_3px_12px_rgba(0,0,0,0.3)] ring-[3px] ring-white/50"
         aria-label="Rank 1"
       >
         1
@@ -29,7 +29,7 @@ function RankEmblem({ rank }: { rank: number }) {
   if (rank === 2) {
     return (
       <span
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-zinc-200 to-zinc-400 text-sm font-black text-zinc-800 shadow-[0_2px_8px_rgba(0,0,0,0.2)] ring-2 ring-white/40"
+        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-zinc-200 to-zinc-400 text-2xl font-black text-zinc-800 shadow-[0_3px_12px_rgba(0,0,0,0.25)] ring-[3px] ring-white/40"
         aria-label="Rank 2"
       >
         2
@@ -39,7 +39,7 @@ function RankEmblem({ rank }: { rank: number }) {
   if (rank === 3) {
     return (
       <span
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-300 to-orange-600 text-sm font-black text-orange-950 shadow-[0_2px_8px_rgba(0,0,0,0.2)] ring-2 ring-white/35"
+        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-300 to-orange-600 text-2xl font-black text-orange-950 shadow-[0_3px_12px_rgba(0,0,0,0.25)] ring-[3px] ring-white/35"
         aria-label="Rank 3"
       >
         3
@@ -48,7 +48,7 @@ function RankEmblem({ rank }: { rank: number }) {
   }
   return (
     <span
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black/25 text-sm font-bold text-white ring-2 ring-white/25"
+      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-black/30 text-2xl font-bold text-white ring-[3px] ring-white/25"
       aria-label={`Rank ${rank}`}
     >
       {rank}
@@ -84,40 +84,54 @@ const TeamCard = forwardRef<HTMLDivElement, TeamCardProps>(function TeamCard(
       layout="position"
       layoutId={entry.tableId}
       transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-      className="relative min-h-0 flex-1 overflow-hidden rounded-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]"
+      className="relative min-h-0 flex-1 overflow-hidden"
       style={{ flex: '1 1 0' }}
     >
       <div className="absolute inset-0" style={{ background: gradient }} aria-hidden />
-      <div className="relative flex h-full min-h-[88px] items-center gap-3 px-3 py-2.5">
-        <RankEmblem rank={rank} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-white drop-shadow-sm">{entry.tableName}</p>
-          <div className="mt-1 flex items-center gap-1.5">
-            <RewardUnitIcon size={14} displayVariant="onDark" />
-            <span className="text-lg font-bold tabular-nums text-white tracking-tight">
+
+      <div className="relative flex h-full min-h-0 flex-col">
+        {/* Header row: rank left, name center, score right */}
+        <div className="relative z-10 flex shrink-0 items-center gap-3 px-4 pt-4">
+          <RankEmblem rank={rank} />
+          <p className="absolute left-1/2 top-4 max-w-[calc(100%-8rem)] -translate-x-1/2 truncate text-center text-xl font-bold text-white drop-shadow-md md:text-2xl">
+            {entry.tableName}
+          </p>
+          <div className="ml-auto flex items-center gap-2">
+            <RewardUnitIcon size={28} displayVariant="onDark" />
+            <span className="text-3xl font-bold tabular-nums text-white tracking-tight">
               {entry.totalPoints}
             </span>
-            <span className="text-[10px] font-medium text-white/70">{unitLabel}</span>
+            <span className="sr-only">{unitLabel}</span>
             {pointsDelta != null && pointsDelta > 0 ? (
               <motion.span
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-[11px] font-bold tabular-nums text-amber-200"
+                className="text-sm font-bold tabular-nums text-amber-200"
               >
                 +{pointsDelta}
               </motion.span>
             ) : null}
           </div>
         </div>
-        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-white/30 bg-white/10 shadow-md">
+
+        {/* Hero image: large, bottom-centered */}
+        <div className="relative mt-auto flex flex-1 items-end justify-center overflow-hidden px-2 pb-0 pt-2">
           {heroUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={heroUrl} alt="" className="h-full w-full object-cover" />
+            <img
+              src={heroUrl}
+              alt=""
+              className="max-h-[85%] w-auto max-w-[90%] object-contain object-bottom drop-shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+            />
           ) : avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+            <img
+              src={avatarUrl}
+              alt=""
+              className="max-h-[70%] w-auto max-w-[70%] object-contain object-bottom drop-shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+            />
           ) : (
-            <span className="flex h-full w-full items-center justify-center text-xs font-bold text-white/90">
+            <span className="mb-4 flex h-24 w-24 items-center justify-center rounded-2xl border border-white/30 bg-white/10 text-2xl font-bold text-white/90 shadow-md">
               {tableInitials(entry.tableName)}
             </span>
           )}
@@ -148,17 +162,15 @@ export function LeaderboardSidebar({
   error: string | null
   teamCardRefs: MutableRefObject<Record<string, HTMLDivElement | null>>
 }) {
-  const teamCount = entries.length
-
   return (
-    <aside className="flex h-full min-h-0 w-[min(100%,300px)] shrink-0 flex-col gap-2 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 p-3">
-      <div className="flex shrink-0 items-center justify-between">
-        <h2 className="text-sm font-semibold tracking-tight text-white">Leaderboard</h2>
+    <aside className="col-span-4 flex h-full min-h-0 flex-col bg-zinc-950">
+      <div className="relative flex shrink-0 items-center justify-center border-b border-zinc-800 bg-zinc-900/80 px-4 py-3">
+        <h2 className="text-lg font-bold tracking-tight text-white">Leaderboard</h2>
         {!isFullscreen ? (
           <button
             type="button"
             onClick={onRequestFullscreen}
-            className="rounded-lg bg-white/8 px-2 py-1 text-[10px] font-medium text-zinc-400 transition hover:bg-white/12 hover:text-zinc-200"
+            className="absolute right-4 rounded-lg bg-white/8 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-white/12 hover:text-zinc-200"
             aria-label="Enter fullscreen"
           >
             Fullscreen
@@ -167,10 +179,12 @@ export function LeaderboardSidebar({
       </div>
 
       {error && entries.length > 0 ? (
-        <p className="text-[10px] text-amber-400/90" role="status">Live update paused</p>
+        <p className="shrink-0 bg-zinc-900 px-4 py-1 text-center text-xs text-amber-400/90" role="status">
+          Live update paused
+        </p>
       ) : null}
 
-      <motion.div layout className="flex min-h-0 flex-1 flex-col gap-2">
+      <motion.div layout className="flex min-h-0 flex-1 flex-col">
         {loading && entries.length === 0 ? (
           <p className="py-8 text-center text-sm text-zinc-500">Loading…</p>
         ) : null}
@@ -199,12 +213,6 @@ export function LeaderboardSidebar({
           )
         })}
       </motion.div>
-
-      {teamCount > 0 ? (
-        <p className="shrink-0 text-center text-[10px] text-zinc-600">
-          {teamCount} team{teamCount === 1 ? '' : 's'}
-        </p>
-      ) : null}
     </aside>
   )
 }

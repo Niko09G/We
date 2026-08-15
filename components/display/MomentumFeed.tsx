@@ -45,14 +45,14 @@ function TeamChipAvatar({
 
   return (
     <span
-      className="inline-flex h-7 w-7 shrink-0 overflow-hidden rounded-full border border-white/25"
+      className="inline-flex h-14 w-14 shrink-0 overflow-hidden rounded-full border-2 border-white/30"
       style={{ background: bg }}
     >
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={url} alt="" className="h-full w-full object-cover" />
       ) : (
-        <span className="flex h-full w-full items-center justify-center text-[10px] font-bold text-white">
+        <span className="flex h-full w-full items-center justify-center text-sm font-bold text-white">
           {tableInitials(name)}
         </span>
       )}
@@ -81,7 +81,7 @@ export function MomentumFeed({
 
   return (
     <div
-      className="pointer-events-none absolute right-4 top-4 z-20 flex w-[min(100%,280px)] flex-col items-end gap-2"
+      className="pointer-events-none absolute right-6 top-6 z-20 flex w-[min(100%,520px)] flex-col items-end gap-3"
       aria-live="polite"
     >
       <AnimatePresence mode="popLayout">
@@ -96,9 +96,9 @@ export function MomentumFeed({
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 56, scale: 0.92 }}
               transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-              className="pointer-events-auto w-full rounded-full border border-white/10 bg-black/30 px-2.5 py-2 shadow-lg backdrop-blur-md"
+              className="pointer-events-auto w-full rounded-full border border-white/15 bg-black/35 px-4 py-3 shadow-xl backdrop-blur-md"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <TeamChipAvatar
                   name={item.tableName}
                   avatarUrl={avatar}
@@ -106,16 +106,16 @@ export function MomentumFeed({
                   visual={visual ?? null}
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[11px] font-semibold text-white">
-                    {item.tableName}
+                  <p className="truncate text-lg font-bold text-white md:text-xl">
+                    Completed {item.missionTitle}
                   </p>
-                  <p className="truncate text-[10px] text-white/75">{item.missionTitle}</p>
+                  <p className="truncate text-base text-white/80">{item.tableName}</p>
                 </div>
                 <span
-                  className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold tabular-nums text-amber-200"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-3 py-1.5 text-lg font-bold tabular-nums text-amber-200"
                 >
                   +{item.points}
-                  <RewardUnitIcon size={10} displayVariant="onDark" />
+                  <RewardUnitIcon size={18} displayVariant="onDark" />
                   <span className="sr-only">{unitLabel}</span>
                 </span>
               </div>
