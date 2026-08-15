@@ -131,7 +131,7 @@ export default function DisplayPage() {
   const mainCanvasRef = useRef<HTMLDivElement>(null)
   const greetingsRef = useRef<GreetingRow[]>([])
   const currentIndexRef = useRef(0)
-  const rotateIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const rotateIntervalRef = useRef<number | ReturnType<typeof setInterval> | null>(null)
   const prevLeaderboardRef = useRef<LeaderboardEntry[] | null>(null)
   const teamCardRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const animClearRef = useRef<ReturnType<typeof setTimeout> | null>(null)
