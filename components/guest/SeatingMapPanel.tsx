@@ -189,17 +189,17 @@ function GuestTableSeatMap({
   onSelectGuest: (guest: GuestWithTable) => void
   tableLabel: React.ReactNode
 }) {
-  const rowRef = useRef<HTMLDivElement>(null)
-  const [rowW, setRowW] = useState(0)
+  const middleRef = useRef<HTMLDivElement>(null)
+  const [middleW, setMiddleW] = useState(0)
 
   const safeCapacity = Math.min(MAX_SEAT_MAP_CAPACITY, Math.max(1, Math.trunc(capacity)))
 
   useLayoutEffect(() => {
-    const el = rowRef.current
+    const el = middleRef.current
     if (!el) return
-    const ro = new ResizeObserver(() => setRowW(el.clientWidth))
+    const ro = new ResizeObserver(() => setMiddleW(el.clientWidth))
     ro.observe(el)
-    setRowW(el.clientWidth)
+    setMiddleW(el.clientWidth)
     return () => ro.disconnect()
   }, [safeCapacity])
 
@@ -216,12 +216,12 @@ function GuestTableSeatMap({
     computeFourSideCounts(safeCapacity)
   const baseSizing = seatSizingForSideCounts(topCount, bottomCount)
   const topSizing =
-    rowW > 0 && topCount > 0
-      ? seatSizingForRowWidthWithSideCounts(topCount, bottomCount, rowW, 'top')
+    middleW > 0 && topCount > 0
+      ? seatSizingForRowWidthWithSideCounts(topCount, bottomCount, middleW, 'top')
       : baseSizing
   const bottomSizing =
-    rowW > 0 && bottomCount > 0
-      ? seatSizingForRowWidthWithSideCounts(topCount, bottomCount, rowW, 'bottom')
+    middleW > 0 && bottomCount > 0
+      ? seatSizingForRowWidthWithSideCounts(topCount, bottomCount, middleW, 'bottom')
       : baseSizing
   const endCapSeatPx = Math.max(topSizing.seatPx, bottomSizing.seatPx)
   const layoutMetrics = guestTableSeatMapMetrics(topSizing, bottomSizing, {
@@ -297,48 +297,47 @@ function GuestTableSeatMap({
 
   return (
     <div
-      ref={rowRef}
-      className="relative w-full px-1"
+      className="w-full min-w-0 px-1"
       style={{
         paddingTop: layoutMetrics.edgePaddingTop,
         paddingBottom: layoutMetrics.edgePaddingBottom,
-        paddingLeft: layoutMetrics.edgePaddingLeft,
-        paddingRight: layoutMetrics.edgePaddingRight,
       }}
     >
-      <div
-        className="relative w-full"
-        style={{ minHeight: layoutMetrics.centerBandPx }}
-      >
-        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-[2] flex -translate-y-1/2 items-center justify-center gap-2 px-1">
-          {leftEndSeat != null ? (
-            <div
-              className="pointer-events-auto shrink-0"
-              style={{ marginRight: `-${Math.ceil(endCapSeatPx / 4)}px` }}
-            >
-              {renderSeat(leftEndSeat, endCapSeatPx)}
-            </div>
-          ) : null}
-          <div className="min-w-0 flex-1 px-2 text-center">{tableLabel}</div>
-          {rightEndSeat != null ? (
-            <div
-              className="pointer-events-auto shrink-0"
-              style={{ marginLeft: `-${Math.ceil(endCapSeatPx / 4)}px` }}
-            >
-              {renderSeat(rightEndSeat, endCapSeatPx)}
-            </div>
-          ) : null}
+      <div className="grid w-full min-w-0 grid-cols-[auto_1fr_auto] items-center gap-x-0.5">
+        <div
+          className="flex shrink-0 items-center justify-center self-stretch"
+          style={{ width: leftEndSeat != null ? endCapSeatPx : 0 }}
+        >
+          {leftEndSeat != null ? renderSeat(leftEndSeat, endCapSeatPx) : null}
         </div>
-        {topCount > 0 ? (
-          <div className="pointer-events-auto absolute inset-x-0 top-0 z-[3] -translate-y-1/2 px-0.5">
-            {renderSide(topStart, topEnd, topSizing)}
+
+        <div ref={middleRef} className="min-w-0 self-stretch">
+          <div
+            className="relative flex min-w-0 flex-col"
+            style={{ minHeight: layoutMetrics.centerBandPx }}
+          >
+            {topCount > 0 ? (
+              <div className="pointer-events-auto z-[3] -translate-y-1/2">
+                {renderSide(topStart, topEnd, topSizing)}
+              </div>
+            ) : null}
+            <div className="flex min-h-[30px] flex-1 items-center justify-center px-2 text-center">
+              {tableLabel}
+            </div>
+            {bottomCount > 0 ? (
+              <div className="pointer-events-auto z-[3] translate-y-1/2">
+                {renderSide(bottomStart, bottomEnd, bottomSizing)}
+              </div>
+            ) : null}
           </div>
-        ) : null}
-        {bottomCount > 0 ? (
-          <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-[3] translate-y-1/2 px-0.5">
-            {renderSide(bottomStart, bottomEnd, bottomSizing)}
-          </div>
-        ) : null}
+        </div>
+
+        <div
+          className="flex shrink-0 items-center justify-center self-stretch"
+          style={{ width: rightEndSeat != null ? endCapSeatPx : 0 }}
+        >
+          {rightEndSeat != null ? renderSeat(rightEndSeat, endCapSeatPx) : null}
+        </div>
       </div>
     </div>
   )

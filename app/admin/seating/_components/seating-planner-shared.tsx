@@ -5,8 +5,11 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import type { AttendeeRow } from '@/lib/admin-attendees'
 import {
   clamp,
-  computeSideCounts,
-  seatSizing,
+  computeFourSideCounts,
+  guestTableSeatMapMetrics,
+  MAX_SEAT_MAP_CAPACITY,
+  seatSizingForRowWidthWithSideCounts,
+  seatSizingForSideCounts,
 } from '@/lib/seat-map-layout'
 import {
   computePartyExtraGuestsCount,
@@ -138,6 +141,192 @@ export function PartyAvatarCluster({
 
 type SeatRange = { minSeat: number; maxSeat: number }
 
+type SeatMapSharedProps = {
+  bySeat: Map<number, AttendeeRow>
+  partiesOnTable: SeatingParty[]
+  highlightPartyKey: string | null
+  previewSeatRange: SeatRange | null
+  previewGhostInitials: string[]
+  partyForSeat: (seatNum: number) => SeatingParty | undefined
+  showSeatNames: boolean
+  isLarge: boolean
+  onSeatClick:
+    | ((seatNum: number, guest: AttendeeRow | null, anchor: DOMRectReadOnly) => void)
+    | null
+  lockedSeatNums: ReadonlySet<number> | null
+}
+
+function seatRangeOccupied(
+  n: number,
+  bySeat: Map<number, AttendeeRow>,
+  previewSeatRange: SeatRange | null
+) {
+  const filled = bySeat.has(n)
+  const inPreview =
+    previewSeatRange != null && n >= previewSeatRange.minSeat && n <= previewSeatRange.maxSeat
+  return { filled, inPreview }
+}
+
+function AdminSeatBubble({
+  seatNum,
+  seatPx,
+  guest,
+  party,
+  filled,
+  inPreview,
+  ghostInitial,
+  showSeatNames,
+  namePlacement,
+  isActiveGroup,
+  isLocked,
+  onSeatClick,
+}: {
+  seatNum: number
+  seatPx: number
+  guest: AttendeeRow | undefined
+  party: SeatingParty | undefined
+  filled: boolean
+  inPreview: boolean
+  ghostInitial: string
+  showSeatNames: boolean
+  namePlacement: 'above' | 'below' | 'none'
+  isActiveGroup: boolean
+  isLocked: boolean
+  onSeatClick:
+    | ((seatNum: number, guest: AttendeeRow | null, anchor: DOMRectReadOnly) => void)
+    | null
+}) {
+  const title = guest
+    ? `Seat ${seatNum} · ${guest.full_name}${party ? ` · ${party.title}` : ''}`
+    : inPreview
+      ? `Seat ${seatNum} · preview`
+      : `Seat ${seatNum} · empty`
+
+  const ringClass = isActiveGroup ? 'ring-2 ring-[#5b38f2]/25' : ''
+
+  const seatClass = isLocked
+    ? 'border-zinc-500/50 bg-zinc-200/50'
+    : inPreview
+      ? 'border-[#5b38f2]/60 bg-[#5b38f2]/12'
+      : filled
+        ? 'border-[#5b38f2]/30 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]/10'
+        : 'border-dashed border-zinc-200/70 bg-zinc-50/55'
+
+  return (
+    <div className="relative flex flex-col items-center">
+      {showSeatNames && guest && namePlacement === 'above' ? (
+        <span className="absolute -top-5 max-w-[88px] truncate text-center text-[10px] font-medium text-zinc-600">
+          {guest.full_name.split(/\s+/)[0] ?? guest.full_name}
+        </span>
+      ) : null}
+      <div
+        title={title}
+        role={onSeatClick ? 'button' : undefined}
+        tabIndex={onSeatClick ? 0 : undefined}
+        onKeyDown={
+          onSeatClick
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onSeatClick(
+                    seatNum,
+                    guest ?? null,
+                    (e.currentTarget as HTMLElement).getBoundingClientRect()
+                  )
+                }
+              }
+            : undefined
+        }
+        onClick={
+          onSeatClick
+            ? (e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onSeatClick(
+                  seatNum,
+                  guest ?? null,
+                  (e.currentTarget as HTMLElement).getBoundingClientRect()
+                )
+              }
+            : undefined
+        }
+        data-seat-control
+        className={`flex items-center justify-center rounded-full border ${seatClass} ${ringClass} ${onSeatClick ? 'cursor-pointer transition-transform hover:scale-[1.04]' : ''}`}
+        style={{ width: seatPx, height: seatPx }}
+      >
+        {guest ? (
+          guest.photo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={guest.photo_url} alt="" className="h-full w-full rounded-full object-cover" />
+          ) : (
+            <span className="text-[10px] font-semibold text-zinc-900">
+              {initialsFromName(guest.full_name)}
+            </span>
+          )
+        ) : inPreview ? (
+          <span className="text-[10px] font-semibold text-zinc-700/80">{ghostInitial}</span>
+        ) : (
+          <span className="text-[10px] font-semibold text-zinc-400">{seatNum}</span>
+        )}
+        {isLocked ? (
+          <span
+            className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-zinc-800 text-[7px] font-bold text-white"
+            aria-hidden
+          >
+            L
+          </span>
+        ) : null}
+      </div>
+      {showSeatNames && guest && namePlacement === 'below' ? (
+        <span className="mt-1 max-w-[88px] truncate text-center text-[10px] font-medium text-zinc-600">
+          {guest.full_name.split(/\s+/)[0] ?? guest.full_name}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+function EndCapSeat({
+  seatNum,
+  seatPx,
+  shared,
+}: {
+  seatNum: number
+  seatPx: number
+  shared: SeatMapSharedProps
+}) {
+  const guest = shared.bySeat.get(seatNum)
+  const party = shared.partyForSeat(seatNum)
+  const { filled, inPreview } = seatRangeOccupied(
+    seatNum,
+    shared.bySeat,
+    shared.previewSeatRange
+  )
+  const isActiveGroup =
+    party != null && shared.highlightPartyKey != null && party.key === shared.highlightPartyKey
+  const ghostInitial =
+    shared.previewGhostInitials[
+      (seatNum + shared.previewGhostInitials.length) % Math.max(1, shared.previewGhostInitials.length)
+    ] ?? '?'
+
+  return (
+    <AdminSeatBubble
+      seatNum={seatNum}
+      seatPx={seatPx}
+      guest={guest}
+      party={party}
+      filled={filled}
+      inPreview={inPreview}
+      ghostInitial={ghostInitial}
+      showSeatNames={shared.showSeatNames}
+      namePlacement={shared.showSeatNames && guest ? 'above' : 'none'}
+      isActiveGroup={isActiveGroup}
+      isLocked={shared.lockedSeatNums?.has(seatNum) ?? false}
+      onSeatClick={shared.onSeatClick}
+    />
+  )
+}
+
 export function AdminTableTwinSeatMap({
   capacity,
   attendeesAtTable,
@@ -165,49 +354,103 @@ export function AdminTableTwinSeatMap({
   /** Seat numbers locked for assignment (session UI; persist later). */
   lockedSeatNums?: ReadonlySet<number> | null
 }) {
-  const fillRef = useRef<HTMLDivElement>(null)
-  const [fillW, setFillW] = useState(0)
+  const middleRef = useRef<HTMLDivElement>(null)
+  const [middleW, setMiddleW] = useState(0)
+
+  const safeCapacity = Math.min(MAX_SEAT_MAP_CAPACITY, Math.max(1, Math.trunc(capacity)))
 
   useLayoutEffect(() => {
-    if (size !== 'large') return
-    const el = fillRef.current
+    const el = middleRef.current
     if (!el) return
-    const ro = new ResizeObserver(() => setFillW(el.clientWidth))
+    const ro = new ResizeObserver(() => setMiddleW(el.clientWidth))
     ro.observe(el)
-    setFillW(el.clientWidth)
+    setMiddleW(el.clientWidth)
     return () => ro.disconnect()
-  }, [size, capacity])
+  }, [safeCapacity])
 
   const bySeat = new Map<number, AttendeeRow>()
   for (const r of attendeesAtTable) {
     const n = r.seat_number
     if (typeof n === 'number' && Number.isFinite(n)) {
       const sn = Math.trunc(n)
-      if (sn >= 1 && sn <= capacity) bySeat.set(sn, r)
+      if (sn >= 1 && sn <= safeCapacity) bySeat.set(sn, r)
     }
   }
 
-  const { topCount, bottomStart } = computeSideCounts(capacity)
-  const bottomCount = capacity - (bottomStart - 1)
-  const { seatPx, gapPx } = seatSizing(capacity)
-  let effectiveSeatPxTop = size === 'large' ? seatPx + 10 : seatPx
-  let effectiveSeatPxBottom = effectiveSeatPxTop
-  let effectiveGapPx = size === 'large' ? gapPx + 4 : gapPx
+  const {
+    leftEndSeat,
+    topStart,
+    topCount,
+    rightEndSeat,
+    bottomStart,
+    bottomCount,
+  } = computeFourSideCounts(safeCapacity)
 
-  if (size === 'large' && fillW > 0 && topCount > 0 && bottomCount > 0) {
-    const inner = Math.max(0, fillW - 4)
-    effectiveGapPx = gapPx
-    effectiveSeatPxTop = clamp(
-      Math.floor((inner - (topCount - 1) * effectiveGapPx) / topCount),
-      26,
-      58
-    )
-    effectiveSeatPxBottom = clamp(
-      Math.floor((inner - (bottomCount - 1) * effectiveGapPx) / bottomCount),
-      26,
-      58
-    )
+  const topEnd = topCount > 0 ? topStart + topCount - 1 : topStart - 1
+  const bottomEnd = bottomCount > 0 ? bottomStart + bottomCount - 1 : bottomStart - 1
+
+  const baseSizing = seatSizingForSideCounts(topCount, bottomCount)
+  const topSizing =
+    middleW > 0 && topCount > 0
+      ? seatSizingForRowWidthWithSideCounts(topCount, bottomCount, middleW, 'top')
+      : baseSizing
+  const bottomSizing =
+    middleW > 0 && bottomCount > 0
+      ? seatSizingForRowWidthWithSideCounts(topCount, bottomCount, middleW, 'bottom')
+      : baseSizing
+
+  const largeBoost = size === 'large' ? 8 : 0
+  let effectiveSeatPxTop = Math.min(
+    size === 'large' ? 58 : topSizing.seatPx,
+    topSizing.seatPx + largeBoost
+  )
+  let effectiveSeatPxBottom = Math.min(
+    size === 'large' ? 58 : bottomSizing.seatPx,
+    bottomSizing.seatPx + largeBoost
+  )
+  const effectiveGapPxTop = topSizing.gapPx + (size === 'large' ? 2 : 0)
+  const effectiveGapPxBottom = bottomSizing.gapPx + (size === 'large' ? 2 : 0)
+
+  if (middleW > 0) {
+    const minPx = size === 'large' ? 26 : 12
+    if (topCount > 0) {
+      const needed =
+        topCount * effectiveSeatPxTop + Math.max(0, topCount - 1) * effectiveGapPxTop
+      if (needed > middleW) {
+        effectiveSeatPxTop = clamp(
+          Math.floor(
+            (middleW - Math.max(0, topCount - 1) * effectiveGapPxTop) / topCount
+          ),
+          minPx,
+          effectiveSeatPxTop
+        )
+      }
+    }
+    if (bottomCount > 0) {
+      const needed =
+        bottomCount * effectiveSeatPxBottom +
+        Math.max(0, bottomCount - 1) * effectiveGapPxBottom
+      if (needed > middleW) {
+        effectiveSeatPxBottom = clamp(
+          Math.floor(
+            (middleW - Math.max(0, bottomCount - 1) * effectiveGapPxBottom) / bottomCount
+          ),
+          minPx,
+          effectiveSeatPxBottom
+        )
+      }
+    }
   }
+
+  const endCapSeatPx = Math.max(effectiveSeatPxTop, effectiveSeatPxBottom)
+  const layoutMetrics = guestTableSeatMapMetrics(
+    { seatPx: effectiveSeatPxTop, gapPx: effectiveGapPxTop },
+    { seatPx: effectiveSeatPxBottom, gapPx: effectiveGapPxBottom },
+    {
+      seatPx:
+        leftEndSeat != null || rightEndSeat != null ? endCapSeatPx : 0,
+    }
+  )
 
   const previewGhostInitials = (previewGhostMembers ?? []).map((m) =>
     initialsFromName(m.full_name)
@@ -221,55 +464,78 @@ export function AdminTableTwinSeatMap({
     return undefined
   }
 
+  const shared: SeatMapSharedProps = {
+    bySeat,
+    partiesOnTable,
+    highlightPartyKey,
+    previewSeatRange,
+    previewGhostInitials,
+    partyForSeat,
+    showSeatNames,
+    isLarge: size === 'large',
+    onSeatClick,
+    lockedSeatNums,
+  }
+
   const rowWidthTop =
     Math.max(0, topCount) * effectiveSeatPxTop +
-    Math.max(0, topCount - 1) * effectiveGapPx
+    Math.max(0, topCount - 1) * effectiveGapPxTop
   const rowWidthBottom =
     Math.max(0, bottomCount) * effectiveSeatPxBottom +
-    Math.max(0, bottomCount - 1) * effectiveGapPx
+    Math.max(0, bottomCount - 1) * effectiveGapPxBottom
 
   return (
-    <div ref={size === 'large' ? fillRef : undefined} className="w-full min-w-0 rounded-none bg-transparent p-0">
-      <div className="grid w-full min-w-0 gap-1">
-        {/* Top row: 1 → N/2 */}
-        <SideRow
-          sideName="top"
-          sideStart={1}
-          sideEnd={topCount}
-          rowWidth={rowWidthTop}
-          seatPx={effectiveSeatPxTop}
-          gapPx={effectiveGapPx}
-          bySeat={bySeat}
-          partiesOnTable={partiesOnTable}
-          highlightPartyKey={highlightPartyKey}
-          previewSeatRange={previewSeatRange}
-          previewGhostInitials={previewGhostInitials}
-          partyForSeat={partyForSeat}
-          showSeatNames={showSeatNames}
-          isLarge={size === 'large'}
-          onSeatClick={onSeatClick}
-          lockedSeatNums={lockedSeatNums}
-        />
+    <div className="w-full min-w-0 rounded-none bg-transparent p-0">
+      <div
+        className="grid w-full min-w-0 grid-cols-[auto_1fr_auto] items-center gap-x-1"
+        style={{
+          paddingTop: layoutMetrics.edgePaddingTop,
+          paddingBottom: layoutMetrics.edgePaddingBottom,
+        }}
+      >
+        <div
+          className="flex shrink-0 items-center justify-center self-stretch"
+          style={{ width: leftEndSeat != null ? endCapSeatPx : 0 }}
+        >
+          {leftEndSeat != null ? (
+            <EndCapSeat seatNum={leftEndSeat} seatPx={endCapSeatPx} shared={shared} />
+          ) : null}
+        </div>
 
-        {/* Bottom row: N/2+1 → N */}
-        <SideRow
-          sideName="bottom"
-          sideStart={bottomStart}
-          sideEnd={capacity}
-          rowWidth={rowWidthBottom}
-          seatPx={effectiveSeatPxBottom}
-          gapPx={effectiveGapPx}
-          bySeat={bySeat}
-          partiesOnTable={partiesOnTable}
-          highlightPartyKey={highlightPartyKey}
-          previewSeatRange={previewSeatRange}
-          previewGhostInitials={previewGhostInitials}
-          partyForSeat={partyForSeat}
-          showSeatNames={showSeatNames}
-          isLarge={size === 'large'}
-          onSeatClick={onSeatClick}
-          lockedSeatNums={lockedSeatNums}
-        />
+        <div ref={middleRef} className="min-w-0 self-stretch">
+          <div
+            className="flex min-w-0 flex-col gap-1"
+            style={{ minHeight: layoutMetrics.centerBandPx }}
+          >
+            <SideRow
+              sideName="top"
+              sideStart={topStart}
+              sideEnd={topEnd}
+              rowWidth={rowWidthTop}
+              seatPx={effectiveSeatPxTop}
+              gapPx={effectiveGapPxTop}
+              shared={shared}
+            />
+            <SideRow
+              sideName="bottom"
+              sideStart={bottomStart}
+              sideEnd={bottomEnd}
+              rowWidth={rowWidthBottom}
+              seatPx={effectiveSeatPxBottom}
+              gapPx={effectiveGapPxBottom}
+              shared={shared}
+            />
+          </div>
+        </div>
+
+        <div
+          className="flex shrink-0 items-center justify-center self-stretch"
+          style={{ width: rightEndSeat != null ? endCapSeatPx : 0 }}
+        >
+          {rightEndSeat != null ? (
+            <EndCapSeat seatNum={rightEndSeat} seatPx={endCapSeatPx} shared={shared} />
+          ) : null}
+        </div>
       </div>
     </div>
   )
@@ -282,16 +548,7 @@ function SideRow({
   rowWidth,
   seatPx,
   gapPx,
-  bySeat,
-  partiesOnTable,
-  highlightPartyKey,
-  previewSeatRange,
-  previewGhostInitials,
-  partyForSeat,
-  showSeatNames,
-  isLarge,
-  onSeatClick,
-  lockedSeatNums,
+  shared,
 }: {
   sideName: 'top' | 'bottom'
   sideStart: number
@@ -299,39 +556,33 @@ function SideRow({
   rowWidth: number
   seatPx: number
   gapPx: number
-  bySeat: Map<number, AttendeeRow>
-  partiesOnTable: SeatingParty[]
-  highlightPartyKey: string | null
-  previewSeatRange: SeatRange | null
-  previewGhostInitials: string[]
-  partyForSeat: (seatNum: number) => SeatingParty | undefined
-  showSeatNames: boolean
-  isLarge: boolean
-  onSeatClick:
-    | ((seatNum: number, guest: AttendeeRow | null, anchor: DOMRectReadOnly) => void)
-    | null
-  lockedSeatNums: ReadonlySet<number> | null
+  shared: SeatMapSharedProps
 }) {
   const count = Math.max(0, sideEnd - sideStart + 1)
   if (count <= 0) {
     return <div className="h-[30px]" aria-hidden />
   }
 
-  const seatRangeOccupied = (n: number) => {
-    const filled = bySeat.has(n)
-    const inPreview =
-      previewSeatRange != null && n >= previewSeatRange.minSeat && n <= previewSeatRange.maxSeat
-    return { filled, inPreview }
-  }
+  const {
+    bySeat,
+    partiesOnTable,
+    highlightPartyKey,
+    previewSeatRange,
+    previewGhostInitials,
+    partyForSeat,
+    showSeatNames,
+    isLarge,
+    onSeatClick,
+    lockedSeatNums,
+  } = shared
 
   return (
-    <div className="relative w-full">
-      <div
-        className="flex w-full items-center justify-start"
-        style={{ width: rowWidth }}
-      >
-        <div className={`relative w-full ${isLarge ? 'h-[108px]' : 'h-[72px]'}`}>
-          {/* Party brackets */}
+    <div className="relative w-full min-w-0">
+      <div className="mx-auto flex w-full max-w-full items-center justify-center">
+        <div
+          className={`relative shrink-0 ${isLarge ? 'h-[108px]' : 'h-[72px]'}`}
+          style={{ width: rowWidth, maxWidth: '100%' }}
+        >
           {partiesOnTable.map((p) => {
             if (p.minSeat == null || p.maxSeat == null) return null
             if (p.members.length <= 1) return null
@@ -363,7 +614,8 @@ function SideRow({
                     : 'border-zinc-300/80'
 
             const centerSeat = (p.minSeat + p.maxSeat) / 2
-            const showLabel = width >= seatPx * 2 && centerSeat >= sideStart && centerSeat <= sideEnd
+            const showLabel =
+              width >= seatPx * 2 && centerSeat >= sideStart && centerSeat <= sideEnd
 
             return (
               <div
@@ -373,12 +625,10 @@ function SideRow({
               >
                 <div className={`absolute left-0 top-0 h-3 w-0 border-l-2 ${colorClass}`} />
                 <div className={`absolute right-0 top-0 h-3 w-0 border-r-2 ${colorClass}`} />
-                <div
-                  className={`absolute left-0 top-0 h-0.5 w-full border-t-2 ${colorClass}`}
-                />
+                <div className={`absolute left-0 top-0 h-0.5 w-full border-t-2 ${colorClass}`} />
                 {showLabel ? (
                   <span
-                    className={`absolute -top-2 left-1/2 -translate-x-1/2 max-w-[86px] -translate-y-0 whitespace-nowrap overflow-hidden text-ellipsis rounded-full px-1.5 py-0.5 text-[9px] font-semibold shadow-sm ${
+                    className={`absolute -top-2 left-1/2 max-w-[86px] -translate-x-1/2 -translate-y-0 overflow-hidden text-ellipsis whitespace-nowrap rounded-full px-1.5 py-0.5 text-[9px] font-semibold shadow-sm ${
                       isActive ? 'bg-white text-zinc-800' : 'bg-white text-zinc-700'
                     }`}
                   >
@@ -389,7 +639,6 @@ function SideRow({
             )
           })}
 
-          {/* Seats */}
           <div
             className={`absolute left-0 flex items-center justify-start ${isLarge ? 'top-8' : 'top-5'}`}
             style={{ gap: `${gapPx}px` }}
@@ -398,103 +647,37 @@ function SideRow({
               const seatNum = sideStart + i
               const guest = bySeat.get(seatNum)
               const party = partyForSeat(seatNum)
-              const { filled, inPreview } = seatRangeOccupied(seatNum)
-              const isActiveGroup = party != null && highlightPartyKey != null && party.key === highlightPartyKey
-              const ghostInitial = previewGhostInitials[(seatNum + previewGhostInitials.length) % Math.max(1, previewGhostInitials.length)] ?? '?'
-
-              const title = guest
-                ? `Seat ${seatNum} · ${guest.full_name}${party ? ` · ${party.title}` : ''}`
-                : inPreview
-                  ? `Seat ${seatNum} · preview`
-                  : `Seat ${seatNum} · empty`
-
-              const ringClass = isActiveGroup
-                ? 'ring-2 ring-[#5b38f2]/25'
-                : ''
-
-              const isLocked = lockedSeatNums?.has(seatNum) ?? false
-              const seatClass = isLocked
-                ? 'border-zinc-500/50 bg-zinc-200/50'
-                : inPreview
-                  ? 'border-[#5b38f2]/60 bg-[#5b38f2]/12'
-                  : filled
-                    ? 'border-[#5b38f2]/30 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]/10'
-                    : 'border-dashed border-zinc-200/70 bg-zinc-50/55'
+              const { filled, inPreview } = seatRangeOccupied(seatNum, bySeat, previewSeatRange)
+              const isActiveGroup =
+                party != null && highlightPartyKey != null && party.key === highlightPartyKey
+              const ghostInitial =
+                previewGhostInitials[
+                  (seatNum + previewGhostInitials.length) %
+                    Math.max(1, previewGhostInitials.length)
+                ] ?? '?'
 
               return (
-                <div key={seatNum} className="relative flex flex-col items-center">
-                  {showSeatNames && guest ? (
-                    <span
-                      className={`absolute max-w-[88px] truncate text-center text-[10px] font-medium text-zinc-600 ${
-                        sideName === 'top' ? '-top-5' : 'top-[calc(100%+4px)]'
-                      }`}
-                    >
-                      {guest.full_name.split(/\s+/)[0] ?? guest.full_name}
-                    </span>
-                  ) : null}
-                  <div
-                    title={title}
-                    role={onSeatClick ? 'button' : undefined}
-                    tabIndex={onSeatClick ? 0 : undefined}
-                    onKeyDown={
-                      onSeatClick
-                        ? (e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              onSeatClick(seatNum, guest ?? null, (e.currentTarget as HTMLElement).getBoundingClientRect())
-                            }
-                          }
-                        : undefined
-                    }
-                    onClick={
-                      onSeatClick
-                        ? (e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            onSeatClick(
-                              seatNum,
-                              guest ?? null,
-                              (e.currentTarget as HTMLElement).getBoundingClientRect()
-                            )
-                          }
-                        : undefined
-                    }
-                    data-seat-control
-                    className={`flex items-center justify-center rounded-full border ${seatClass} ${ringClass} ${onSeatClick ? 'cursor-pointer transition-transform hover:scale-[1.04]' : ''}`}
-                    style={{ width: seatPx, height: seatPx }}
-                  >
-                    {guest ? (
-                      guest.photo_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={guest.photo_url}
-                          alt=""
-                          className="h-full w-full rounded-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-[10px] font-semibold text-zinc-900">
-                          {initialsFromName(guest.full_name)}
-                        </span>
-                      )
-                    ) : inPreview ? (
-                      <span className="text-[10px] font-semibold text-zinc-700/80">
-                        {ghostInitial}
-                      </span>
-                    ) : (
-                      <span className={`text-[10px] font-semibold text-zinc-400`}>
-                        {seatNum}
-                      </span>
-                    )}
-                    {isLocked ? (
-                      <span
-                        className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-zinc-800 text-[7px] font-bold text-white"
-                        aria-hidden
-                      >
-                        L
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
+                <AdminSeatBubble
+                  key={seatNum}
+                  seatNum={seatNum}
+                  seatPx={seatPx}
+                  guest={guest}
+                  party={party}
+                  filled={filled}
+                  inPreview={inPreview}
+                  ghostInitial={ghostInitial}
+                  showSeatNames={showSeatNames}
+                  namePlacement={
+                    showSeatNames && guest
+                      ? sideName === 'top'
+                        ? 'above'
+                        : 'below'
+                      : 'none'
+                  }
+                  isActiveGroup={isActiveGroup}
+                  isLocked={lockedSeatNums?.has(seatNum) ?? false}
+                  onSeatClick={onSeatClick}
+                />
               )
             })}
           </div>

@@ -1,4 +1,4 @@
-/** Shared twin-row seat layout: top 1..floor(N/2), bottom floor(N/2)+1..N. */
+/** Shared table seat layout: left end-cap, top row, right end-cap, bottom row (see computeFourSideCounts). */
 
 export const MAX_SEAT_MAP_CAPACITY = 40
 
@@ -83,8 +83,7 @@ export function seatSizingForSideCounts(
 }
 
 export function seatSizing(capacity: number): { seatPx: number; gapPx: number } {
-  const { topCount, bottomStart } = computeSideCounts(capacity)
-  const bottomCount = capacity - (bottomStart - 1)
+  const { topCount, bottomCount } = computeFourSideCounts(capacity)
   return seatSizingForSideCounts(topCount, bottomCount)
 }
 
