@@ -1,8 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { lockBodyScroll, unlockBodyScroll } from '@/lib/body-scroll-lock'
 import { compressImage } from '@/lib/image-compress'
 import {
   isAcceptedImageType,
@@ -188,8 +187,6 @@ export function MissionModal({
   /** HUD points before this submission’s reward; avoids refetch jumping the count before the flight. */
   const [rewardDisplayBase, setRewardDisplayBase] = useState<number | null>(null)
   const [rewardClaimSummaryVisible, setRewardClaimSummaryVisible] = useState(false)
-  const [isClosing, setIsClosing] = useState(false)
-  const isClosingRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const claimRewardBtnRef = useRef<HTMLButtonElement>(null)
@@ -221,11 +218,6 @@ export function MissionModal({
   const submission_type = (
     isBeatcoinMission ? 'text' : submissionTypeFromMissionValidation(mission.validation_type)
   ) as SubmissionType
-
-  useEffect(() => {
-    lockBodyScroll()
-    return () => unlockBodyScroll()
-  }, [])
 
   useEffect(() => {
     if (resetSignal <= lastResetApplied.current) return
@@ -445,19 +437,6 @@ export function MissionModal({
     }
   }
 
-  const requestClose = useCallback(() => {
-    if (isClosingRef.current) return
-    isClosingRef.current = true
-    setIsClosing(true)
-    window.setTimeout(() => {
-      onClose()
-    }, 150)
-  }, [onClose])
-
-  const backdropClass = isHeroOverlay
-    ? 'bg-black/50 backdrop-blur-sm'
-    : 'bg-black/60 backdrop-blur-sm'
-
   /** Stats row on gradient HUD (always light text on category gradient). */
   const hudGradientStatsClass =
     'text-[0.9rem] font-bold tabular-nums tracking-tight text-white sm:text-[1rem]'
@@ -482,11 +461,6 @@ export function MissionModal({
     ? 'flex h-11 w-11 items-center justify-center rounded-full border border-white/45 bg-white/12 text-2xl font-light leading-none text-white backdrop-blur-sm transition hover:bg-white/22 active:scale-[0.98]'
     : 'inline-flex h-11 w-11 items-center justify-center rounded-full bg-black text-2xl font-normal leading-none text-white transition hover:bg-zinc-800 active:scale-[0.98]'
 
-  const scrollPadClass = isMissionsSection
-    ? 'flex min-h-0 flex-1 flex-col items-stretch justify-start overflow-y-auto overflow-x-hidden overscroll-contain px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(1.35rem,calc(env(safe-area-inset-top)+1rem))] sm:px-6'
-    : 'flex min-h-0 flex-1 flex-col items-stretch justify-start overflow-y-auto overflow-x-hidden overscroll-contain px-14 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-0 sm:px-16'
-
-  /** Scrollable overlay body only — CTAs live in `overlayCtaBarClass` (same band as Done). */
   const cardScrollAreaClass =
     'min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] pl-[10px] pr-3 pb-4 pt-2 sm:pr-4 sm:pt-2.5'
   /** Full-width footer: matches completed-state Done (not nested under scroll padding). */
@@ -828,57 +802,47 @@ export function MissionModal({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-50 overflow-hidden overscroll-none transition-opacity duration-150 ease-out ${
-        isClosing ? 'opacity-0' : 'opacity-100'
-      }`}
+      className="fixed inset-0 z-50 flex cursor-pointer touch-manipulation items-center justify-center overflow-y-auto overscroll-contain bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={
+        rewardHud && tableName ? 'mission-overlay-team-name' : 'mission-modal-title'
+      }
     >
-      <button
-        type="button"
-        className={`fixed inset-0 z-0 m-0 cursor-pointer touch-manipulation appearance-none border-0 p-0 ${backdropClass}`}
-        onClick={requestClose}
-        aria-label="Close dialog"
-      />
-      <div
-        className="relative z-10 flex h-full min-h-0 flex-col pointer-events-none"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={
-          rewardHud && tableName ? 'mission-overlay-team-name' : 'mission-modal-title'
-        }
-      >
-        {isHeroOverlay && onPrev ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onPrev()
-            }}
-            className={`${arrowClass} pointer-events-auto`}
-            aria-label="Previous mission"
-          >
-            ‹
-          </button>
-        ) : null}
-        {isHeroOverlay && onNext ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onNext()
-            }}
-            className={`${arrowClassRight} pointer-events-auto`}
-            aria-label="Next mission"
-          >
-            ›
-          </button>
-        ) : null}
+      {isHeroOverlay && onPrev ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onPrev()
+          }}
+          className={arrowClass}
+          aria-label="Previous mission"
+        >
+          ‹
+        </button>
+      ) : null}
+      {isHeroOverlay && onNext ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onNext()
+          }}
+          className={arrowClassRight}
+          aria-label="Next mission"
+        >
+          ›
+        </button>
+      ) : null}
 
-        <div className={`${scrollPadClass} pointer-events-none`}>
-          <div
-            className={`relative mx-auto flex w-full max-h-[min(96dvh,calc(100dvh-1.5rem))] min-h-0 shrink-0 flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white ${cardMaxClass} pointer-events-auto`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div
+        className={`relative z-10 flex w-full cursor-default flex-col items-center pointer-events-auto ${cardMaxClass}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex w-full max-h-[min(96dvh,calc(100dvh-2rem))] min-h-0 flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {rewardHud ? (
                 <div
                   className="relative shrink-0 overflow-hidden rounded-t-3xl px-4 pb-4 pt-4 sm:px-5 sm:pb-[1.15rem] sm:pt-5"
@@ -1123,7 +1087,7 @@ export function MissionModal({
                           </button>
                           <button
                             type="button"
-                            onClick={requestClose}
+                            onClick={onClose}
                             className={overlaySecondaryCtaClass}
                           >
                             Close
@@ -1143,7 +1107,7 @@ export function MissionModal({
                           </button>
                           <button
                             type="button"
-                            onClick={requestClose}
+                            onClick={onClose}
                             className={overlaySecondaryCtaClass}
                           >
                             Close
@@ -1155,7 +1119,7 @@ export function MissionModal({
                         !canSubmitAnother ? (
                         <button
                           type="button"
-                          onClick={requestClose}
+                          onClick={onClose}
                           className={MISSION_PRIMARY_CTA_CLASS}
                         >
                           Done
@@ -1171,14 +1135,14 @@ export function MissionModal({
                           </button>
                           <button
                             type="button"
-                            onClick={requestClose}
+                            onClick={onClose}
                             className={overlaySecondaryCtaClass}
                           >
                             Close
                           </button>
                         </>
                       ) : (
-                        <button type="button" onClick={requestClose} className={MISSION_PRIMARY_CTA_CLASS}>
+                        <button type="button" onClick={onClose} className={MISSION_PRIMARY_CTA_CLASS}>
                           Done
                         </button>
                       )}
@@ -1469,7 +1433,7 @@ export function MissionModal({
                     <div className={overlayCtaBarClass}>
                       <button
                         type="button"
-                        onClick={requestClose}
+                        onClick={onClose}
                         className={MISSION_PRIMARY_CTA_CLASS}
                       >
                         Got it
@@ -1626,7 +1590,7 @@ export function MissionModal({
                     {missionsEnabled === false ? (
                       <button
                         type="button"
-                        onClick={requestClose}
+                        onClick={onClose}
                         className={MISSION_PRIMARY_CTA_CLASS}
                       >
                         OK
@@ -1634,7 +1598,7 @@ export function MissionModal({
                     ) : completed ? (
                       <button
                         type="button"
-                        onClick={requestClose}
+                        onClick={onClose}
                         className={MISSION_PRIMARY_CTA_CLASS}
                       >
                         Done
@@ -1650,7 +1614,7 @@ export function MissionModal({
                     ) : (
                       <button
                         type="button"
-                        onClick={requestClose}
+                        onClick={onClose}
                         disabled
                         aria-disabled
                         className={MISSION_PRIMARY_CTA_CLASS}
@@ -1664,50 +1628,43 @@ export function MissionModal({
                 )}
               </div>
             </div>
-          </div>
-          {rewardFlights.map((coin) => (
-            <img
-              key={coin.id}
-              ref={(el) => {
-                if (el) flightImgRefs.current.set(coin.id, el)
-                else flightImgRefs.current.delete(coin.id)
-              }}
-              data-reward-flight={coin.id}
-              src={coin.iconUrl}
-              alt=""
-              aria-hidden
-              className="pointer-events-none fixed z-[80] object-contain will-change-transform"
-              style={{
-                width: `${REWARD_FLIGHT_COIN_PX}px`,
-                height: `${REWARD_FLIGHT_COIN_PX}px`,
-                left: coin.startX - REWARD_FLIGHT_COIN_PX / 2,
-                top: coin.startY - REWARD_FLIGHT_COIN_PX / 2,
-                transform: 'translate(0px, 0px)',
-                opacity: 0.98,
-              }}
-            />
-          ))}
-          <div
-            className="pointer-events-auto mt-5 flex w-full shrink-0 flex-col items-center gap-1.5 px-4 pb-2"
-            onClick={(e) => e.stopPropagation()}
+        </div>
+        <div className="mt-5 flex w-full shrink-0 flex-col items-center gap-1.5 pb-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className={closeCircleBtnClass}
+            aria-label="Close"
           >
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                requestClose()
-              }}
-              className={closeCircleBtnClass}
-              aria-label="Close"
-            >
-              <span aria-hidden className="leading-none translate-y-[1px]">
-                ×
-              </span>
-            </button>
-            <span className={closeClusterLabelClass}>Close</span>
-          </div>
+            <span aria-hidden className="leading-none translate-y-[1px]">
+              ×
+            </span>
+          </button>
+          <span className={closeClusterLabelClass}>Close</span>
         </div>
       </div>
+      {rewardFlights.map((coin) => (
+        <img
+          key={coin.id}
+          ref={(el) => {
+            if (el) flightImgRefs.current.set(coin.id, el)
+            else flightImgRefs.current.delete(coin.id)
+          }}
+          data-reward-flight={coin.id}
+          src={coin.iconUrl}
+          alt=""
+          aria-hidden
+          className="pointer-events-none fixed z-[80] object-contain will-change-transform"
+          style={{
+            width: `${REWARD_FLIGHT_COIN_PX}px`,
+            height: `${REWARD_FLIGHT_COIN_PX}px`,
+            left: coin.startX - REWARD_FLIGHT_COIN_PX / 2,
+            top: coin.startY - REWARD_FLIGHT_COIN_PX / 2,
+            transform: 'translate(0px, 0px)',
+            opacity: 0.98,
+          }}
+        />
+      ))}
     </div>,
     document.body
   )

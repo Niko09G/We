@@ -221,7 +221,6 @@ export default function MissionsTablePage({
   const [tableAvatars, setTableAvatars] = useState<Record<string, string>>({})
   const prevLeaderboardRef = useRef<LeaderboardEntry[] | null>(null)
   const momentumCarouselRef = useRef<HTMLDivElement>(null)
-  const missionModalScrollYRef = useRef(0)
 
   const { tablePoints, tableRank, totalTeams } = useMemo(() => {
     const idx = leaderboardRows.findIndex((e) => e.tableId === tableId)
@@ -968,19 +967,10 @@ export default function MissionsTablePage({
     return { done, total: missions.length }
   }, [missions, statusFor])
 
-  const closeMissionModal = useCallback(() => {
-    const scrollY = missionModalScrollYRef.current
-    setSelectedMissionId(null)
-    window.setTimeout(() => {
-      window.scrollTo(0, scrollY)
-    }, 160)
-  }, [])
-
   async function openMissionModal(
     missionId: string,
     opts?: { skipHydrate?: boolean; fromHero?: boolean }
   ) {
-    missionModalScrollYRef.current = window.scrollY
     setMissionOverlayVariant(
       opts?.fromHero === true ? 'hero-greeting' : 'missions-section'
     )
@@ -1671,7 +1661,7 @@ export default function MissionsTablePage({
                     teamEmblemUrl,
                     rankEmblemUrl,
                   }}
-                  onClose={closeMissionModal}
+                  onClose={() => setSelectedMissionId(null)}
                   onPrev={
                     missionOverlayVariant === 'hero-greeting' && hasNav
                       ? () =>
