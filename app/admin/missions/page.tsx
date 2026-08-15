@@ -83,6 +83,10 @@ type MissionForm = {
   add_to_greetings: boolean
   /** UI-only until a missions column exists; not persisted. */
   message_max_chars: string
+  /** When true, mission is assigned to every active table on publish. */
+  assign_all_tables: boolean
+  /** Explicit table IDs when `assign_all_tables` is false (mission_assignments). */
+  target_table_ids: string[]
 }
 
 const CATEGORY_DESCRIPTIONS: Record<ValidationType, string> = {
@@ -179,6 +183,8 @@ function emptyForm(): MissionForm {
     max_submissions_per_table: '',
     add_to_greetings: false,
     message_max_chars: '140',
+    assign_all_tables: true,
+    target_table_ids: [],
   }
 }
 
@@ -205,6 +211,30 @@ function formFromMission(m: MissionRecord): MissionForm {
     max_submissions_per_table: maxSubmissionsDisplayValue(m),
     add_to_greetings: m.add_to_greetings ?? false,
     message_max_chars: '140',
+    assign_all_tables: true,
+    target_table_ids: [],
+  }
+}
+
+function targetTablePillClass(selected: boolean): string {
+  return selected
+    ? 'inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-black px-3 text-[13px] font-medium text-white touch-manipulation transition-colors'
+    : 'inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-[#ebebeb] bg-white px-3 text-[13px] font-medium text-[#171717] touch-manipulation transition-colors hover:border-zinc-300'
+}
+
+function assignmentFormFromMission(
+  missionId: string,
+  activeTableIds: string[],
+  assignmentsByMission: Record<string, string[]>
+): Pick<MissionForm, 'assign_all_tables' | 'target_table_ids'> {
+  const assigned = (assignmentsByMission[missionId] ?? []).filter((id) =>
+    activeTableIds.includes(id)
+  )
+  const allAssigned =
+    activeTableIds.length > 0 && activeTableIds.every((id) => assigned.includes(id))
+  return {
+    assign_all_tables: allAssigned || assigned.length === 0,
+    target_table_ids: allAssigned ? [] : assigned,
   }
 }
 
@@ -614,7 +644,11 @@ export default function MissionsLibraryPage() {
     setOpenMissionColorKey(null)
     setMissionColorPopoverPos(null)
     customizePanelWasOpenRef.current = false
-    setForm(formFromMission(mission))
+    const activeIds = tables.filter((t) => !t.is_archived).map((t) => t.id)
+    setForm({
+      ...formFromMission(mission),
+      ...assignmentFormFromMission(mission.id, activeIds, assignmentsByMission),
+    })
     setEditorOpen(true)
   }
 
@@ -748,13 +782,41 @@ export default function MissionsLibraryPage() {
     setStep(2)
   }
 
+  function toggleTargetTable(tableId: string) {
+    setForm((s) => {
+      if (s.assign_all_tables) {
+        return {
+          ...s,
+          assign_all_tables: false,
+          target_table_ids: [tableId],
+        }
+      }
+      const next = new Set(s.target_table_ids)
+      if (next.has(tableId)) next.delete(tableId)
+      else next.add(tableId)
+      const ids = [...next]
+      const activeIds = activeTableRows.map((t) => t.id)
+      if (ids.length > 0 && activeIds.every((id) => ids.includes(id))) {
+        return { ...s, assign_all_tables: true, target_table_ids: [] }
+      }
+      return { ...s, assign_all_tables: false, target_table_ids: ids }
+    })
+  }
+
   async function onSaveMission() {
     if (!form.title.trim()) {
       showToast('Add a mission title first.', 'error')
       return
     }
     const activeIds = activeTableRows.map((t) => t.id)
-    const desiredTableIds = activeIds
+    const desiredTableIds = form.assign_all_tables
+      ? activeIds
+      : form.target_table_ids.filter((id) => activeIds.includes(id))
+
+    if (desiredTableIds.length === 0) {
+      showToast('Select at least one target table.', 'error')
+      return
+    }
 
     setSaving(true)
     try {
@@ -1987,6 +2049,56 @@ export default function MissionsLibraryPage() {
                                 value={form.approval_mode}
                                 onChange={(v) => setForm((s) => ({ ...s, approval_mode: v }))}
                               />
+                            </div>
+
+                            <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[15px] font-semibold text-zinc-900">Target Tables</p>
+                                <p className="mt-1 text-sm font-medium text-zinc-500">
+                                  Select which tables can view and complete this mission
+                                </p>
+                              </div>
+                              <div
+                                className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2 sm:max-w-[420px]"
+                                role="group"
+                                aria-label="Target tables"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setForm((s) => ({
+                                      ...s,
+                                      assign_all_tables: true,
+                                      target_table_ids: [],
+                                    }))
+                                  }
+                                  className={targetTablePillClass(form.assign_all_tables)}
+                                >
+                                  All Tables
+                                </button>
+                                {activeTableRows.length === 0 ? (
+                                  <span className="text-sm font-medium text-zinc-500">
+                                    No active tables yet
+                                  </span>
+                                ) : (
+                                  activeTableRows.map((t) => {
+                                    const selected =
+                                      form.assign_all_tables || form.target_table_ids.includes(t.id)
+                                    return (
+                                      <button
+                                        key={t.id}
+                                        type="button"
+                                        onClick={() => toggleTargetTable(t.id)}
+                                        className={targetTablePillClass(selected)}
+                                        aria-pressed={selected}
+                                      >
+                                        <AdminTableAvatarChip row={t} className="h-6 w-6" />
+                                        <span className="max-w-[8rem] truncate">{t.name}</span>
+                                      </button>
+                                    )
+                                  })
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
