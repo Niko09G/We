@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { lockBodyScroll, unlockBodyScroll } from '@/lib/body-scroll-lock'
 import { compressImage } from '@/lib/image-compress'
@@ -188,6 +188,8 @@ export function MissionModal({
   /** HUD points before this submission’s reward; avoids refetch jumping the count before the flight. */
   const [rewardDisplayBase, setRewardDisplayBase] = useState<number | null>(null)
   const [rewardClaimSummaryVisible, setRewardClaimSummaryVisible] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
+  const isClosingRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const claimRewardBtnRef = useRef<HTMLButtonElement>(null)
@@ -443,9 +445,18 @@ export function MissionModal({
     }
   }
 
+  const requestClose = useCallback(() => {
+    if (isClosingRef.current) return
+    isClosingRef.current = true
+    setIsClosing(true)
+    window.setTimeout(() => {
+      onClose()
+    }, 150)
+  }, [onClose])
+
   const backdropClass = isHeroOverlay
-    ? 'absolute inset-0 bg-transparent backdrop-blur-xl [background-color:transparent]'
-    : 'absolute inset-0 bg-white/40 backdrop-blur-md'
+    ? 'bg-black/50 backdrop-blur-sm'
+    : 'bg-black/60 backdrop-blur-sm'
 
   /** Stats row on gradient HUD (always light text on category gradient). */
   const hudGradientStatsClass =
@@ -781,10 +792,6 @@ export function MissionModal({
     }
   }, [rewardFlights])
 
-  function handleBackdropDismiss(e: React.MouseEvent<HTMLDivElement>) {
-    if (e.target === e.currentTarget) onClose()
-  }
-
   function renderPrimaryCta(defaultLabel: string) {
     if (success && rewardHud && !showInlineSuccess) {
       if (rewardClaimSummaryVisible) {
@@ -820,11 +827,16 @@ export function MissionModal({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50 overflow-hidden overscroll-none">
-      <div
-        className={`absolute inset-0 z-0 ${backdropClass}`}
-        aria-hidden
-        onClick={handleBackdropDismiss}
+    <div
+      className={`fixed inset-0 z-50 overflow-hidden overscroll-none transition-opacity duration-150 ease-out ${
+        isClosing ? 'opacity-0' : 'opacity-100'
+      }`}
+    >
+      <button
+        type="button"
+        className={`fixed inset-0 z-0 m-0 cursor-pointer touch-manipulation appearance-none border-0 p-0 ${backdropClass}`}
+        onClick={requestClose}
+        aria-label="Close dialog"
       />
       <div
         className="relative z-10 flex h-full min-h-0 flex-col pointer-events-none"
@@ -861,12 +873,9 @@ export function MissionModal({
           </button>
         ) : null}
 
-        <div
-          className={`${scrollPadClass} pointer-events-auto`}
-          onClick={handleBackdropDismiss}
-        >
+        <div className={`${scrollPadClass} pointer-events-none`}>
           <div
-            className={`relative mx-auto flex w-full max-h-[min(96dvh,calc(100dvh-1.5rem))] min-h-0 shrink-0 flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white ${cardMaxClass}`}
+            className={`relative mx-auto flex w-full max-h-[min(96dvh,calc(100dvh-1.5rem))] min-h-0 shrink-0 flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white ${cardMaxClass} pointer-events-auto`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -1114,7 +1123,7 @@ export function MissionModal({
                           </button>
                           <button
                             type="button"
-                            onClick={onClose}
+                            onClick={requestClose}
                             className={overlaySecondaryCtaClass}
                           >
                             Close
@@ -1134,7 +1143,7 @@ export function MissionModal({
                           </button>
                           <button
                             type="button"
-                            onClick={onClose}
+                            onClick={requestClose}
                             className={overlaySecondaryCtaClass}
                           >
                             Close
@@ -1146,7 +1155,7 @@ export function MissionModal({
                         !canSubmitAnother ? (
                         <button
                           type="button"
-                          onClick={onClose}
+                          onClick={requestClose}
                           className={MISSION_PRIMARY_CTA_CLASS}
                         >
                           Done
@@ -1162,14 +1171,14 @@ export function MissionModal({
                           </button>
                           <button
                             type="button"
-                            onClick={onClose}
+                            onClick={requestClose}
                             className={overlaySecondaryCtaClass}
                           >
                             Close
                           </button>
                         </>
                       ) : (
-                        <button type="button" onClick={onClose} className={MISSION_PRIMARY_CTA_CLASS}>
+                        <button type="button" onClick={requestClose} className={MISSION_PRIMARY_CTA_CLASS}>
                           Done
                         </button>
                       )}
@@ -1460,7 +1469,7 @@ export function MissionModal({
                     <div className={overlayCtaBarClass}>
                       <button
                         type="button"
-                        onClick={onClose}
+                        onClick={requestClose}
                         className={MISSION_PRIMARY_CTA_CLASS}
                       >
                         Got it
@@ -1617,7 +1626,7 @@ export function MissionModal({
                     {missionsEnabled === false ? (
                       <button
                         type="button"
-                        onClick={onClose}
+                        onClick={requestClose}
                         className={MISSION_PRIMARY_CTA_CLASS}
                       >
                         OK
@@ -1625,7 +1634,7 @@ export function MissionModal({
                     ) : completed ? (
                       <button
                         type="button"
-                        onClick={onClose}
+                        onClick={requestClose}
                         className={MISSION_PRIMARY_CTA_CLASS}
                       >
                         Done
@@ -1641,7 +1650,7 @@ export function MissionModal({
                     ) : (
                       <button
                         type="button"
-                        onClick={onClose}
+                        onClick={requestClose}
                         disabled
                         aria-disabled
                         className={MISSION_PRIMARY_CTA_CLASS}
@@ -1686,7 +1695,7 @@ export function MissionModal({
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
-                onClose()
+                requestClose()
               }}
               className={closeCircleBtnClass}
               aria-label="Close"

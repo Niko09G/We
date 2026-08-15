@@ -971,9 +971,9 @@ export default function MissionsTablePage({
   const closeMissionModal = useCallback(() => {
     const scrollY = missionModalScrollYRef.current
     setSelectedMissionId(null)
-    requestAnimationFrame(() => {
+    window.setTimeout(() => {
       window.scrollTo(0, scrollY)
-    })
+    }, 160)
   }, [])
 
   async function openMissionModal(
@@ -1072,7 +1072,7 @@ export default function MissionsTablePage({
         />
       </div>
 
-      <div className="relative z-10 -mt-6 min-h-screen rounded-t-3xl bg-white shadow-2xl">
+      <div className="relative z-10 -mt-6 min-h-screen rounded-t-3xl bg-white shadow-2xl isolate">
       {loading && showMissionUi ? (
         <section className="w-full pt-8" aria-busy="true">
           <div className="mb-5 flex items-end justify-between gap-4">
