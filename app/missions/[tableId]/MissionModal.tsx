@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { lockBodyScroll, unlockBodyScroll } from '@/lib/body-scroll-lock'
 import { compressImage } from '@/lib/image-compress'
 import {
   isAcceptedImageType,
@@ -219,14 +221,8 @@ export function MissionModal({
   ) as SubmissionType
 
   useEffect(() => {
-    const prevBody = document.body.style.overflow
-    const prevHtml = document.documentElement.style.overflow
-    document.body.style.overflow = 'hidden'
-    document.documentElement.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prevBody
-      document.documentElement.style.overflow = prevHtml
-    }
+    lockBodyScroll()
+    return () => unlockBodyScroll()
   }, [])
 
   useEffect(() => {
@@ -823,8 +819,8 @@ export function MissionModal({
     )
   }
 
-  return (
-    <div className="fixed inset-0 z-50 h-[100dvh] max-h-[100dvh] min-h-[100dvh] overflow-hidden overscroll-none">
+  return createPortal(
+    <div className="fixed inset-0 z-50 overflow-hidden overscroll-none">
       <div
         className={`absolute inset-0 z-0 ${backdropClass}`}
         aria-hidden
@@ -1703,6 +1699,7 @@ export function MissionModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

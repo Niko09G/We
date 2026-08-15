@@ -97,7 +97,7 @@ export default function MissionDetailPage({
         if (!isUuid(tableId) || !isUuid(missionId)) {
           setLoading(false)
           setError('Invalid link. Please go back and select again.')
-          router.replace('/missions')
+          router.replace('/missions', { scroll: false })
           return
         }
 
@@ -366,6 +366,7 @@ export default function MissionDetailPage({
           <div className="mt-4">
             <Link
               href={`/missions/${tableId}`}
+              scroll={false}
               className="text-xs font-medium text-white/70 underline hover:no-underline"
             >
               Back to missions

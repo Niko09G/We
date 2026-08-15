@@ -52,10 +52,10 @@ export function MissionsTableHero({
   const mainArt = heroImageSrc?.trim() || '/hero/hero-main.png'
   return (
     <section
-      className="relative isolate box-border flex h-full min-h-0 w-full max-w-full min-w-0 flex-col overflow-x-hidden overflow-y-hidden pt-[env(safe-area-inset-top,0px)] text-white"
+      className="relative isolate box-border flex h-full min-h-0 w-full max-w-full min-w-0 flex-col justify-between pb-10 pt-[env(safe-area-inset-top,0px)] text-white"
       style={{ background: heroBg }}
     >
-      <nav className="absolute left-0 right-0 top-0 z-20 flex flex-wrap items-center justify-between gap-2 px-5 pt-[calc(env(safe-area-inset-top,0px)+1.25rem)]">
+      <nav className="relative z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 px-5 pt-5">
         <Link
           href="/play"
           className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white/95 backdrop-blur-sm transition active:scale-[0.98] hover:bg-white/25"
@@ -70,7 +70,7 @@ export function MissionsTableHero({
         </Link>
       </nav>
 
-      <div className="relative z-10 flex min-h-0 w-full flex-1 items-center justify-center px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-16">
+      <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col justify-center px-5 pt-2">
         <div className="relative mx-auto w-full max-w-sm text-center">
           {loading && !tableName.trim() ? (
             <div className="space-y-5 animate-pulse">
@@ -89,27 +89,27 @@ export function MissionsTableHero({
             </div>
           ) : tableName.trim() ? (
             <>
-              <div className="mx-auto mb-4 w-full max-w-xs">
+              <div className="mx-auto mb-2 w-full max-w-xs">
                 <img
                   src={mainArt}
                   alt=""
-                  className="mx-auto w-[80%] max-w-[80%] object-contain"
+                  className="mx-auto max-h-48 w-auto max-w-[72%] object-contain sm:max-h-52"
                 />
               </div>
-              <p className="flex items-center justify-center text-center text-2xl font-semibold leading-snug text-white">
+              <p className="flex items-center justify-center text-center text-xl font-semibold leading-snug text-white sm:text-2xl">
                 {tableName}
               </p>
 
-              <div className="mt-5 flex justify-center">
+              <div className="mt-3 flex justify-center">
                 <img
                   src={heroTeamEmblemUrl || heroRankEmblemUrl || GUEST_EMBLEM_PLACEHOLDER_DATA_URL}
                   alt=""
-                  className="h-[84px] w-[84px] rounded-2xl object-contain"
+                  className="h-16 w-16 rounded-2xl object-contain sm:h-[72px] sm:w-[72px]"
                 />
               </div>
 
               <div
-                className="mx-auto mt-6 h-px max-w-[14rem]"
+                className="mx-auto mt-4 h-px max-w-[14rem]"
                 style={{
                   background:
                     'linear-gradient(to right, transparent, rgba(255,255,255,0.55), transparent)',
@@ -117,7 +117,7 @@ export function MissionsTableHero({
                 role="presentation"
               />
 
-              <div className="mt-5 flex items-center justify-center gap-5">
+              <div className="mt-3 flex items-center justify-center gap-4 sm:gap-5">
                 <p className="inline-flex items-center gap-1 text-base font-semibold text-white sm:text-lg">
                   <img
                     src={heroRankEmblemUrl || heroTeamEmblemUrl || GUEST_EMBLEM_PLACEHOLDER_DATA_URL}
@@ -137,12 +137,12 @@ export function MissionsTableHero({
                 </p>
               </div>
 
-              <p className="mx-auto mt-4 max-w-[22rem] whitespace-pre-line text-sm font-medium leading-relaxed text-white/90">
+              <p className="mx-auto mt-3 max-w-[22rem] whitespace-pre-line text-sm font-medium leading-relaxed text-white/90">
                 {teamSubcopy?.trim() ||
                   'We are Kaypoh Aunties! We see, we hear, we confirm win Bea & Niko’s wedding game.\nFaster go play!'}
               </p>
 
-              <div className="mt-6 flex w-full flex-col items-center gap-2.5">
+              <div className="mt-4 flex w-full flex-col items-center gap-2">
                 <button
                   type="button"
                   onClick={onStartMission}

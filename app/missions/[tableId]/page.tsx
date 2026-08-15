@@ -221,6 +221,7 @@ export default function MissionsTablePage({
   const [tableAvatars, setTableAvatars] = useState<Record<string, string>>({})
   const prevLeaderboardRef = useRef<LeaderboardEntry[] | null>(null)
   const momentumCarouselRef = useRef<HTMLDivElement>(null)
+  const missionModalScrollYRef = useRef(0)
 
   const { tablePoints, tableRank, totalTeams } = useMemo(() => {
     const idx = leaderboardRows.findIndex((e) => e.tableId === tableId)
@@ -628,7 +629,7 @@ export default function MissionsTablePage({
         if (!isUuid(tableId)) {
           setLoading(false)
           setError('Invalid table link. Please select a table again.')
-          router.replace('/missions')
+          router.replace('/missions', { scroll: false })
           return
         }
 
@@ -967,10 +968,19 @@ export default function MissionsTablePage({
     return { done, total: missions.length }
   }, [missions, statusFor])
 
+  const closeMissionModal = useCallback(() => {
+    const scrollY = missionModalScrollYRef.current
+    setSelectedMissionId(null)
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY)
+    })
+  }, [])
+
   async function openMissionModal(
     missionId: string,
     opts?: { skipHydrate?: boolean; fromHero?: boolean }
   ) {
+    missionModalScrollYRef.current = window.scrollY
     setMissionOverlayVariant(
       opts?.fromHero === true ? 'hero-greeting' : 'missions-section'
     )
@@ -1033,8 +1043,8 @@ export default function MissionsTablePage({
   const navHighlightColor = teamPage.theme.primaryColor
 
   return (
-    <main className="min-h-screen w-full min-w-0 max-w-full overflow-x-hidden bg-white">
-      <div id="section-hero" className="sticky top-0 z-0 h-screen">
+    <main className="min-h-screen w-full min-w-0 max-w-full bg-white">
+      <div id="section-hero" className="sticky top-0 z-0 h-[100dvh]">
         <MissionsTableHero
           loading={loading}
           tableName={tableName}
@@ -1062,7 +1072,7 @@ export default function MissionsTablePage({
         />
       </div>
 
-      <div className="relative z-10 -mt-6 rounded-t-3xl bg-white shadow-xl">
+      <div className="relative z-10 -mt-6 min-h-screen rounded-t-3xl bg-white shadow-2xl">
       {loading && showMissionUi ? (
         <section className="w-full pt-8" aria-busy="true">
           <div className="mb-5 flex items-end justify-between gap-4">
@@ -1661,7 +1671,7 @@ export default function MissionsTablePage({
                     teamEmblemUrl,
                     rankEmblemUrl,
                   }}
-                  onClose={() => setSelectedMissionId(null)}
+                  onClose={closeMissionModal}
                   onPrev={
                     missionOverlayVariant === 'hero-greeting' && hasNav
                       ? () =>
