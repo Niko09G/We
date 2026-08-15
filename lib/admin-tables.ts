@@ -8,6 +8,8 @@ export type AdminTableRow = {
   is_archived: boolean
   archived_at: string | null
   created_at: string
+  /** Vertical / map ordering (admin lanes + guest seat map slots). */
+  display_order: number
   /** Max seats for seating planner (per-table seat numbers 1..capacity). */
   capacity: number
   /** Occupied seats based on attendees assigned to this table with a seat number. */
@@ -44,6 +46,9 @@ export async function listTablesForAdmin(): Promise<AdminTableRow[]> {
       typeof cap === 'number' && Number.isFinite(cap) && cap >= 1
         ? Math.trunc(cap)
         : 10
+    const ordRaw = r.display_order
+    const display_order =
+      typeof ordRaw === 'number' && Number.isFinite(ordRaw) ? Math.trunc(ordRaw) : 0
     return {
       id: row.id as string,
       name: (row.name as string) ?? '',
@@ -52,6 +57,7 @@ export async function listTablesForAdmin(): Promise<AdminTableRow[]> {
       is_archived: (r.is_archived as boolean | undefined) ?? false,
       archived_at: (r.archived_at as string | null) ?? null,
       created_at: (row.created_at as string) ?? new Date().toISOString(),
+      display_order,
       capacity,
       occupied_count: occupiedByTableId.get(row.id as string) ?? 0,
       page_config: (r.page_config as unknown) ?? null,
@@ -60,6 +66,7 @@ export async function listTablesForAdmin(): Promise<AdminTableRow[]> {
   rows.sort((a, b) => {
     const d = Number(a.is_archived) - Number(b.is_archived)
     if (d !== 0) return d
+    if (a.display_order !== b.display_order) return a.display_order - b.display_order
     return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
   })
   return rows
@@ -78,6 +85,18 @@ export async function createTable(input: {
       ? Math.max(1, Math.trunc(input.capacity))
       : 10
 
+  const { data: maxRow, error: maxErr } = await supabase
+    .from('tables')
+    .select('display_order')
+    .order('display_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (maxErr) throw new Error(maxErr.message || 'Failed to resolve table order.')
+  const nextOrder =
+    typeof (maxRow as { display_order?: number } | null)?.display_order === 'number'
+      ? Math.trunc((maxRow as { display_order: number }).display_order) + 1
+      : 0
+
   const { error } = await supabase.from('tables').insert({
     name,
     color: input.color?.trim() || null,
@@ -85,6 +104,7 @@ export async function createTable(input: {
     is_archived: false,
     archived_at: null,
     capacity: cap,
+    display_order: nextOrder,
   })
 
   if (error) {
@@ -101,6 +121,7 @@ export async function updateTable(
     color?: string | null
     is_active?: boolean
     capacity?: number
+    display_order?: number
     /** JSON object for `tables.page_config` (omit to leave unchanged). */
     page_config?: Record<string, unknown> | null
   }
@@ -113,6 +134,9 @@ export async function updateTable(
     const c = Math.max(1, Math.trunc(patch.capacity))
     row.capacity = c
   }
+  if (patch.display_order !== undefined) {
+    row.display_order = Math.trunc(patch.display_order)
+  }
   if (patch.page_config !== undefined) row.page_config = patch.page_config
   if (Object.keys(row).length === 0) return
 
@@ -123,6 +147,23 @@ export async function updateTable(
       throw new Error('A table with this name already exists.')
     throw new Error(error.message || 'Failed to update table.')
   }
+}
+
+/** Swap display_order between two tables (admin seating reorder). */
+export async function swapTableDisplayOrder(aId: string, bId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('tables')
+    .select('id, display_order')
+    .in('id', [aId, bId])
+  if (error) throw new Error(error.message || 'Failed to load table order.')
+  const rows = (data ?? []) as Array<{ id: string; display_order: number }>
+  const a = rows.find((r) => r.id === aId)
+  const b = rows.find((r) => r.id === bId)
+  if (!a || !b) throw new Error('Table not found for reorder.')
+  await Promise.all([
+    updateTable(aId, { display_order: b.display_order }),
+    updateTable(bId, { display_order: a.display_order }),
+  ])
 }
 
 /** Soft-delete: hide from guests/scoreboard; keep all related rows. */

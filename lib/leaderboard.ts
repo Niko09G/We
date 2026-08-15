@@ -23,10 +23,12 @@ export type CompletionRow = {
 
 export type RecentActivityItem = {
   id: string
+  tableId: string
   tableName: string
   tableColor: string | null
   missionTitle: string
   points: number
+  createdAt: string
 }
 
 type ApprovedSubmissionRow = {
@@ -294,11 +296,21 @@ export async function fetchLeaderboardBundle(
   )
   const recentActivity: RecentActivityItem[] = sortedByTime.slice(0, recentLimit).map((c) => ({
     id: c.id,
+    tableId: c.table_id,
     tableName: tableName.get(c.table_id) ?? '—',
     tableColor: tableColor.get(c.table_id) ?? null,
     missionTitle: missionTitle.get(c.mission_id) ?? '—',
     points: c.points,
+    createdAt: c.created_at,
   }))
 
   return { leaderboard: entries, recentActivity }
+}
+
+/** Recent scoring events across all teams (completions + approved submissions). */
+export async function fetchRecentScoringActivity(
+  recentLimit = 6
+): Promise<RecentActivityItem[]> {
+  const { recentActivity } = await fetchLeaderboardBundle(recentLimit)
+  return recentActivity
 }

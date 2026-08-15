@@ -4,6 +4,11 @@ import { useLayoutEffect, useRef, useState } from 'react'
 
 import type { AttendeeRow } from '@/lib/admin-attendees'
 import {
+  clamp,
+  computeSideCounts,
+  seatSizing,
+} from '@/lib/seat-map-layout'
+import {
   computePartyExtraGuestsCount,
   computePartyKidsCount,
   type SeatingParty,
@@ -132,27 +137,6 @@ export function PartyAvatarCluster({
 }
 
 type SeatRange = { minSeat: number; maxSeat: number }
-
-function computeSideCounts(capacity: number): { topCount: number; bottomStart: number } {
-  const topCount = Math.floor(capacity / 2)
-  return { topCount, bottomStart: topCount + 1 }
-}
-
-function seatSizing(capacity: number): { seatPx: number; gapPx: number } {
-  const { topCount, bottomStart } = computeSideCounts(capacity)
-  const bottomCount = capacity - (bottomStart - 1)
-  const maxSide = Math.max(topCount, bottomCount, 1)
-
-  // Bias larger so map uses table-card width more effectively.
-  if (maxSide >= 16) return { seatPx: 22, gapPx: 8 }
-  if (maxSide >= 12) return { seatPx: 24, gapPx: 9 }
-  if (maxSide >= 8) return { seatPx: 26, gapPx: 9 }
-  return { seatPx: 30, gapPx: 10 }
-}
-
-function clamp(n: number, a: number, b: number): number {
-  return Math.max(a, Math.min(b, n))
-}
 
 export function AdminTableTwinSeatMap({
   capacity,

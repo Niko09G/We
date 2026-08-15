@@ -9,6 +9,14 @@ import {
   useState,
 } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import {
+  computeSideCounts,
+  guestTableSeatMapMetrics,
+  MAX_SEAT_MAP_CAPACITY,
+  seatSizing,
+  seatSizingForRowWidth,
+} from '@/lib/seat-map-layout'
+import { teamPageAdminFormDefaults } from '@/lib/team-page-config'
 
 type SeatFinderGuest = {
   id: string
@@ -21,12 +29,33 @@ type SeatFinderGuest = {
 type SeatFinderTable = {
   id: string
   name: string
+  color: string | null
+  capacity: number
+  display_order: number
+  page_config: unknown
   is_active?: boolean
   is_archived?: boolean
 }
 
 type GuestWithTable = SeatFinderGuest & {
   table_name: string
+}
+
+type TableVisual = {
+  background: string
+  borderColor: string
+  shadow: string
+  accent: string
+  resultGlow: string
+}
+
+type TableOnMap = {
+  id: string
+  name: string
+  capacity: number
+  display_order: number
+  guests: GuestWithTable[]
+  visual: TableVisual
 }
 
 const TABLE_LAYOUT_SLOTS = [
@@ -44,7 +73,6 @@ const LANDMARKS = [
   { name: 'Bar', x: 70, y: 80 },
 ] as const
 
-const SEAT_LAYOUT_CAPACITY = 30
 const WORLD_W = 720
 const WORLD_H = 620
 
@@ -112,28 +140,172 @@ function getInitials(name: string): string {
   return out || 'G'
 }
 
-function seatPosition(
-  seatNumber: number,
-  maxSeatOnTable: number
-): { leftPct: number; isTop: boolean } {
-  const perSide = Math.max(1, Math.ceil(maxSeatOnTable / 2))
-  const sideIndex = Math.max(1, Math.ceil(seatNumber / 2))
-  const leftPct = (sideIndex / (perSide + 1)) * 100
-  const isTop = seatNumber % 2 === 1
-  return { leftPct, isTop }
+function accentGlowShadow(accent: string, fallback: string): string {
+  const h = accent.trim().replace('#', '')
+  if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(h)) return fallback
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+  const r = parseInt(full.slice(0, 2), 16)
+  const g = parseInt(full.slice(2, 4), 16)
+  const b = parseInt(full.slice(4, 6), 16)
+  return `0 12px 36px rgba(${r},${g},${b},0.28), 0 0 0 1px rgba(${r},${g},${b},0.12)`
 }
 
-function tableFillStyle(slotKey: (typeof TABLE_LAYOUT_SLOTS)[number]['key']): {
-  background: string
-  borderColor: string
-  shadow: string
-} {
-  const background = TABLE_GRADIENT_BY_SLOT[slotKey]
+function tableVisualFromTeam(
+  color: string | null,
+  pageConfig: unknown,
+  tableName: string,
+  slotKey: (typeof TABLE_LAYOUT_SLOTS)[number]['key']
+): TableVisual {
+  const d = teamPageAdminFormDefaults(pageConfig, { tableColor: color, tableName })
+  const top = d.tableGradTop.trim()
+  const bottom = d.tableGradBottom.trim()
+  const accent = d.primaryColor.trim() || top || TABLE_SOLID_ACCENT_BY_SLOT[slotKey]
+  const background =
+    top && bottom
+      ? `linear-gradient(to bottom, ${top} 0%, ${bottom} 100%)`
+      : TABLE_GRADIENT_BY_SLOT[slotKey]
+  const fallbackGlow = TABLE_RESULT_GLOW_BY_SLOT[slotKey]
   return {
     background,
     borderColor: 'rgba(255,255,255,0.28)',
     shadow: '0 6px 18px rgba(0,0,0,0.12)',
+    accent,
+    resultGlow: accentGlowShadow(accent, fallbackGlow),
   }
+}
+
+function GuestTableSeatMap({
+  capacity,
+  guests,
+  tableAccent,
+  selectedGuestId,
+  onSelectGuest,
+  tableLabel,
+}: {
+  capacity: number
+  guests: GuestWithTable[]
+  tableAccent: string
+  selectedGuestId: string | null
+  onSelectGuest: (guest: GuestWithTable) => void
+  tableLabel: React.ReactNode
+}) {
+  const rowRef = useRef<HTMLDivElement>(null)
+  const [rowW, setRowW] = useState(0)
+
+  const safeCapacity = Math.min(MAX_SEAT_MAP_CAPACITY, Math.max(1, Math.trunc(capacity)))
+
+  useLayoutEffect(() => {
+    const el = rowRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setRowW(el.clientWidth))
+    ro.observe(el)
+    setRowW(el.clientWidth)
+    return () => ro.disconnect()
+  }, [safeCapacity])
+
+  const bySeat = useMemo(() => {
+    const m = new Map<number, GuestWithTable>()
+    for (const g of guests) {
+      const sn = Math.trunc(g.seat_number)
+      if (sn >= 1 && sn <= safeCapacity) m.set(sn, g)
+    }
+    return m
+  }, [guests, safeCapacity])
+
+  const { topCount, bottomStart } = computeSideCounts(safeCapacity)
+  const baseSizing = seatSizing(safeCapacity)
+  const topSizing =
+    rowW > 0 ? seatSizingForRowWidth(safeCapacity, rowW, 'top') : baseSizing
+  const bottomSizing =
+    rowW > 0 ? seatSizingForRowWidth(safeCapacity, rowW, 'bottom') : baseSizing
+  const layoutMetrics = guestTableSeatMapMetrics(topSizing, bottomSizing)
+
+  const renderSide = (
+    sideStart: number,
+    sideEnd: number,
+    sizing: { seatPx: number; gapPx: number }
+  ) => {
+    const count = Math.max(0, sideEnd - sideStart + 1)
+    if (count <= 0) return null
+
+    return (
+      <div className="mx-auto flex max-w-full items-center justify-center" style={{ gap: `${sizing.gapPx}px` }}>
+        {Array.from({ length: count }, (_, i) => {
+          const seatNum = sideStart + i
+          const guest = bySeat.get(seatNum)
+          const isSelected = guest?.id === selectedGuestId
+          const size = sizing.seatPx
+
+          if (!guest) {
+            return (
+              <div
+                key={seatNum}
+                aria-hidden
+                className="shrink-0 rounded-full"
+                style={{ width: size, height: size }}
+              />
+            )
+          }
+
+          return (
+            <button
+              key={guest.id}
+              type="button"
+              onClick={() => onSelectGuest(guest)}
+              className={`shrink-0 overflow-hidden rounded-full border-2 transition-[box-shadow] duration-200 ${
+                isSelected
+                  ? 'animate-seat-selected-glow z-30 border-white bg-white'
+                  : 'border-zinc-300 bg-white shadow-sm hover:border-zinc-400'
+              }`}
+              style={{
+                width: size,
+                height: size,
+                ...(isSelected
+                  ? ({ ['--seat-accent' as string]: tableAccent } as React.CSSProperties)
+                  : undefined),
+              }}
+              title={`${guest.full_name} · Seat ${guest.seat_number}`}
+            >
+              {guest.photo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={guest.photo_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center bg-zinc-200 text-[9px] font-bold text-zinc-700">
+                  {getInitials(guest.full_name)}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
+
+  return (
+    <div
+      ref={rowRef}
+      className="relative w-full px-1"
+      style={{
+        paddingTop: layoutMetrics.edgePaddingTop,
+        paddingBottom: layoutMetrics.edgePaddingBottom,
+      }}
+    >
+      <div
+        className="relative w-full"
+        style={{ minHeight: layoutMetrics.centerBandPx }}
+      >
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-[2] flex -translate-y-1/2 items-center justify-center px-10">
+          {tableLabel}
+        </div>
+        <div className="pointer-events-auto absolute inset-x-0 top-0 z-[3] -translate-y-1/2 px-0.5">
+          {renderSide(1, topCount, topSizing)}
+        </div>
+        <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-[3] translate-y-1/2 px-0.5">
+          {renderSide(bottomStart, safeCapacity, bottomSizing)}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 /** Subtle interior guides — matches `border-zinc-200` map frame; rendered behind tables/labels/seats. */
@@ -178,6 +350,7 @@ export function SeatingMapPanel({
   viewerAccentColor?: string
 }) {
   const [rows, setRows] = useState<GuestWithTable[]>([])
+  const [tableCatalog, setTableCatalog] = useState<SeatFinderTable[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -191,7 +364,6 @@ export function SeatingMapPanel({
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const tableRefs = useRef<Record<string, HTMLDivElement | null>>({})
-  const seatRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const dragRef = useRef<DragRef | null>(null)
   const panZoomRef = useRef({ x: 0, y: 0, zoom: DEFAULT_ZOOM })
   const mapFrameRef = useRef<HTMLDivElement | null>(null)
@@ -215,14 +387,35 @@ export function SeatingMapPanel({
             .not('seat_number', 'is', null),
           supabase
             .from('tables')
-            .select('id, name, is_active, is_archived')
+            .select('id, name, color, capacity, display_order, page_config, is_active, is_archived')
+            .eq('is_archived', false)
+            .eq('is_active', true)
+            .order('display_order')
             .order('name'),
         ])
 
         if (attendeesRes.error) throw attendeesRes.error
         if (tablesRes.error) throw tablesRes.error
 
-        const tables = (tablesRes.data ?? []) as SeatFinderTable[]
+        const tables = (tablesRes.data ?? []).map((row) => {
+          const r = row as Record<string, unknown>
+          const cap = r.capacity
+          const ord = r.display_order
+          return {
+            id: row.id as string,
+            name: (row.name as string) ?? '',
+            color: (r.color as string | null) ?? null,
+            capacity:
+              typeof cap === 'number' && Number.isFinite(cap) && cap >= 1
+                ? Math.trunc(cap)
+                : 10,
+            display_order:
+              typeof ord === 'number' && Number.isFinite(ord) ? Math.trunc(ord) : 0,
+            page_config: r.page_config ?? null,
+            is_active: (r.is_active as boolean | undefined) ?? true,
+            is_archived: (r.is_archived as boolean | undefined) ?? false,
+          } satisfies SeatFinderTable
+        })
         const tableNameById = new Map(tables.map((t) => [t.id, t.name]))
 
         const seatedRows = (attendeesRes.data ?? []) as Array<
@@ -246,6 +439,7 @@ export function SeatingMapPanel({
           )
 
         setRows(normalized)
+        setTableCatalog(tables)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load seats.')
       } finally {
@@ -256,48 +450,38 @@ export function SeatingMapPanel({
     void load()
   }, [])
 
-  const tablesUsed = useMemo(() => {
-    const m = new Map<string, { id: string; name: string; guests: GuestWithTable[] }>()
+  const tablesUsed = useMemo((): TableOnMap[] => {
+    const guestByTable = new Map<string, GuestWithTable[]>()
     for (const r of rows) {
-      if (!m.has(r.table_id)) {
-        m.set(r.table_id, { id: r.table_id, name: r.table_name, guests: [] })
+      if (!guestByTable.has(r.table_id)) guestByTable.set(r.table_id, [])
+      guestByTable.get(r.table_id)!.push(r)
+    }
+
+    const orderedTables = [...tableCatalog].sort((a, b) => {
+      if (a.display_order !== b.display_order) return a.display_order - b.display_order
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    })
+
+    const withGuests = orderedTables.slice(0, TABLE_LAYOUT_SLOTS.length)
+
+    return withGuests.map((meta, idx) => {
+      const slotKey = TABLE_LAYOUT_SLOTS[idx]!.key
+      const guests = [...(guestByTable.get(meta.id) ?? [])].sort(
+        (a, b) => a.seat_number - b.seat_number
+      )
+      return {
+        id: meta.id,
+        name: meta.name,
+        capacity: meta.capacity,
+        display_order: meta.display_order,
+        guests,
+        visual: tableVisualFromTeam(meta.color, meta.page_config, meta.name, slotKey),
       }
-      m.get(r.table_id)!.guests.push(r)
-    }
-    for (const t of m.values()) {
-      t.guests.sort((a, b) => a.seat_number - b.seat_number)
-    }
-    return [...m.values()]
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-      .slice(0, 4)
-  }, [rows])
+    })
+  }, [rows, tableCatalog])
 
   const tableBySlot = useMemo(() => {
-    const byName = new Map(
-      tablesUsed.map((t) => [t.name.trim().toLowerCase(), t] as const)
-    )
-    const usedIds = new Set<string>()
-    const picked: Array<(typeof tablesUsed)[number] | null> = []
-
-    for (const slot of TABLE_LAYOUT_SLOTS) {
-      const exact = byName.get(`${slot.expectedName} table`)
-      const partial =
-        exact ??
-        tablesUsed.find((t) =>
-          t.name.trim().toLowerCase().includes(slot.expectedName)
-        ) ??
-        null
-
-      if (partial && !usedIds.has(partial.id)) {
-        picked.push(partial)
-        usedIds.add(partial.id)
-      } else {
-        picked.push(null)
-      }
-    }
-
-    const remaining = tablesUsed.filter((t) => !usedIds.has(t.id))
-    return picked.map((p) => p ?? remaining.shift() ?? null)
+    return TABLE_LAYOUT_SLOTS.map((_, idx) => tablesUsed[idx] ?? null)
   }, [tablesUsed])
 
   const selectedGuest = useMemo(
@@ -305,12 +489,11 @@ export function SeatingMapPanel({
     [rows, selectedId]
   )
 
-  const selectedGuestSlotKey = useMemo((): (typeof TABLE_LAYOUT_SLOTS)[number]['key'] | null => {
+  const selectedGuestVisual = useMemo((): TableVisual | null => {
     if (!selectedGuest) return null
-    const idx = tableBySlot.findIndex((t) => t?.id === selectedGuest.table_id)
-    if (idx < 0) return null
-    return TABLE_LAYOUT_SLOTS[idx]!.key
-  }, [selectedGuest, tableBySlot])
+    const table = tablesUsed.find((t) => t.id === selectedGuest.table_id)
+    return table?.visual ?? null
+  }, [selectedGuest, tablesUsed])
 
   const matching = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -689,8 +872,13 @@ export function SeatingMapPanel({
                 `${slot.expectedName.charAt(0).toUpperCase()}${slot.expectedName.slice(1)} Table`
 
               const isSelectedTable = Boolean(table && selectedGuest?.table_id === table.id)
-              const tableStyle = tableFillStyle(slot.key)
-              const slotAccent = TABLE_SOLID_ACCENT_BY_SLOT[slot.key]
+              const tableStyle = table?.visual ?? {
+                background: TABLE_GRADIENT_BY_SLOT[slot.key],
+                borderColor: 'rgba(255,255,255,0.28)',
+                shadow: '0 6px 18px rgba(0,0,0,0.12)',
+                accent: TABLE_SOLID_ACCENT_BY_SLOT[slot.key],
+                resultGlow: TABLE_RESULT_GLOW_BY_SLOT[slot.key],
+              }
 
               return (
                 <div
@@ -719,61 +907,31 @@ export function SeatingMapPanel({
                         : undefined
                     }
                   >
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-8 pt-1">
-                      <span
-                        className={`max-w-full truncate text-center text-[11px] font-semibold tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)] ${
-                          table ? 'text-white' : 'text-zinc-600'
-                        }`}
-                      >
-                        {label}
-                      </span>
-                    </div>
-                    <div className="relative h-[76px] w-full pointer-events-auto">
-                      {table
-                        ? table.guests.map((g) => {
-                            const pos = seatPosition(g.seat_number, SEAT_LAYOUT_CAPACITY)
-                            const isSelectedSeat = selectedGuest?.id === g.id
-                            return (
-                              <button
-                                key={g.id}
-                                type="button"
-                                ref={(el) => {
-                                  seatRefs.current[g.id] = el
-                                }}
-                                onClick={() => selectGuest(g)}
-                                className={`absolute z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center overflow-hidden rounded-full border-2 text-[10px] font-extrabold leading-none transition-[transform,box-shadow] duration-200 ${
-                                  pos.isTop
-                                    ? 'top-0 -translate-y-1/2'
-                                    : 'bottom-0 translate-y-1/2'
-                                } ${
-                                  isSelectedSeat
-                                    ? 'animate-seat-selected-glow z-30 scale-110 border-white bg-white'
-                                    : 'border-zinc-300 bg-white shadow-sm hover:border-zinc-400'
-                                }`}
-                                style={{
-                                  left: `${pos.leftPct}%`,
-                                  ...(isSelectedSeat
-                                    ? ({ ['--seat-accent' as string]: slotAccent } as React.CSSProperties)
-                                    : undefined),
-                                }}
-                                title={`${g.full_name} · Seat ${g.seat_number}`}
-                              >
-                                {g.photo_url ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={g.photo_url}
-                                    alt=""
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  <span className="flex h-full w-full items-center justify-center bg-zinc-200 text-[9px] font-bold text-zinc-700">
-                                    {getInitials(g.full_name)}
-                                  </span>
-                                )}
-                              </button>
-                            )
-                          })
-                        : null}
+                    <div className="relative w-full pointer-events-auto">
+                      {table ? (
+                        <GuestTableSeatMap
+                          capacity={table.capacity}
+                          guests={table.guests}
+                          tableAccent={tableStyle.accent}
+                          selectedGuestId={selectedGuest?.id ?? null}
+                          onSelectGuest={selectGuest}
+                          tableLabel={
+                            <span
+                              className={`max-w-full truncate text-center text-[11px] font-semibold tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)] ${
+                                table ? 'text-white' : 'text-zinc-600'
+                              }`}
+                            >
+                              {label}
+                            </span>
+                          }
+                        />
+                      ) : (
+                        <div className="px-4 py-3">
+                          <span className="block truncate text-center text-[11px] font-semibold tracking-wide text-zinc-600">
+                            {label}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -786,9 +944,9 @@ export function SeatingMapPanel({
           <aside
             className="pointer-events-auto absolute bottom-3 left-3 right-3 z-30 mx-auto max-w-md rounded-2xl border border-white/80 bg-white/95 px-4 py-3.5 backdrop-blur-sm transition-[box-shadow,opacity] duration-300"
             style={{
-              boxShadow: selectedGuestSlotKey
-                ? TABLE_RESULT_GLOW_BY_SLOT[selectedGuestSlotKey]
-                : '0 10px 28px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.06)',
+              boxShadow:
+                selectedGuestVisual?.resultGlow ??
+                '0 10px 28px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.06)',
             }}
           >
             <div className="flex items-center gap-4 text-black">
@@ -810,25 +968,13 @@ export function SeatingMapPanel({
                 <p className="truncate text-base font-semibold text-black">{selectedGuest.full_name}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm font-medium text-black">
                   <span className="flex min-w-0 max-w-full flex-1 basis-0 items-center gap-2">
-                    <MapTableGlyph
-                      color={
-                        selectedGuestSlotKey
-                          ? TABLE_SOLID_ACCENT_BY_SLOT[selectedGuestSlotKey]
-                          : '#71717a'
-                      }
-                    />
+                    <MapTableGlyph color={selectedGuestVisual?.accent ?? '#71717a'} />
                     <span className="min-w-0 break-words leading-snug text-black [overflow-wrap:anywhere]">
                       {selectedGuest.table_name}
                     </span>
                   </span>
                   <span className="inline-flex shrink-0 items-center gap-2 pr-1">
-                    <MapSeatGlyph
-                      color={
-                        selectedGuestSlotKey
-                          ? TABLE_SOLID_ACCENT_BY_SLOT[selectedGuestSlotKey]
-                          : '#71717a'
-                      }
-                    />
+                    <MapSeatGlyph color={selectedGuestVisual?.accent ?? '#71717a'} />
                     <span className="whitespace-nowrap pr-1 text-black">Seat {selectedGuest.seat_number}</span>
                   </span>
                 </div>

@@ -16,7 +16,7 @@ import {
   type AttendeeRow,
 } from '@/lib/admin-attendees'
 import { listAttendeeGroups, type AttendeeGroupRow } from '@/lib/admin-attendee-groups'
-import { listTablesForAdmin, updateTable, type AdminTableRow } from '@/lib/admin-tables'
+import { listTablesForAdmin, swapTableDisplayOrder, updateTable, type AdminTableRow } from '@/lib/admin-tables'
 import { AdminFilterRowSegmented } from '@/app/admin/_components/AdminFilterRowSegmented'
 import {
   buildSeatingParties,
@@ -717,6 +717,7 @@ export default function AdminSeatingPage() {
   const [selectedPartyKey, setSelectedPartyKey] = useState<string | null>(null)
   const [dockCollapsed, setDockCollapsed] = useState(false)
   const [largeMapTableId, setLargeMapTableId] = useState<string | null>(null)
+  const [reorderingTableId, setReorderingTableId] = useState<string | null>(null)
   const [scrubMetrics, setScrubMetrics] = useState({ cw: 0, sw: 0, sl: 0 })
   const workspaceRef = useRef<HTMLDivElement>(null)
   const scrubTrackRef = useRef<HTMLDivElement>(null)
@@ -767,8 +768,47 @@ export default function AdminSeatingPage() {
   )
 
   const plannerTables = useMemo(
-    () => tables.filter((t) => !t.is_archived && t.is_active),
+    () =>
+      tables
+        .filter((t) => !t.is_archived && t.is_active)
+        .sort((a, b) => {
+          if (a.display_order !== b.display_order) return a.display_order - b.display_order
+          return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        }),
     [tables]
+  )
+
+  const moveTableDisplayOrder = useCallback(
+    async (tableId: string, direction: 'up' | 'down') => {
+      const idx = plannerTables.findIndex((t) => t.id === tableId)
+      if (idx < 0) return
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+      if (swapIdx < 0 || swapIdx >= plannerTables.length) return
+      const other = plannerTables[swapIdx]!
+      setReorderingTableId(tableId)
+      setError(null)
+      try {
+        await swapTableDisplayOrder(tableId, other.id)
+        setTables((prev) => {
+          const next = prev.map((t) => ({ ...t }))
+          const a = next.find((t) => t.id === tableId)
+          const b = next.find((t) => t.id === other.id)
+          if (!a || !b) return prev
+          const aOrd = a.display_order
+          a.display_order = b.display_order
+          b.display_order = aOrd
+          return next
+        })
+        showToast('Table order updated.', 'success')
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to reorder table.'
+        setError(msg)
+        showToast(msg, 'error')
+      } finally {
+        setReorderingTableId(null)
+      }
+    },
+    [plannerTables, showToast]
   )
 
   const tableNameById = useMemo(
@@ -1106,8 +1146,8 @@ export default function AdminSeatingPage() {
       <header className="shrink-0">
         <h1 className="admin-page-title text-zinc-900">Seating</h1>
         <p className="admin-gap-page-title-intro admin-intro">
-          Plan seating by party: assign tables, reorder rows, and keep seat blocks contiguous. Guest
-          seat maps will follow these assignments later.
+          Plan seating by party: assign tables, reorder rows, and keep seat blocks contiguous. Table
+          lane order controls the guest seat map layout (top to bottom).
         </p>
       </header>
 
@@ -1149,7 +1189,7 @@ export default function AdminSeatingPage() {
                   ) : null}
 
                   <div className="flex gap-5 pr-2">
-                    {plannerTables.map((t) => {
+                    {plannerTables.map((t, tableIdx) => {
                       const used = rowsAtTable(t.id).length
                       const cap = t.capacity
                       const list = partiesOnTable(t.id)
@@ -1162,6 +1202,7 @@ export default function AdminSeatingPage() {
                         tableGradientById.get(t.id) ??
                         'linear-gradient(145deg, #1ca0d8, #5b38f2)'
                       const laneFlash = dropFlash === t.id
+                      const reorderBusy = reorderingTableId === t.id
                       return (
                         <div
                           key={t.id}
@@ -1233,6 +1274,28 @@ export default function AdminSeatingPage() {
                             </div>
                             <div className="shrink-0 text-center text-[11px] font-semibold tabular-nums text-white/95">
                               {used} / {cap}
+                            </div>
+                            <div className="flex shrink-0 flex-col gap-0.5">
+                              <button
+                                type="button"
+                                disabled={reorderBusy || tableIdx === 0}
+                                onClick={() => void moveTableDisplayOrder(t.id, 'up')}
+                                className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-white/55 bg-white/90 text-[11px] font-bold text-zinc-800 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                                aria-label={`Move ${t.name} up on guest map`}
+                                title="Move up on guest map"
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                disabled={reorderBusy || tableIdx === plannerTables.length - 1}
+                                onClick={() => void moveTableDisplayOrder(t.id, 'down')}
+                                className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-white/55 bg-white/90 text-[11px] font-bold text-zinc-800 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                                aria-label={`Move ${t.name} down on guest map`}
+                                title="Move down on guest map"
+                              >
+                                ↓
+                              </button>
                             </div>
                             <button
                               type="button"

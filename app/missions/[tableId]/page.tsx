@@ -7,8 +7,9 @@ import { MissionSocialFeedSection } from '@/components/guest/MissionSocialFeedSe
 import { SeatingMapPanel } from '@/components/guest/SeatingMapPanel'
 import { StickySectionNav } from '@/components/guest/StickySectionNav'
 import { MissionsTableHero } from '@/components/guest/MissionsTableHero'
+import { TeamAvatar } from '@/components/guest/TeamAvatar'
 import { getMissionsEnabled } from '@/lib/app-settings'
-import { fetchLeaderboard, type LeaderboardEntry } from '@/lib/leaderboard'
+import { fetchLeaderboard, fetchLeaderboardBundle, fetchRecentScoringActivity, type LeaderboardEntry, type RecentActivityItem } from '@/lib/leaderboard'
 import {
   guestMissionDisplayReward,
   isAtSubmissionLimit,
@@ -100,6 +101,62 @@ type MomentumEntry = {
   createdAt: number
 }
 
+function scoringActivityToMomentum(item: RecentActivityItem): MomentumEntry {
+  const pts = safeRewardPoints(item.points)
+  return {
+    id: item.id,
+    tableId: item.tableId,
+    tableName: item.tableName,
+    tableColor: item.tableColor,
+    eventType: pts >= 18 ? 'on_fire' : pts >= 8 ? 'move' : 'neutral',
+    coinChange: pts,
+    message:
+      pts > 0
+        ? `${item.tableName} earned ${pts} on “${item.missionTitle}”`
+        : `${item.tableName} completed “${item.missionTitle}”`,
+    createdAt: new Date(item.createdAt).getTime(),
+  }
+}
+
+function buildSeedMomentumFromLeaderboard(rows: LeaderboardEntry[]): MomentumEntry[] {
+  const now = Date.now()
+  const withPoints = rows.filter((r) => safeRewardPoints(r.totalPoints) > 0)
+  if (withPoints.length > 0) {
+    return withPoints.slice(0, 6).map((row, i) => ({
+      id: `seed-points-${row.tableId}`,
+      tableId: row.tableId,
+      tableName: row.tableName,
+      tableColor: row.tableColor,
+      eventType: 'entered' as const,
+      coinChange: safeRewardPoints(row.totalPoints),
+      message: `${row.tableName} has ${safeRewardPoints(row.totalPoints)} coins on the board 🎉`,
+      createdAt: now - i * 1000,
+    }))
+  }
+  return rows.slice(0, 6).map((row, i) => ({
+    id: `seed-join-${row.tableId}`,
+    tableId: row.tableId,
+    tableName: row.tableName,
+    tableColor: row.tableColor,
+    eventType: 'neutral' as const,
+    coinChange: 0,
+    message: `${row.tableName} is ready to compete — missions await!`,
+    createdAt: now - i * 1000,
+  }))
+}
+
+function resolveTeamAvatarUrl(
+  teamTableId: string,
+  tableAvatars: Record<string, string>,
+  guestEmblems: GuestEmblemsSettingsValue
+): string | null {
+  return (
+    tableAvatars[teamTableId]?.trim() ||
+    guestEmblems.team_emblem_by_table_id?.[teamTableId]?.trim() ||
+    null
+  )
+}
+
 function isUuid(value: unknown): value is string {
   if (typeof value !== 'string') return false
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -161,6 +218,7 @@ export default function MissionsTablePage({
   const [guestEmblems, setGuestEmblems] = useState<GuestEmblemsSettingsValue>({})
   const [momentumFeed, setMomentumFeed] = useState<MomentumEntry[]>([])
   const [momentumEnterIds, setMomentumEnterIds] = useState<Set<string>>(new Set())
+  const [tableAvatars, setTableAvatars] = useState<Record<string, string>>({})
   const prevLeaderboardRef = useRef<LeaderboardEntry[] | null>(null)
   const momentumCarouselRef = useRef<HTMLDivElement>(null)
 
@@ -182,6 +240,10 @@ export default function MissionsTablePage({
     () => leaderboardRows.slice(0, 4),
     [leaderboardRows]
   )
+  const displayMomentumFeed = useMemo(() => {
+    if (momentumFeed.length > 0) return momentumFeed
+    return buildSeedMomentumFromLeaderboard(leaderboardRows)
+  }, [momentumFeed, leaderboardRows])
   const heroRankEmblemUrl = useMemo(
     () => resolveRankEmblemUrl(guestEmblems, tableRank),
     [guestEmblems, tableRank]
@@ -379,7 +441,7 @@ export default function MissionsTablePage({
 
   const scrollMomentumCarousel = (dir: -1 | 1) => {
     const el = momentumCarouselRef.current
-    if (!el || momentumFeed.length === 0) return
+    if (!el || displayMomentumFeed.length === 0) return
     const card = el.querySelector('[data-momentum-card]') as HTMLElement | null
     const gap = 12
     const cardW = card?.offsetWidth ?? Math.min(el.clientWidth * 0.8, 300)
@@ -418,11 +480,36 @@ export default function MissionsTablePage({
     }
   }, [missionsEnabled, feedMissionIds])
 
+  const loadMomentumFromScoringLogs = useCallback(async (lbRows?: LeaderboardEntry[]) => {
+    const rows = lbRows ?? leaderboardRows
+    try {
+      const recent = await fetchRecentScoringActivity(6)
+      const fromLogs = recent.map(scoringActivityToMomentum)
+      if (fromLogs.length > 0) {
+        setMomentumFeed(fromLogs)
+        return
+      }
+      setMomentumFeed((prev) =>
+        prev.length > 0 ? prev : buildSeedMomentumFromLeaderboard(rows)
+      )
+    } catch {
+      setMomentumFeed((prev) =>
+        prev.length > 0 ? prev : buildSeedMomentumFromLeaderboard(rows)
+      )
+    }
+  }, [leaderboardRows])
+
   const refreshTableData = useCallback(() => {
     void (async () => {
       try {
         const lb = await fetchLeaderboard()
+        const diffEntries = buildMomentumEntries(lb)
         setLeaderboardRows(lb)
+        if (diffEntries.length > 0) {
+          pushMomentum(diffEntries)
+        } else {
+          await loadMomentumFromScoringLogs(lb)
+        }
       } catch {
         /* keep previous leaderboard */
       }
@@ -495,6 +582,8 @@ export default function MissionsTablePage({
     tableId,
     loadMissionFeed,
     buildMomentumEntries,
+    pushMomentum,
+    loadMomentumFromScoringLogs,
   ])
 
   useEffect(() => {
@@ -594,16 +683,14 @@ export default function MissionsTablePage({
         setMissionsEnabled(enabled)
 
         try {
-          const lb1 = await fetchLeaderboard()
+          const { leaderboard: lb, recentActivity } = await fetchLeaderboardBundle(6)
           if (!cancelled) {
-            setLeaderboardRows(lb1)
-            prevLeaderboardRef.current = lb1
-          }
-          const lb2 = await fetchLeaderboard()
-          if (!cancelled) {
-            setLeaderboardRows(lb2)
-            const entries = buildMomentumEntries(lb2)
-            pushMomentum(entries)
+            setLeaderboardRows(lb)
+            prevLeaderboardRef.current = lb
+            const fromLogs = recentActivity.map(scoringActivityToMomentum)
+            setMomentumFeed(
+              fromLogs.length > 0 ? fromLogs : buildSeedMomentumFromLeaderboard(lb)
+            )
           }
         } catch {
           if (!cancelled) setLeaderboardRows([])
@@ -800,6 +887,37 @@ export default function MissionsTablePage({
     }
   }, [tableId])
 
+  const leaderboardTableIdsKey = useMemo(() => {
+    if (!leaderboardRows.length) return ''
+    return [...new Set(leaderboardRows.map((entry) => entry.tableId))].sort().join(',')
+  }, [leaderboardRows])
+
+  useEffect(() => {
+    if (!leaderboardTableIdsKey) return
+    let cancelled = false
+    const ids = leaderboardTableIdsKey.split(',')
+    void (async () => {
+      const { data, error } = await supabase
+        .from('tables')
+        .select('id, name, color, page_config')
+        .in('id', ids)
+      if (cancelled || error || !data) return
+      const next: Record<string, string> = {}
+      for (const row of data) {
+        const resolved = resolveTeamPageConfig(row.page_config, {
+          tableColor: (row as { color?: string | null }).color ?? null,
+          tableName: row.name as string,
+        })
+        const url = resolved.hero.avatarImage.url?.trim()
+        if (url) next[row.id as string] = url
+      }
+      setTableAvatars(next)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [leaderboardTableIdsKey])
+
   const statusFor = useMemo(() => {
     const completed = completedMissionIds
     const pending = pendingMissionIds
@@ -916,7 +1034,7 @@ export default function MissionsTablePage({
 
   return (
     <main className="min-h-screen w-full min-w-0 max-w-full overflow-x-hidden bg-white">
-      <div id="section-hero">
+      <div id="section-hero" className="sticky top-0 z-0 h-screen">
         <MissionsTableHero
           loading={loading}
           tableName={tableName}
@@ -944,6 +1062,7 @@ export default function MissionsTablePage({
         />
       </div>
 
+      <div className="relative z-10 -mt-6 rounded-t-3xl bg-white shadow-xl">
       {loading && showMissionUi ? (
         <section className="w-full pt-8" aria-busy="true">
           <div className="mb-5 flex items-end justify-between gap-4">
@@ -1328,9 +1447,14 @@ export default function MissionsTablePage({
                     >
                       <span className="flex min-w-0 items-center gap-2.5 font-bold text-white">
                         <span className="tabular-nums text-white">{i + 1}.</span>
-                        <div
-                          className="h-8 w-8 shrink-0 rounded-full border border-white/35 bg-white/20"
-                          aria-hidden
+                        <TeamAvatar
+                          name={row.tableName}
+                          avatarUrl={resolveTeamAvatarUrl(
+                            row.tableId,
+                            tableAvatars,
+                            guestEmblems
+                          )}
+                          tableColor={row.tableColor}
                         />
                         <span className="truncate">{row.tableName}</span>
                         {isYou ? (
@@ -1358,74 +1482,69 @@ export default function MissionsTablePage({
                 >
                   Momentum feed
                 </h3>
-                {momentumFeed.length === 0 ? (
-                  <p
-                    className="mt-2 text-xs text-zinc-500"
-                    style={{ color: teamPage.typography.textColorSecondary }}
+                <>
+                  <div
+                    ref={momentumCarouselRef}
+                    className="mt-2 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
                   >
-                    No recent scoring activity yet.
-                  </p>
-                ) : (
-                  <>
-                    <div
-                      ref={momentumCarouselRef}
-                      className="mt-2 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
-                    >
-                      {momentumFeed.map((item, idx) => (
-                        <div
-                          key={item.id}
-                          data-momentum-card
-                          className={`w-[min(300px,82vw)] shrink-0 snap-start rounded-lg border border-zinc-200/80 bg-white/85 px-3 py-3 min-h-[96px] ${
-                            momentumEnterIds.has(item.id)
-                              ? 'motion-safe:animate-[fadeIn_0.45s_ease-out]'
-                              : ''
-                          } ${
-                            idx >= 5 ? 'opacity-70' : idx >= 3 ? 'opacity-85' : 'opacity-100'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <span className="inline-flex min-w-0 items-center gap-2">
-                              <div
-                                className="h-8 w-8 shrink-0 rounded-full border border-white/35 bg-white/20"
-                                style={{ background: sharedLeaderboardGradient }}
-                                aria-hidden
-                              />
-                              <span className="line-clamp-2 text-sm font-medium leading-snug text-zinc-700">
-                                {item.message}
-                              </span>
+                    {displayMomentumFeed.map((item, idx) => (
+                      <div
+                        key={item.id}
+                        data-momentum-card
+                        className={`w-[min(300px,82vw)] shrink-0 snap-start rounded-lg border border-zinc-200/80 bg-white/85 px-3 py-3 min-h-[96px] ${
+                          momentumEnterIds.has(item.id)
+                            ? 'motion-safe:animate-[fadeIn_0.45s_ease-out]'
+                            : ''
+                        } ${
+                          idx >= 5 ? 'opacity-70' : idx >= 3 ? 'opacity-85' : 'opacity-100'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="inline-flex min-w-0 items-center gap-2">
+                            <TeamAvatar
+                              name={item.tableName}
+                              avatarUrl={resolveTeamAvatarUrl(
+                                item.tableId,
+                                tableAvatars,
+                                guestEmblems
+                              )}
+                              tableColor={item.tableColor}
+                            />
+                            <span className="line-clamp-2 text-sm font-medium leading-snug text-zinc-700">
+                              {item.message}
                             </span>
-                            {item.coinChange > 0 ? (
-                              <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold tabular-nums text-sm text-zinc-700">
-                                +{item.coinChange}
-                                <RewardUnitIcon size={COIN_SIZE} className="align-middle" />
-                              </span>
-                            ) : null}
-                          </div>
+                          </span>
+                          {item.coinChange > 0 ? (
+                            <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold tabular-nums text-sm text-zinc-700">
+                              +{item.coinChange}
+                              <RewardUnitIcon size={COIN_SIZE} className="align-middle" />
+                            </span>
+                          ) : null}
                         </div>
-                      ))}
-                    </div>
-                    {momentumFeed.length > 1 ? (
-                      <div className="mt-2 flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          aria-label="Previous momentum item"
-                          onClick={() => scrollMomentumCarousel(-1)}
-                          className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300 bg-white text-lg font-medium text-zinc-900 transition hover:bg-zinc-50 active:scale-95"
-                        >
-                          ‹
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Next momentum item"
-                          onClick={() => scrollMomentumCarousel(1)}
-                          className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300 bg-white text-lg font-medium text-zinc-900 transition hover:bg-zinc-50 active:scale-95"
-                        >
-                          ›
-                        </button>
                       </div>
-                    ) : null}
-                  </>
-                )}
+                    ))}
+                  </div>
+                  {displayMomentumFeed.length > 1 ? (
+                    <div className="mt-2 flex items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        aria-label="Previous momentum item"
+                        onClick={() => scrollMomentumCarousel(-1)}
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300 bg-white text-lg font-medium text-zinc-900 transition hover:bg-zinc-50 active:scale-95"
+                      >
+                        ‹
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Next momentum item"
+                        onClick={() => scrollMomentumCarousel(1)}
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300 bg-white text-lg font-medium text-zinc-900 transition hover:bg-zinc-50 active:scale-95"
+                      >
+                        ›
+                      </button>
+                    </div>
+                  ) : null}
+                </>
               </div>
               <div className="mt-4 flex w-full justify-center">
                 <button
@@ -1570,6 +1689,7 @@ export default function MissionsTablePage({
             })()
           : null}
 
+      </div>
       </div>
 
       <StickySectionNav

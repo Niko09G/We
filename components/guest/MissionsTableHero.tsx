@@ -52,7 +52,7 @@ export function MissionsTableHero({
   const mainArt = heroImageSrc?.trim() || '/hero/hero-main.png'
   return (
     <section
-      className="relative isolate box-border flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] w-full max-w-full min-w-0 flex-col overflow-x-hidden overflow-y-hidden pt-[env(safe-area-inset-top,0px)] text-white"
+      className="relative isolate box-border flex h-full min-h-0 w-full max-w-full min-w-0 flex-col overflow-x-hidden overflow-y-hidden pt-[env(safe-area-inset-top,0px)] text-white"
       style={{ background: heroBg }}
     >
       <nav className="absolute left-0 right-0 top-0 z-20 flex flex-wrap items-center justify-between gap-2 px-5 pt-[calc(env(safe-area-inset-top,0px)+1.25rem)]">
