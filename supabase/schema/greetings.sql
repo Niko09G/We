@@ -26,3 +26,9 @@ create policy "Allow public read for greetings"
   on public.greetings
   for select
   using (true);
+
+drop policy if exists "Allow anonymous delete for greetings" on public.greetings;
+create policy "Allow anonymous delete for greetings"
+  on public.greetings
+  for delete
+  using (true);

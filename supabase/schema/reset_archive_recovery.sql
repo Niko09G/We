@@ -221,6 +221,21 @@ begin
   join _target_submissions s on s.id = g.mission_submission_id
   on conflict do nothing;
 
+  -- Full event reset clears every greeting (uploads + mission-generated).
+  if v_scope = 'event_all_progress' then
+    insert into _target_greetings (id)
+    select id from public.greetings
+    on conflict do nothing;
+  end if;
+
+  -- Table reset also clears greetings attributed to that table (incl. direct uploads).
+  if v_scope = 'table_all_progress' then
+    insert into _target_greetings (id)
+    select id from public.greetings
+    where table_id = p_table_id
+    on conflict do nothing;
+  end if;
+
   -- Tokens tied to beatcoin submissions.
   insert into _target_tokens (id)
   select (ms.submission_data->>'beatcoin_token_id')::uuid

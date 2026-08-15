@@ -1,6 +1,22 @@
+import type { PostgrestError } from '@supabase/supabase-js'
+
 import { supabase } from '@/lib/supabase/client'
 
 const BUCKET = 'greetings'
+
+const GREETINGS_DELETE_POLICY_HINT =
+  'If this mentions RLS or “permission denied”, run supabase/schema/greetings_admin.sql in the Supabase SQL editor (greetings table needs a DELETE policy).'
+
+function formatSupabaseError(prefix: string, err: PostgrestError): string {
+  const bits = [
+    `${prefix}:`,
+    err.message,
+    err.code ? `[${err.code}]` : '',
+    err.details ? `Details: ${err.details}` : '',
+    err.hint ? `Hint: ${err.hint}` : '',
+  ].filter(Boolean)
+  return bits.join(' ')
+}
 
 export type GreetingRow = {
   id: string
@@ -68,26 +84,44 @@ function storagePathFromPublicUrl(publicUrl: string): string | null {
 }
 
 /**
- * Deletes the greeting row. Best-effort deletes the image from storage first.
- * If storage deletion fails, the row is still deleted and a storageWarning is returned.
+ * Deletes the greeting row by id, then best-effort removes the image from storage.
+ * Verifies the row was actually deleted (RLS can otherwise return success with 0 rows).
  */
 export async function deleteGreeting(
   row: Pick<GreetingRow, 'id' | 'image_url'>
 ): Promise<{ storageWarning?: string }> {
+  const { data: deletedRows, error: dbError } = await supabase
+    .from('greetings')
+    .delete()
+    .eq('id', row.id)
+    .select('id')
+
+  if (dbError) {
+    let msg = formatSupabaseError('Delete greeting', dbError)
+    if (/rls|permission|policy/i.test(msg)) {
+      msg += ` ${GREETINGS_DELETE_POLICY_HINT}`
+    }
+    throw new Error(msg)
+  }
+
+  if (!deletedRows?.length) {
+    throw new Error(
+      `Delete greeting failed: no row was removed for id ${row.id}. This usually means Row Level Security blocked the delete. ${GREETINGS_DELETE_POLICY_HINT}`
+    )
+  }
+
   let storageWarning: string | undefined
   const path = storagePathFromPublicUrl(row.image_url)
 
   if (path) {
     const { error: storageError } = await supabase.storage.from(BUCKET).remove([path])
     if (storageError) {
-      storageWarning = 'Image could not be removed from storage (row was still deleted).'
+      storageWarning = 'Greeting deleted, but the image could not be removed from storage.'
+      console.warn('[deleteGreeting] storage remove failed:', storageError.message, { path })
     }
-  } else {
-    storageWarning = 'Could not determine storage path; row was still deleted.'
+  } else if (row.image_url?.trim()) {
+    storageWarning = 'Greeting deleted, but the storage path could not be determined for cleanup.'
   }
-
-  const { error: dbError } = await supabase.from('greetings').delete().eq('id', row.id)
-  if (dbError) throw new Error(dbError.message || 'Failed to delete greeting.')
 
   return storageWarning ? { storageWarning } : {}
 }

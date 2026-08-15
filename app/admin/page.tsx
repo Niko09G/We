@@ -508,11 +508,13 @@ export default function AdminPage() {
     setDeletingId(row.id)
     try {
       const result = await deleteGreeting({ id: row.id, image_url: row.image_url })
-      setRows((prev) => prev.filter((r) => r.id !== row.id))
+      await refresh()
       setSuccessMessage('Greeting deleted.')
       if (result.storageWarning) setStorageWarning(result.storageWarning)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete greeting.')
+      const msg = e instanceof Error ? e.message : 'Failed to delete greeting.'
+      console.error('[admin/greetings] delete failed:', msg, { greetingId: row.id })
+      setError(msg)
     } finally {
       setDeletingId(null)
     }

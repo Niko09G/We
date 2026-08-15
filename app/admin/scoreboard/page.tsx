@@ -109,7 +109,7 @@ export default function ScoreboardAdminPage() {
 
   async function handleResetTable(tableId: string) {
     const ok = window.confirm(
-      `Reset all leaderboard scores for this table?\n\nThis will remove completions and revert approved mission submissions for this table (history preserved).`
+      `Reset all leaderboard scores for this table?\n\nThis will remove completions, revert approved mission submissions, and clear greetings for this table (history preserved).`
     )
     if (!ok) return
     const typed = window.prompt('Type RESET to confirm table reset:')
@@ -131,7 +131,7 @@ export default function ScoreboardAdminPage() {
 
   async function handleResetAll() {
     const ok = window.confirm(
-      'Reset ALL leaderboard scores globally?\n\nThis removes all completions and reverts all approved mission submissions (submission history preserved).'
+      'Reset ALL leaderboard scores globally?\n\nThis removes all completions, reverts all approved mission submissions, and clears all greetings (submission history preserved).'
     )
     if (!ok) return
     const typed = window.prompt('Type RESET to confirm GLOBAL reset:')
