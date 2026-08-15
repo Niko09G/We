@@ -46,11 +46,11 @@ export function GreetingSpeechBubble({
 
   return (
     <div
-      className="absolute bottom-10 left-8 z-20 flex max-w-[min(72%,900px)] items-end gap-5 animate-[greetingTextIn_0.45s_ease-out]"
+      className="absolute bottom-[190px] left-8 z-20 flex max-w-[min(72%,900px)] items-end gap-5"
       aria-live="polite"
     >
       <div
-        className="relative z-10 shrink-0 rounded-full border-[3px] border-white/90 p-1 shadow-[0_6px_24px_rgba(0,0,0,0.32)]"
+        className="relative z-10 shrink-0 animate-[greetingAvatarIn_0.4s_ease-out_both] rounded-full border-[3px] border-white/90 p-1 shadow-[0_6px_24px_rgba(0,0,0,0.32)]"
         style={{ background: gradientCss }}
         aria-hidden
       >
@@ -71,12 +71,12 @@ export function GreetingSpeechBubble({
         </div>
       </div>
 
-      <div className="relative min-w-0 flex-1">
+      <div className="relative min-w-0 flex-1 animate-[greetingBubbleExpand_0.55s_cubic-bezier(0.22,1,0.36,1)_0.22s_both]">
         <div
           className="absolute -left-2.5 bottom-10 h-5 w-5 rotate-45 bg-white shadow-sm"
           aria-hidden
         />
-        <div className="rounded-3xl rounded-bl-lg bg-white px-8 py-6 shadow-[0_12px_48px_rgba(0,0,0,0.28)]">
+        <div className="origin-bottom-left rounded-3xl rounded-bl-lg bg-white px-8 py-6 shadow-[0_12px_48px_rgba(0,0,0,0.28)]">
           <p className="text-2xl font-bold leading-tight tracking-tight text-zinc-900 md:text-3xl">
             {isMission ? teamName : displayName}
           </p>

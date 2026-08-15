@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 
 import { RewardUnitIcon } from '@/components/reward/RewardUnitIcon'
 import { useRewardUnit } from '@/components/reward/RewardUnitProvider'
+import { resolveRankEmblemUrl, type GuestEmblemsSettingsValue } from '@/lib/guest-emblem-config'
 import { rewardUnitCompactLabel } from '@/lib/reward-unit'
 import type { DisplayTeamVisual } from '@/lib/display-team-visuals'
 import type { LeaderboardEntry } from '@/lib/leaderboard'
@@ -15,7 +16,24 @@ function tableInitials(name: string): string {
   return (parts[0]?.slice(0, 2) ?? '?').toUpperCase()
 }
 
-function RankEmblem({ rank }: { rank: number }) {
+function RankEmblem({
+  rank,
+  emblemUrl,
+}: {
+  rank: number
+  emblemUrl: string | null
+}) {
+  if (emblemUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={emblemUrl}
+        alt={`Rank ${rank}`}
+        className="h-14 w-14 shrink-0 object-contain drop-shadow-[0_3px_12px_rgba(0,0,0,0.3)]"
+      />
+    )
+  }
+
   if (rank === 1) {
     return (
       <span
@@ -61,11 +79,12 @@ type TeamCardProps = {
   rank: number
   visual: DisplayTeamVisual | null
   avatarUrl: string | null
+  rankEmblemUrl: string | null
   pointsDelta?: number
 }
 
 const TeamCard = forwardRef<HTMLDivElement, TeamCardProps>(function TeamCard(
-  { entry, rank, visual, avatarUrl, pointsDelta },
+  { entry, rank, visual, avatarUrl, rankEmblemUrl, pointsDelta },
   ref
 ) {
   const { config: rewardUnit } = useRewardUnit()
@@ -90,45 +109,45 @@ const TeamCard = forwardRef<HTMLDivElement, TeamCardProps>(function TeamCard(
       <div className="absolute inset-0" style={{ background: gradient }} aria-hidden />
 
       <div className="relative flex h-full min-h-0 flex-col">
-        {/* Header row: rank left, name center, score right */}
-        <div className="relative z-10 flex shrink-0 items-center gap-3 px-4 pt-4">
-          <RankEmblem rank={rank} />
-          <p className="absolute left-1/2 top-4 max-w-[calc(100%-8rem)] -translate-x-1/2 truncate text-center text-xl font-bold text-white drop-shadow-md md:text-2xl">
-            {entry.tableName}
-          </p>
-          <div className="ml-auto flex items-center gap-2">
-            <RewardUnitIcon size={28} displayVariant="onDark" />
-            <span className="text-3xl font-bold tabular-nums text-white tracking-tight">
-              {entry.totalPoints}
-            </span>
-            <span className="sr-only">{unitLabel}</span>
-            {pointsDelta != null && pointsDelta > 0 ? (
-              <motion.span
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-sm font-bold tabular-nums text-amber-200"
-              >
-                +{pointsDelta}
-              </motion.span>
-            ) : null}
-          </div>
+        <p className="relative z-10 shrink-0 truncate px-14 pt-3 text-center text-xl font-bold text-white drop-shadow-md md:text-2xl">
+          {entry.tableName}
+        </p>
+
+        <div className="pointer-events-none absolute inset-y-0 left-4 z-10 flex items-center">
+          <RankEmblem rank={rank} emblemUrl={rankEmblemUrl} />
         </div>
 
-        {/* Hero image: large, bottom-centered */}
+        <div className="pointer-events-none absolute inset-y-0 right-4 z-10 flex items-center gap-2">
+          <RewardUnitIcon size={28} displayVariant="onDark" />
+          <span className="text-3xl font-bold tabular-nums tracking-tight text-white">
+            {entry.totalPoints}
+          </span>
+          <span className="sr-only">{unitLabel}</span>
+          {pointsDelta != null && pointsDelta > 0 ? (
+            <motion.span
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-sm font-bold tabular-nums text-amber-200"
+            >
+              +{pointsDelta}
+            </motion.span>
+          ) : null}
+        </div>
+
         <div className="relative mt-auto flex flex-1 items-end justify-center overflow-hidden px-2 pb-0 pt-2">
           {heroUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={heroUrl}
               alt=""
-              className="max-h-[85%] w-auto max-w-[90%] object-contain object-bottom drop-shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+              className="max-h-[85%] w-auto max-w-[90%] origin-bottom -mb-4 scale-[1.2] translate-y-2 object-contain object-bottom drop-shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
             />
           ) : avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={avatarUrl}
               alt=""
-              className="max-h-[70%] w-auto max-w-[70%] object-contain object-bottom drop-shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+              className="max-h-[70%] w-auto max-w-[70%] origin-bottom -mb-4 scale-[1.2] translate-y-2 object-contain object-bottom drop-shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
             />
           ) : (
             <span className="mb-4 flex h-24 w-24 items-center justify-center rounded-2xl border border-white/30 bg-white/10 text-2xl font-bold text-white/90 shadow-md">
@@ -145,6 +164,7 @@ export function LeaderboardSidebar({
   entries,
   teamVisuals,
   teamAvatars,
+  rankEmblems,
   rowAnim,
   isFullscreen,
   onRequestFullscreen,
@@ -155,6 +175,7 @@ export function LeaderboardSidebar({
   entries: LeaderboardEntry[]
   teamVisuals: Record<string, DisplayTeamVisual>
   teamAvatars: Record<string, string>
+  rankEmblems: GuestEmblemsSettingsValue
   rowAnim: Record<string, { delta?: number }>
   isFullscreen: boolean
   onRequestFullscreen: () => void
@@ -163,7 +184,7 @@ export function LeaderboardSidebar({
   teamCardRefs: MutableRefObject<Record<string, HTMLDivElement | null>>
 }) {
   return (
-    <aside className="col-span-4 flex h-full min-h-0 flex-col bg-zinc-950">
+    <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl bg-zinc-950">
       <div className="relative flex shrink-0 items-center justify-center border-b border-zinc-800 bg-zinc-900/80 px-4 py-3">
         <h2 className="text-lg font-bold tracking-tight text-white">Leaderboard</h2>
         {!isFullscreen ? (
@@ -208,6 +229,7 @@ export function LeaderboardSidebar({
               rank={rank}
               visual={teamVisuals[entry.tableId] ?? null}
               avatarUrl={teamAvatars[entry.tableId] ?? null}
+              rankEmblemUrl={resolveRankEmblemUrl(rankEmblems, rank)}
               pointsDelta={anim?.delta}
             />
           )

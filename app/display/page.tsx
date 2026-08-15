@@ -16,8 +16,14 @@ import {
   recordGreetingDisplayed,
   type GreetingRow,
 } from '@/lib/greetings-admin'
+import {
+  fetchGuestEmblemsConfig,
+  type GuestEmblemsSettingsValue,
+} from '@/lib/guest-emblem-config'
 import type { LeaderboardEntry, RecentActivityItem } from '@/lib/leaderboard'
 import { supabase } from '@/lib/supabase/client'
+
+const DISPLAY_GRID_CLASS = 'grid h-screen w-screen grid-cols-[8.6fr_3.4fr] gap-6 bg-zinc-950 p-6'
 
 const GREETING_ROTATE_MS = 10_000
 const LIVE_POLL_MS = 25_000
@@ -86,6 +92,7 @@ export default function DisplayPage() {
   const [teamAvatars, setTeamAvatars] = useState<Record<string, string>>({})
   const [confettiFire, setConfettiFire] = useState(0)
   const [flyingCoins, setFlyingCoins] = useState<FlyingBeatCoin[]>([])
+  const [rankEmblems, setRankEmblems] = useState<GuestEmblemsSettingsValue>({})
 
   const containerRef = useRef<HTMLDivElement>(null)
   const mainCanvasRef = useRef<HTMLDivElement>(null)
@@ -118,6 +125,21 @@ export default function DisplayPage() {
   useEffect(() => {
     void loadInitialGreeting()
   }, [loadInitialGreeting])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const cfg = await fetchGuestEmblemsConfig()
+        if (!cancelled) setRankEmblems(cfg)
+      } catch {
+        if (!cancelled) setRankEmblems({})
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -336,17 +358,15 @@ export default function DisplayPage() {
 
   if (greetingLoading && !currentGreeting) {
     return (
-      <div
-        ref={containerRef}
-        className="grid h-screen w-screen grid-cols-12 bg-zinc-950"
-      >
-        <div className="col-span-8 flex min-w-0 items-center justify-center bg-zinc-900/50">
+      <div ref={containerRef} className={DISPLAY_GRID_CLASS}>
+        <div className="flex min-w-0 items-center justify-center overflow-hidden rounded-2xl bg-zinc-900/50">
           <span className="text-zinc-500">Loading…</span>
         </div>
         <LeaderboardSidebar
           entries={[]}
           teamVisuals={{}}
           teamAvatars={{}}
+          rankEmblems={rankEmblems}
           rowAnim={{}}
           isFullscreen={false}
           onRequestFullscreen={requestFullscreen}
@@ -359,13 +379,10 @@ export default function DisplayPage() {
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="grid h-screen w-screen grid-cols-12 bg-zinc-950"
-    >
+    <div ref={containerRef} className={DISPLAY_GRID_CLASS}>
       <div
         ref={mainCanvasRef}
-        className="relative col-span-8 min-w-0 overflow-hidden bg-zinc-900"
+        className="relative min-w-0 overflow-hidden rounded-2xl bg-zinc-900"
       >
         {!currentGreeting ? (
           <div className="flex h-full w-full flex-col items-center justify-center px-8">
@@ -405,6 +422,7 @@ export default function DisplayPage() {
         entries={leaderboardEntries}
         teamVisuals={teamVisuals}
         teamAvatars={teamAvatars}
+        rankEmblems={rankEmblems}
         rowAnim={rowAnim}
         isFullscreen={isFullscreen}
         onRequestFullscreen={requestFullscreen}
