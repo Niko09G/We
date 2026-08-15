@@ -166,6 +166,7 @@ export function SeatingMapPanel({
   layout = 'page',
   showSectionHeading = true,
   sectionTitle = 'Find your seat',
+  viewerAccentColor,
 }: {
   className?: string
   layout?: 'page' | 'embedded'
@@ -173,6 +174,8 @@ export function SeatingMapPanel({
   showSectionHeading?: boolean
   /** Team/table page can override (e.g. “Find your people”); standalone seat page keeps default. */
   sectionTitle?: string
+  /** Optional team accent for search focus/selection on embedded team pages. */
+  viewerAccentColor?: string
 }) {
   const [rows, setRows] = useState<GuestWithTable[]>([])
   const [loading, setLoading] = useState(true)
@@ -522,9 +525,20 @@ export function SeatingMapPanel({
     </div>
   ) : null
 
+  const accentCssVar =
+    viewerAccentColor?.trim() &&
+    /^#?[0-9a-fA-F]{3,8}$/.test(viewerAccentColor.trim())
+      ? ({
+          ['--viewer-accent' as string]: viewerAccentColor.trim().startsWith('#')
+            ? viewerAccentColor.trim()
+            : `#${viewerAccentColor.trim()}`,
+        } as React.CSSProperties)
+      : undefined
+
   const searchBlock = (
     <div
       className={`relative shrink-0 ${showSectionHeading ? 'mt-4' : layout === 'embedded' ? 'mt-0' : 'mt-4'}`}
+      style={accentCssVar}
     >
       <input
         ref={inputRef}
@@ -540,7 +554,11 @@ export function SeatingMapPanel({
           }
         }}
         placeholder="Search name"
-        className="relative z-10 w-full rounded-full border border-zinc-200 bg-zinc-50/80 px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition-colors duration-200 focus:border-violet-300 focus:bg-white focus:ring-2 focus:ring-violet-200/60"
+        className={`relative z-10 w-full rounded-full border border-zinc-200 bg-zinc-50/80 px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition-colors duration-200 focus:bg-white ${
+          accentCssVar
+            ? 'focus:border-[var(--viewer-accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--viewer-accent)_28%,transparent)]'
+            : 'focus:border-violet-300 focus:ring-2 focus:ring-violet-200/60'
+        }`}
       />
       {search.trim().length > 0 && !searchResultsDismissed ? (
         <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-auto rounded-2xl border border-zinc-200 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
@@ -556,8 +574,16 @@ export function SeatingMapPanel({
                     type="button"
                     onClick={() => selectGuest(g)}
                     className={`flex w-full items-center gap-3 px-3 py-3 text-left transition-colors duration-200 hover:bg-zinc-50 active:bg-zinc-100/80 ${
-                      selectedId === g.id ? 'bg-violet-50' : ''
+                      selectedId === g.id && !accentCssVar ? 'bg-violet-50' : ''
                     }`}
+                    style={
+                      selectedId === g.id && accentCssVar
+                        ? {
+                            backgroundColor:
+                              'color-mix(in srgb, var(--viewer-accent) 12%, white)',
+                          }
+                        : undefined
+                    }
                   >
                     <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-zinc-200 bg-zinc-100">
                       {g.photo_url ? (
