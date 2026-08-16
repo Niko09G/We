@@ -11,7 +11,7 @@ import {
   deleteMission,
   listMissions,
   maxSubmissionsDisplayValue,
-  swapMissionSortOrder,
+  saveMissionOrder,
   updateMission,
   VALIDATION_TYPES,
   type MissionRecord,
@@ -640,35 +640,54 @@ export default function MissionsLibraryPage() {
     })
   }, [filtered])
 
-  const moveMissionSortOrder = useCallback(
-    async (missionId: string, direction: 'up' | 'down') => {
-      const idx = sortedFiltered.findIndex((m) => m.id === missionId)
-      if (idx < 0) return
-      const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+  const sortMissionsByOrder = useCallback((list: MissionRecord[]) => {
+    return [...list].sort((a, b) => {
+      if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order
+      return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+    })
+  }, [])
+
+  const moveMission = useCallback(
+    (index: number, direction: 'up' | 'down') => {
+      const swapIdx = direction === 'up' ? index - 1 : index + 1
       if (swapIdx < 0 || swapIdx >= sortedFiltered.length) return
-      const other = sortedFiltered[swapIdx]!
-      setReorderingMissionId(missionId)
-      try {
-        await swapMissionSortOrder(missionId, other.id)
-        setMissions((prev) => {
-          const next = prev.map((m) => ({ ...m }))
-          const a = next.find((m) => m.id === missionId)
-          const b = next.find((m) => m.id === other.id)
-          if (!a || !b) return prev
-          const aOrd = a.sort_order
-          a.sort_order = b.sort_order
-          b.sort_order = aOrd
-          return next
-        })
-        showToast('Mission order updated.', 'success')
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Failed to reorder mission.'
-        showToast(msg, 'error')
-      } finally {
-        setReorderingMissionId(null)
-      }
+
+      const idA = sortedFiltered[index]!.id
+      const idB = sortedFiltered[swapIdx]!.id
+      const globallySorted = sortMissionsByOrder(missions)
+      const globalIdxA = globallySorted.findIndex((m) => m.id === idA)
+      const globalIdxB = globallySorted.findIndex((m) => m.id === idB)
+      if (globalIdxA < 0 || globalIdxB < 0) return
+
+      const nextGlobal = [...globallySorted]
+      const itemA = nextGlobal[globalIdxA]!
+      const itemB = nextGlobal[globalIdxB]!
+      nextGlobal[globalIdxA] = itemB
+      nextGlobal[globalIdxB] = itemA
+
+      const payload = nextGlobal.map((m, i) => ({ id: m.id, sort_order: i }))
+      const orderById = new Map(payload.map((p) => [p.id, p.sort_order]))
+
+      setMissions((prev) =>
+        prev.map((m) =>
+          orderById.has(m.id) ? { ...m, sort_order: orderById.get(m.id)! } : m
+        )
+      )
+
+      setReorderingMissionId(idA)
+      void (async () => {
+        try {
+          await saveMissionOrder(payload)
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : 'Failed to reorder mission.'
+          showToast(msg, 'error')
+          void refresh()
+        } finally {
+          setReorderingMissionId(null)
+        }
+      })()
     },
-    [sortedFiltered, showToast]
+    [missions, sortedFiltered, sortMissionsByOrder, showToast, refresh]
   )
 
   const confirmDeleteMission = useCallback(
@@ -1365,7 +1384,8 @@ export default function MissionsLibraryPage() {
                             disabled={!canMoveUp || reorderBusy}
                             onClick={(e) => {
                               e.stopPropagation()
-                              void moveMissionSortOrder(m.id, 'up')
+                              e.preventDefault()
+                              moveMission(cardIndex, 'up')
                             }}
                             className="pointer-events-auto flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-zinc-200/90 bg-white/95 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-[2px] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
                             aria-label="Move mission up"
@@ -1377,7 +1397,8 @@ export default function MissionsLibraryPage() {
                             disabled={!canMoveDown || reorderBusy}
                             onClick={(e) => {
                               e.stopPropagation()
-                              void moveMissionSortOrder(m.id, 'down')
+                              e.preventDefault()
+                              moveMission(cardIndex, 'down')
                             }}
                             className="pointer-events-auto flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-zinc-200/90 bg-white/95 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-[2px] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
                             aria-label="Move mission down"

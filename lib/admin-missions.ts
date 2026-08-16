@@ -363,6 +363,16 @@ export async function deleteMission(id: string): Promise<void> {
   }
 }
 
+export type MissionOrderPayload = { id: string; sort_order: number }
+
+/** Persist mission display order after admin reorder (batch update). */
+export async function saveMissionOrder(missionOrders: MissionOrderPayload[]): Promise<void> {
+  if (missionOrders.length === 0) return
+  await Promise.all(
+    missionOrders.map(({ id, sort_order }) => updateMission(id, { sort_order }))
+  )
+}
+
 /** Swap sort_order between two missions (admin cards reorder). */
 export async function swapMissionSortOrder(missionIdA: string, missionIdB: string): Promise<void> {
   const { data, error } = await supabase
@@ -377,9 +387,9 @@ export async function swapMissionSortOrder(missionIdA: string, missionIdB: strin
   const b = rows.find((r) => r.id === missionIdB)
   if (!a || !b) throw new Error('Could not find both missions to reorder.')
 
-  await Promise.all([
-    updateMission(a.id, { sort_order: b.sort_order }),
-    updateMission(b.id, { sort_order: a.sort_order }),
+  await saveMissionOrder([
+    { id: a.id, sort_order: b.sort_order },
+    { id: b.id, sort_order: a.sort_order },
   ])
 }
 
