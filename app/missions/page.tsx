@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
+import { DynamicThemeColor } from '@/components/DynamicThemeColor'
 import { supabase } from '@/lib/supabase/client'
 import { getMissionsEnabled } from '@/lib/app-settings'
 
@@ -140,6 +141,7 @@ export default function MissionsEntryPage() {
 
   return (
     <main className="min-h-screen bg-zinc-950 px-4 py-8">
+      <DynamicThemeColor color="#09090b" />
       <div className="mx-auto w-full max-w-md">
         <div className="mb-5 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
           <h1 className="text-2xl font-semibold tracking-tight text-white">

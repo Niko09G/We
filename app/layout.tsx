@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Inter, Montserrat, Outfit } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "./providers";
-import { MISSIONS_HERO_THEME_COLOR } from "@/lib/guest-missions-gradients";
 
 const montserrat = Montserrat({
   variable: "--font-montserrat",
@@ -40,7 +39,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: MISSIONS_HERO_THEME_COLOR,
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({

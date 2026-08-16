@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { DynamicThemeColor } from '@/components/DynamicThemeColor'
 import { LobbyEventProgramSection } from '@/components/guest/LobbyEventProgramSection'
 import { LobbyHero } from '@/components/guest/LobbyHero'
 import { LobbyMcsSection } from '@/components/guest/LobbyMcsSection'
@@ -11,6 +12,7 @@ import {
   type LobbyModuleId,
   type LobbySettings,
 } from '@/lib/lobby-settings'
+import { MISSIONS_HERO_THEME_COLOR } from '@/lib/guest-missions-gradients'
 import { supabase } from '@/lib/supabase/client'
 
 function scrollToSection(id: string) {
@@ -146,6 +148,7 @@ export default function LobbyPage() {
 
   return (
     <main className="min-h-screen w-full min-w-0 max-w-full bg-white">
+      <DynamicThemeColor color={MISSIONS_HERO_THEME_COLOR} />
       <div id="section-hero" className="sticky top-0 z-0 h-[100dvh]">
         <LobbyHero
           loading={loading || !hero}

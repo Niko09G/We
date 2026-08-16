@@ -21,6 +21,11 @@
 }
 
 /* Lock document width — prevents horizontal rubber-banding from off-screen decor / carousels */
+html,
+body {
+  transition: background-color 0.3s ease;
+}
+
 html {
   height: 100%;
   overflow-x: clip;
@@ -30,6 +35,7 @@ html {
 body {
   height: 100%;
   margin: 0;
+  padding: 0;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
