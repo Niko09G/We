@@ -1087,7 +1087,7 @@ export default function MissionsTablePage({
   const navHighlightColor = teamPage.theme.primaryColor
 
   return (
-    <main className="min-h-screen w-full min-w-0 max-w-full bg-white">
+    <main className="guest-page-shell min-w-0 max-w-full bg-white">
       <div id="section-hero" className="sticky top-0 z-0 h-[100dvh]">
         <MissionsTableHero
           loading={loading}
@@ -1120,7 +1120,7 @@ export default function MissionsTablePage({
         />
       </div>
 
-      <div className="relative z-10 -mt-6 min-h-screen rounded-t-3xl bg-white shadow-2xl isolate">
+      <div className="relative z-10 -mt-6 min-h-dvh rounded-t-3xl bg-white shadow-2xl isolate">
       {loading && showMissionUi ? (
         <section className="w-full pt-8" aria-busy="true">
           <div className="mb-5 flex items-end justify-between gap-4">

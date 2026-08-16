@@ -140,7 +140,7 @@ export default function MissionsEntryPage() {
   }, [loading, missionsEnabled, tables])
 
   return (
-    <main className="min-h-screen bg-zinc-950 px-4 py-8">
+    <main className="guest-page-shell bg-zinc-950 px-4 py-8">
       <DynamicThemeColor color="#09090b" />
       <div className="mx-auto w-full max-w-md">
         <div className="mb-5 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">

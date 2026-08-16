@@ -24,16 +24,18 @@
 html,
 body {
   transition: background-color 0.3s ease;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 html {
-  height: 100%;
+  min-height: 100dvh;
   overflow-x: clip;
   max-width: 100%;
 }
 
 body {
-  height: 100%;
+  min-height: 100dvh;
   margin: 0;
   padding: 0;
   background: var(--background);
@@ -42,6 +44,13 @@ body {
   overflow-x: clip;
   max-width: 100%;
   position: relative;
+}
+
+/* Guest lobby / missions — single document scroll, no nested overflow traps */
+.guest-page-shell {
+  min-height: 100dvh;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 .admin-font {
