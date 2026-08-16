@@ -4,7 +4,7 @@
  *     add_to_greetings, allow_multiple_submissions, max_submissions_per_table, points_per_submission,
  *     target_person_name, submission_hint, header_title, header_image_url, message_required,
  *     card_theme_index, card_cover_image_url, success_message,
- *     card_cta_label, card_completed_label
+ *     card_cta_label, card_completed_label, sort_order
  */
 export type MissionsTableRow = {
   id: string
@@ -35,4 +35,6 @@ export type MissionsTableRow = {
   card_cta_label: string | null
   /** Guest carousel CTA when complete; null = “Completed”. */
   card_completed_label: string | null
+  /** Admin manual display order (lower = earlier). */
+  sort_order: number
 }

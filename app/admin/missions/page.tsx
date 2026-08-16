@@ -6,8 +6,10 @@ import {
   adminValidationTypeLabel,
   APPROVAL_MODES,
   createMission,
+  deleteMission,
   listMissions,
   maxSubmissionsDisplayValue,
+  swapMissionSortOrder,
   updateMission,
   VALIDATION_TYPES,
   type MissionRecord,
@@ -434,6 +436,8 @@ export default function MissionsLibraryPage() {
   /** `null` = all tables (no table filter). Non-empty list = missions assigned to any selected table. */
   const [tableFilterTableIds, setTableFilterTableIds] = useState<string[] | null>(null)
   const [view, setView] = useState<MissionView>('cards')
+  const [reorderingMissionId, setReorderingMissionId] = useState<string | null>(null)
+  const [deletingMissionId, setDeletingMissionId] = useState<string | null>(null)
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorMode, setEditorMode] = useState<'create' | 'edit'>('create')
@@ -625,6 +629,66 @@ export default function MissionsLibraryPage() {
       return true
     })
   }, [missions, search, statusFilter, tableFilterTableIds, assignmentsByMission])
+
+  const sortedFiltered = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order
+      return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+    })
+  }, [filtered])
+
+  const moveMissionSortOrder = useCallback(
+    async (missionId: string, direction: 'up' | 'down') => {
+      const idx = sortedFiltered.findIndex((m) => m.id === missionId)
+      if (idx < 0) return
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+      if (swapIdx < 0 || swapIdx >= sortedFiltered.length) return
+      const other = sortedFiltered[swapIdx]!
+      setReorderingMissionId(missionId)
+      try {
+        await swapMissionSortOrder(missionId, other.id)
+        setMissions((prev) => {
+          const next = prev.map((m) => ({ ...m }))
+          const a = next.find((m) => m.id === missionId)
+          const b = next.find((m) => m.id === other.id)
+          if (!a || !b) return prev
+          const aOrd = a.sort_order
+          a.sort_order = b.sort_order
+          b.sort_order = aOrd
+          return next
+        })
+        showToast('Mission order updated.', 'success')
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to reorder mission.'
+        showToast(msg, 'error')
+      } finally {
+        setReorderingMissionId(null)
+      }
+    },
+    [sortedFiltered, showToast]
+  )
+
+  const confirmDeleteMission = useCallback(
+    async (mission: MissionRecord) => {
+      const ok = window.confirm(
+        `Delete “${mission.title}”? This removes the mission and related submissions cannot be undone.`
+      )
+      if (!ok) return
+      setDeletingMissionId(mission.id)
+      try {
+        await deleteMission(mission.id)
+        setMissions((prev) => prev.filter((m) => m.id !== mission.id))
+        if (editingId === mission.id) setEditorOpen(false)
+        showToast('Mission deleted.', 'success')
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to delete mission.'
+        showToast(msg, 'error')
+      } finally {
+        setDeletingMissionId(null)
+      }
+    },
+    [editingId, showToast]
+  )
 
   function openCreate() {
     setEditorMode('create')
@@ -1167,7 +1231,7 @@ export default function MissionsLibraryPage() {
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {filtered.map((m, index) => {
+                  {sortedFiltered.map((m, index) => {
                     const status = missionStatusBadge(m.is_active)
                     const rowBg =
                       index % 2 === 0 ? 'bg-[#fdfdfd] hover:bg-[#fafafa]' : 'bg-[#1f1f1f08] hover:bg-[#ededed]'
@@ -1239,7 +1303,7 @@ export default function MissionsLibraryPage() {
                   <p className="mt-1 text-sm text-zinc-500">Create a mission template</p>
                 </button>
 
-                {filtered.map((m) => {
+                {sortedFiltered.map((m, cardIndex) => {
                   const assignedCount = (assignmentsByMission[m.id] ?? []).length
                   const cap = effectiveMaxSubmissionsPerTable(m)
                   const coverImage = m.card_cover_image_url?.trim() || m.header_image_url?.trim() || ''
@@ -1257,29 +1321,79 @@ export default function MissionsLibraryPage() {
                     )
                   const limitTitle = submissionsLimitCardTitle(cap)
                   const categoryTitle = missionCategoryCardTitle(m.validation_type)
+                  const canMoveUp = cardIndex > 0
+                  const canMoveDown = cardIndex < sortedFiltered.length - 1
+                  const reorderBusy = reorderingMissionId === m.id
+                  const deleteBusy = deletingMissionId === m.id
                   return (
-                    <button
+                    <div
                       key={m.id}
-                      type="button"
-                      onClick={() => openEdit(m)}
-                      className="relative isolate h-[320px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 text-left shadow-none transform-gpu transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md"
+                      className="group relative isolate h-[320px] overflow-hidden rounded-2xl border border-zinc-200 text-left shadow-none transform-gpu transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md"
                       style={{ background: themeBg }}
                     >
+                      <button
+                        type="button"
+                        onClick={() => openEdit(m)}
+                        className="absolute inset-0 z-0 cursor-pointer"
+                        aria-label={`Edit ${m.title}`}
+                      />
                       {coverImage ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={coverImage}
                           alt=""
-                          className="pointer-events-none absolute inset-0 h-full w-full min-h-full min-w-full scale-[1.03] object-cover object-center"
+                          className="pointer-events-none absolute inset-0 z-[1] h-full w-full min-h-full min-w-full scale-[1.03] object-cover object-center"
                         />
                       ) : null}
                       <span
-                        className="absolute right-3 top-3 z-20 max-w-[calc(100%-6rem)] truncate rounded-full bg-white/95 px-2.5 py-0.5 text-[11px] font-semibold text-zinc-800 shadow-sm backdrop-blur-[2px]"
+                        className="absolute right-3 top-3 z-20 max-w-[calc(100%-6rem)] truncate rounded-full bg-white/95 px-2.5 py-0.5 text-[11px] font-semibold text-zinc-800 shadow-sm backdrop-blur-[2px] transition-opacity duration-200 group-hover:opacity-0"
                         title={limitTitle}
                       >
                         {limitLabel}
                       </span>
-                      <div className="relative z-10 flex h-full min-h-0 flex-col p-3">
+                      <div
+                        className="pointer-events-none absolute inset-0 z-20 opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100"
+                      >
+                        <div className="absolute left-3 top-3 flex flex-col gap-1">
+                          <button
+                            type="button"
+                            disabled={!canMoveUp || reorderBusy}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void moveMissionSortOrder(m.id, 'up')
+                            }}
+                            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-zinc-200/90 bg-white/95 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-[2px] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                            aria-label="Move mission up"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!canMoveDown || reorderBusy}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void moveMissionSortOrder(m.id, 'down')
+                            }}
+                            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-zinc-200/90 bg-white/95 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-[2px] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                            aria-label="Move mission down"
+                          >
+                            ↓
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={deleteBusy}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void confirmDeleteMission(m)
+                          }}
+                          className="absolute right-3 top-3 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-zinc-200/90 bg-white/95 text-sm font-semibold text-red-600 shadow-sm backdrop-blur-[2px] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label={`Delete ${m.title}`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className="relative z-10 flex h-full min-h-0 flex-col p-3 pointer-events-none">
                         <div
                           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200/80 bg-white shadow-sm"
                           title={categoryTitle}
@@ -1314,7 +1428,7 @@ export default function MissionsLibraryPage() {
                           </p>
                         </div>
                       </div>
-                    </button>
+                    </div>
                   )
                 })}
               </div>

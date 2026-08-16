@@ -76,8 +76,8 @@ const LANDMARKS = [
 const WORLD_W = 720
 const WORLD_H = 620
 
-/** Overview: fully zoomed out; pan X nudged right vs world origin. */
-const DEFAULT_ZOOM = 0.52
+/** Overview: default viewport (+2 zoom steps above fully zoomed-out baseline). */
+const DEFAULT_ZOOM = 0.68
 const FOCUS_ZOOM = 1.08
 const ZOOM_MIN = 0.52
 const ZOOM_MAX = 1.28
@@ -248,10 +248,10 @@ function GuestTableSeatMap({
         key={guest.id}
         type="button"
         onClick={() => onSelectGuest(guest)}
-        className={`shrink-0 overflow-hidden rounded-full border-2 transition-[box-shadow] duration-200 ${
+        className={`shrink-0 overflow-hidden rounded-full transition-[box-shadow] duration-200 ${
           isSelected
-            ? 'animate-seat-selected-glow z-30 border-white bg-white'
-            : 'border-zinc-300 bg-white shadow-sm hover:border-zinc-400'
+            ? 'animate-seat-selected-glow z-30 border-2 border-white p-0'
+            : 'border-2 border-zinc-300 bg-white shadow-sm hover:border-zinc-400'
         }`}
         style={{
           width: size,
@@ -264,7 +264,11 @@ function GuestTableSeatMap({
       >
         {guest.photo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={guest.photo_url} alt="" className="h-full w-full object-cover" />
+          <img
+            src={guest.photo_url}
+            alt=""
+            className="h-full w-full rounded-full object-cover"
+          />
         ) : (
           <span className="flex h-full w-full items-center justify-center bg-zinc-200 text-[9px] font-bold text-zinc-700">
             {getInitials(guest.full_name)}

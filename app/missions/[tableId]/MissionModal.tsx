@@ -482,7 +482,9 @@ export function MissionModal({
     (pending && !success) ||
     atSubmissionLimit
 
-  const missionTitleText = mission.header_title?.trim() || mission.title
+  const missionTitleText = isHeroOverlay
+    ? mission.title?.trim() || 'Post a table greeting'
+    : mission.header_title?.trim() || mission.title
   const missionArtworkUrl = mission.header_image_url?.trim() || null
   const missionDescriptionBody =
     mission.description != null && mission.description.trim() !== ''

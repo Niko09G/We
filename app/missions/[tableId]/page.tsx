@@ -759,6 +759,7 @@ export default function MissionsTablePage({
             )
             .in('id', assignedMissionIds)
             .eq('is_active', true)
+            .order('sort_order', { ascending: true })
             .order('title')
 
           if (mErr) throw new Error(`missions: ${mErr.message}`)

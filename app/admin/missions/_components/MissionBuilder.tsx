@@ -455,6 +455,7 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
       message_required: form.message_required,
       card_theme_index: form.card_theme_choice === 'auto' ? null : form.card_theme_choice,
       card_cover_image_url: form.card_cover_image_url || null,
+      sort_order: 0,
     }
   }, [form, savedActive, workingId])
 

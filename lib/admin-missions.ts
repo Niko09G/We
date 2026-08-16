@@ -51,15 +51,20 @@ function missionRecordFromSupabaseRow(row: Record<string, unknown>): MissionReco
     success_message: (row.success_message as string | null) ?? null,
     card_cta_label: (row.card_cta_label as string | null) ?? null,
     card_completed_label: (row.card_completed_label as string | null) ?? null,
+    sort_order:
+      typeof row.sort_order === 'number' && Number.isFinite(row.sort_order)
+        ? Math.trunc(row.sort_order)
+        : 0,
   }
 }
+
+const MISSION_SELECT =
+  'id,title,description,points,created_at,validation_type,is_active,approval_mode,add_to_greetings,allow_multiple_submissions,max_submissions_per_table,points_per_submission,target_person_name,submission_hint,header_title,header_image_url,message_required,card_theme_index,card_cover_image_url,success_message,card_cta_label,card_completed_label,sort_order'
 
 export async function getMissionById(id: string): Promise<MissionRecord | null> {
   const { data, error } = await supabase
     .from('missions')
-    .select(
-      'id,title,description,points,created_at,validation_type,is_active,approval_mode,add_to_greetings,allow_multiple_submissions,max_submissions_per_table,points_per_submission,target_person_name,submission_hint,header_title,header_image_url,message_required,card_theme_index,card_cover_image_url,success_message,card_cta_label,card_completed_label'
-    )
+    .select(MISSION_SELECT)
     .eq('id', id)
     .maybeSingle()
 
@@ -71,9 +76,8 @@ export async function getMissionById(id: string): Promise<MissionRecord | null> 
 export async function listMissions(): Promise<MissionRecord[]> {
   const { data, error } = await supabase
     .from('missions')
-    .select(
-      'id,title,description,points,created_at,validation_type,is_active,approval_mode,add_to_greetings,allow_multiple_submissions,max_submissions_per_table,points_per_submission,target_person_name,submission_hint,header_title,header_image_url,message_required,card_theme_index,card_cover_image_url,success_message,card_cta_label,card_completed_label'
-    )
+    .select(MISSION_SELECT)
+    .order('sort_order', { ascending: true })
     .order('title')
 
   if (error) throw new Error(error.message || 'Failed to load missions.')
@@ -111,6 +115,17 @@ export async function createMission(input: {
           ? null
           : Math.max(1, Math.floor(Number(input.max_submissions_per_table)))
 
+  const { data: maxOrderRow } = await supabase
+    .from('missions')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const nextSortOrder =
+    typeof (maxOrderRow as { sort_order?: number } | null)?.sort_order === 'number'
+      ? Math.trunc((maxOrderRow as { sort_order: number }).sort_order) + 1
+      : 0
+
   const row: Record<string, unknown> = {
     title: input.title.trim(),
     description: input.description.trim() || null,
@@ -118,6 +133,7 @@ export async function createMission(input: {
     validation_type: input.validation_type,
     approval_mode: input.approval_mode,
     is_active: input.is_active,
+    sort_order: nextSortOrder,
     add_to_greetings: input.add_to_greetings ?? false,
     max_submissions_per_table: max,
     allow_multiple_submissions: allowMultipleSubmissionsFlag({
@@ -178,6 +194,7 @@ export async function updateMission(
     success_message: string | null
     card_cta_label: string | null
     card_completed_label: string | null
+    sort_order: number
   }>
 ): Promise<void> {
   const row: Record<string, unknown> = {}
@@ -214,6 +231,9 @@ export async function updateMission(
   if (patch.card_completed_label !== undefined) {
     row.card_completed_label = patch.card_completed_label?.trim() || null
   }
+  if (patch.sort_order !== undefined) {
+    row.sort_order = Math.trunc(patch.sort_order)
+  }
 
   if (patch.max_submissions_per_table !== undefined) {
     const max =
@@ -233,6 +253,39 @@ export async function updateMission(
 
   const { error } = await supabase.from('missions').update(row).eq('id', id)
   if (error) throw new Error(error.message || 'Failed to update mission.')
+}
+
+export async function deleteMission(id: string): Promise<void> {
+  const { data: deletedRows, error } = await supabase
+    .from('missions')
+    .delete()
+    .eq('id', id)
+    .select('id')
+
+  if (error) throw new Error(error.message || 'Failed to delete mission.')
+  if (!deletedRows?.length) {
+    throw new Error('Delete mission failed: no row was removed (check RLS delete policy).')
+  }
+}
+
+/** Swap sort_order between two missions (admin cards reorder). */
+export async function swapMissionSortOrder(missionIdA: string, missionIdB: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('missions')
+    .select('id, sort_order')
+    .in('id', [missionIdA, missionIdB])
+
+  if (error) throw new Error(error.message || 'Failed to load missions for reorder.')
+
+  const rows = (data ?? []) as Array<{ id: string; sort_order: number }>
+  const a = rows.find((r) => r.id === missionIdA)
+  const b = rows.find((r) => r.id === missionIdB)
+  if (!a || !b) throw new Error('Could not find both missions to reorder.')
+
+  await Promise.all([
+    updateMission(a.id, { sort_order: b.sort_order }),
+    updateMission(b.id, { sort_order: a.sort_order }),
+  ])
 }
 
 /** Display / form: max as string; empty = unlimited. */

@@ -37,12 +37,15 @@ function sortGreetingsNewestFirst(rows: GreetingRow[]): GreetingRow[] {
 
 function greetingFromRealtimeRow(row: Record<string, unknown>): GreetingRow | null {
   const id = typeof row.id === 'string' ? row.id : null
-  const message = typeof row.message === 'string' ? row.message : null
-  const image_url = typeof row.image_url === 'string' ? row.image_url : null
+  const image_url = typeof row.image_url === 'string' ? row.image_url.trim() : ''
   const status = typeof row.status === 'string' ? row.status : null
   const created_at = typeof row.created_at === 'string' ? row.created_at : null
-  if (!id || !message || !image_url || !status || !created_at) return null
+  if (!id || !image_url || !status || !created_at) return null
   if (status !== 'ready') return null
+
+  const messageRaw = typeof row.message === 'string' ? row.message.trim() : ''
+  const message = messageRaw.length > 0 ? messageRaw : 'Greeting'
+
   return {
     id,
     message,
@@ -262,6 +265,52 @@ export default function DisplayPage() {
             payload.new as Record<string, unknown>
           )
           if (row) queueNewGreeting(row)
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'greetings' },
+        (payload) => {
+          const row = greetingFromRealtimeRow(
+            payload.new as Record<string, unknown>
+          )
+          if (row) {
+            queueNewGreeting(row)
+            return
+          }
+
+          const updatedId =
+            typeof (payload.new as { id?: unknown }).id === 'string'
+              ? (payload.new as { id: string }).id
+              : null
+          const newStatus =
+            typeof (payload.new as { status?: unknown }).status === 'string'
+              ? (payload.new as { status: string }).status
+              : null
+          if (!updatedId || newStatus === 'ready') return
+
+          setGreetings((prev) => {
+            const removeIdx = prev.findIndex((g) => g.id === updatedId)
+            if (removeIdx === -1) return prev
+
+            const next = prev.filter((g) => g.id !== updatedId)
+            greetingsRef.current = next
+
+            let newIdx = currentIndexRef.current
+            if (next.length === 0) {
+              newIdx = 0
+            } else {
+              if (removeIdx < newIdx) newIdx -= 1
+              else if (removeIdx === newIdx && newIdx >= next.length) {
+                newIdx = next.length - 1
+              }
+              if (newIdx >= next.length) newIdx = next.length - 1
+            }
+
+            currentIndexRef.current = newIdx
+            setCurrentIndex(newIdx)
+            return next
+          })
         }
       )
       .on(
