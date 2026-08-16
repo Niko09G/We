@@ -622,7 +622,7 @@ export default function CheckInPage() {
 
         <div className="mt-8 pb-2">
           <Link
-            href="/play"
+            href="/"
             className="inline-flex rounded-xl border border-zinc-300 px-4 py-2.5 text-sm font-medium text-zinc-700 dark:border-zinc-600 dark:text-zinc-300"
           >
             ← Lobby

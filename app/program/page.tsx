@@ -21,7 +21,7 @@ export default function EventProgramPage() {
               Send a greeting
             </Link>
             <Link
-              href="/play"
+              href="/"
               className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-medium text-white hover:bg-white/10"
             >
               Back to hub

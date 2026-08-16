@@ -13,6 +13,7 @@ type NavItem = {
   icon: (props: { active: boolean }) => JSX.Element
   key:
     | 'overview'
+    | 'lobby'
     | 'missions'
     | 'tokens'
     | 'tables'
@@ -56,6 +57,23 @@ const NAV_ITEMS: NavItem[] = [
     key: 'overview',
     section: 'event',
     icon: ({ active }) => <NavIcon active={active} d={<path d="M3 12h18M12 3v18" />} />,
+  },
+  {
+    href: '/admin/lobby',
+    label: 'Lobby',
+    key: 'lobby',
+    section: 'event',
+    icon: ({ active }) => (
+      <NavIcon
+        active={active}
+        d={
+          <>
+            <path d="M4 10h16v10H4z" />
+            <path d="M8 6h8v4H8z" />
+          </>
+        }
+      />
+    ),
   },
   {
     href: '/admin/missions',
@@ -154,6 +172,7 @@ export default function AdminSidebar() {
 
   const activeKey = useMemo(() => {
     if (pathname === '/admin') return 'overview'
+    if (pathname.startsWith('/admin/lobby')) return 'lobby'
     if (pathname.startsWith('/admin/missions')) return 'missions'
     if (pathname.startsWith('/admin/tokens')) return 'tokens'
     if (pathname.startsWith('/admin/scoreboard')) return 'scoreboard'

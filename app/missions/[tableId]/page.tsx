@@ -1342,7 +1342,7 @@ export default function MissionsTablePage({
                 Post a greeting
               </Link>
               <Link
-                href="/play"
+                href="/"
                 className="rounded-full border-2 border-amber-300/80 bg-white px-5 py-3 text-sm font-bold text-amber-900 transition hover:bg-amber-50"
               >
                 Back to lobby

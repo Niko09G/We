@@ -216,7 +216,7 @@ export default function SubmitPage() {
           </p>
           <div className="mt-2">
             <Link
-              href="/play"
+              href="/"
               className="text-xs font-medium text-amber-900 underline hover:no-underline"
             >
               Back to hub

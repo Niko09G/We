@@ -102,7 +102,7 @@ export default function GreetingsGalleryPage() {
       <div className="mx-auto w-full max-w-lg">
         <nav className="mb-6 flex flex-wrap items-center justify-between gap-2">
           <Link
-            href="/play"
+            href="/"
             className="text-xs font-medium text-white/55 underline-offset-2 hover:text-white/80 hover:underline"
           >
             ← Lobby

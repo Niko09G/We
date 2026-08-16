@@ -382,7 +382,7 @@ export default function MissionDetailPage({
             </div>
             <div className="mt-3">
               <Link
-                href="/play"
+                href="/"
                 className="text-xs font-medium text-amber-900 underline hover:no-underline"
               >
                 Back to hub

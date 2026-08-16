@@ -57,7 +57,7 @@ export function MissionsTableHero({
     >
       <nav className="relative z-20 flex shrink-0 flex-wrap items-center justify-between gap-2 px-5 pt-5">
         <Link
-          href="/play"
+          href="/"
           className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white/95 backdrop-blur-sm transition active:scale-[0.98] hover:bg-white/25"
         >
           ← Lobby

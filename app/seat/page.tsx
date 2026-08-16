@@ -9,7 +9,7 @@ export default function SeatFinderPage() {
 
         <div className="mt-8">
           <Link
-            href="/play"
+            href="/"
             className="inline-flex text-sm font-semibold text-violet-700 underline-offset-4 transition hover:underline"
           >
             ← Back to lobby
