@@ -157,6 +157,8 @@ export default function LobbyPage() {
               cta_program_label: 'See the Program',
             }
           }
+          headerLogoUrl={settings?.header_logo_url}
+          heroBackgroundUrl={settings?.hero_background_url}
           onFindSeat={() => scrollToSection('seat-finder')}
           onSeeProgram={() => scrollToSection('event-program')}
         />

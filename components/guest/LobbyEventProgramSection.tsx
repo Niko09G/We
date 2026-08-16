@@ -31,17 +31,19 @@ export function LobbyEventProgramSection({
           {items.map((item, index) => (
             <div
               key={item.id}
-              className={`grid grid-cols-[5.5rem_1fr] gap-x-4 gap-y-1 px-4 py-4 sm:grid-cols-[7rem_1fr] sm:px-5 ${
+              className={`grid h-auto min-h-16 grid-cols-[5.5rem_1fr] gap-x-4 gap-y-1 px-4 py-4 sm:grid-cols-[7rem_1fr] sm:px-5 ${
                 index % 2 === 0 ? 'bg-white' : 'bg-neutral-50/80'
               } ${index > 0 ? 'border-t border-zinc-100' : ''}`}
             >
-              <p className="text-sm font-semibold tabular-nums text-violet-700 sm:text-base">
+              <p className="text-sm font-semibold tabular-nums text-[#605de6] sm:text-base">
                 {item.time}
               </p>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-zinc-900 sm:text-base">{item.title}</p>
                 {item.description?.trim() ? (
-                  <p className="mt-1 text-sm leading-relaxed text-zinc-600">{item.description}</p>
+                  <p className="mt-1 break-words whitespace-normal text-sm leading-relaxed text-zinc-600 [overflow-wrap:anywhere]">
+                    {item.description}
+                  </p>
                 ) : null}
               </div>
             </div>

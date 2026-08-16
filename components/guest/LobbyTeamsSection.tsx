@@ -44,20 +44,18 @@ export function LobbyTeamsSection({ title, description, tables }: LobbyTeamsSect
                   background: `linear-gradient(to bottom, ${resolved.heroTop}, ${resolved.heroMiddle || resolved.heroBottom}, ${resolved.heroBottom})`,
                 }}
               >
-                <div className="relative flex h-full flex-col justify-between p-3 text-white">
+                <div className="relative flex h-full flex-col p-3 text-white">
+                  <p className="relative z-[1] text-center text-sm font-bold leading-tight sm:text-base">
+                    {row.name}
+                  </p>
                   {resolved.heroImageUrl.trim() ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={resolved.heroImageUrl.trim()}
                       alt=""
-                      className="absolute inset-x-3 top-4 h-28 w-[calc(100%-1.5rem)] object-contain opacity-95 sm:h-32"
+                      className="relative z-[1] mx-auto mt-2 h-28 w-full max-w-full flex-1 object-contain opacity-95 sm:h-32"
                     />
                   ) : null}
-                  <div className="relative z-[1] mt-auto">
-                    <p className="text-center text-sm font-bold leading-tight sm:text-base">
-                      {row.name}
-                    </p>
-                  </div>
                 </div>
               </Link>
             )

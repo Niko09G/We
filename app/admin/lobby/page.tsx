@@ -4,9 +4,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import {
   compressIconImage,
+  compressPhotoImage,
   isAcceptedImageFile,
   webpUploadFile,
 } from '@/lib/image-compress'
+import {
+  removeLobbyHeaderLogoByPublicUrl,
+  removeLobbyHeroBackgroundByPublicUrl,
+  uploadLobbyHeaderLogo,
+  uploadLobbyHeroBackground,
+} from '@/lib/lobby-assets'
 import {
   removeLobbyMcPhotoByPublicUrl,
   uploadLobbyMcPhoto,
@@ -21,7 +28,7 @@ import {
   type LobbyProgramItem,
   type LobbySettings,
 } from '@/lib/lobby-settings'
-import { MAX_ICON_UPLOAD_BYTES, prettyMb } from '@/lib/upload-constraints'
+import { MAX_ICON_UPLOAD_BYTES, MAX_IMAGE_UPLOAD_BYTES, prettyMb } from '@/lib/upload-constraints'
 
 const GRADIENT_BTN =
   'inline-flex h-[40px] cursor-pointer items-center gap-2 rounded-full px-4 text-[14px] font-medium text-white transition-opacity hover:opacity-90 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]'
@@ -46,6 +53,8 @@ export default function AdminLobbyPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploadingMcId, setUploadingMcId] = useState<LobbyMc['id'] | null>(null)
+  const [uploadingHeaderLogo, setUploadingHeaderLogo] = useState(false)
+  const [uploadingHeroBackground, setUploadingHeroBackground] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [form, setForm] = useState<LobbySettings>(DEFAULT_LOBBY_SETTINGS)
@@ -183,6 +192,78 @@ export default function AdminLobbyPage() {
     }
   }
 
+  async function handleHeaderLogoUpload(file: File) {
+    if (!isAcceptedImageFile(file)) {
+      setError('Please choose a JPEG, PNG, or WebP image.')
+      return
+    }
+    if (file.size > MAX_ICON_UPLOAD_BYTES) {
+      setError(`Image must be under ${prettyMb(MAX_ICON_UPLOAD_BYTES)}.`)
+      return
+    }
+
+    setUploadingHeaderLogo(true)
+    setError(null)
+    try {
+      const compressed = await compressIconImage(file)
+      const webp = webpUploadFile(compressed.blob, 'lobby-header-logo')
+      const prevUrl = form.header_logo_url
+      const publicUrl = await uploadLobbyHeaderLogo(webp)
+      setForm((prev) => ({ ...prev, header_logo_url: publicUrl }))
+      if (prevUrl && prevUrl !== publicUrl) {
+        await removeLobbyHeaderLogoByPublicUrl(prevUrl).catch(() => undefined)
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Header logo upload failed.')
+    } finally {
+      setUploadingHeaderLogo(false)
+    }
+  }
+
+  async function removeHeaderLogo() {
+    const prevUrl = form.header_logo_url
+    setForm((prev) => ({ ...prev, header_logo_url: null }))
+    if (prevUrl) {
+      await removeLobbyHeaderLogoByPublicUrl(prevUrl).catch(() => undefined)
+    }
+  }
+
+  async function handleHeroBackgroundUpload(file: File) {
+    if (!isAcceptedImageFile(file)) {
+      setError('Please choose a JPEG, PNG, or WebP image.')
+      return
+    }
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      setError(`Image must be under ${prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.`)
+      return
+    }
+
+    setUploadingHeroBackground(true)
+    setError(null)
+    try {
+      const compressed = await compressPhotoImage(file)
+      const webp = webpUploadFile(compressed.blob, 'lobby-hero-background')
+      const prevUrl = form.hero_background_url
+      const publicUrl = await uploadLobbyHeroBackground(webp)
+      setForm((prev) => ({ ...prev, hero_background_url: publicUrl }))
+      if (prevUrl && prevUrl !== publicUrl) {
+        await removeLobbyHeroBackgroundByPublicUrl(prevUrl).catch(() => undefined)
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Hero background upload failed.')
+    } finally {
+      setUploadingHeroBackground(false)
+    }
+  }
+
+  async function removeHeroBackground() {
+    const prevUrl = form.hero_background_url
+    setForm((prev) => ({ ...prev, hero_background_url: null }))
+    if (prevUrl) {
+      await removeLobbyHeroBackgroundByPublicUrl(prevUrl).catch(() => undefined)
+    }
+  }
+
   return (
     <div className="admin-page-shell flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <p className="sr-only" aria-live="polite">
@@ -234,9 +315,100 @@ export default function AdminLobbyPage() {
                 <div className="rounded-2xl border border-[#ebebeb] p-5">
                   <h2 className="text-[16px] font-semibold text-zinc-900">Hero section</h2>
                   <p className="mt-1 text-sm text-zinc-500">
-                    Welcome title, description, and call-to-action button labels.
+                    Welcome title, description, call-to-action labels, header logo, and hero
+                    background.
                   </p>
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="md:col-span-2">
+                      <span className="mb-1.5 block text-[13px] font-medium text-zinc-700">
+                        Header logo
+                      </span>
+                      <div className="flex flex-wrap items-start gap-4">
+                        <div className="flex min-h-[80px] min-w-[120px] max-w-[250px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                          {form.header_logo_url?.trim() ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={form.header_logo_url.trim()}
+                              alt=""
+                              className="max-w-[250px] w-full object-contain"
+                            />
+                          ) : (
+                            <span className="text-xs text-zinc-400">No logo uploaded</span>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="inline-flex cursor-pointer items-center rounded-full border border-[#ebebeb] bg-white px-3 py-1.5 text-[12px] font-medium text-zinc-800 hover:bg-zinc-50">
+                            {uploadingHeaderLogo ? 'Uploading…' : 'Upload logo'}
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              className="sr-only"
+                              disabled={uploadingHeaderLogo}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                e.target.value = ''
+                                if (file) void handleHeaderLogoUpload(file)
+                              }}
+                            />
+                          </label>
+                          {form.header_logo_url?.trim() ? (
+                            <button
+                              type="button"
+                              onClick={() => void removeHeaderLogo()}
+                              className="text-left text-[12px] font-medium text-red-600 hover:underline"
+                            >
+                              Remove logo
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <span className="mb-1.5 block text-[13px] font-medium text-zinc-700">
+                        Hero background banner
+                      </span>
+                      <div className="flex flex-wrap items-start gap-4">
+                        <div className="h-28 w-full max-w-md overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 sm:h-32">
+                          {form.hero_background_url?.trim() ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={form.hero_background_url.trim()}
+                              alt=""
+                              className="h-full w-full object-cover object-center"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-xs text-zinc-400">
+                              No background uploaded
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="inline-flex cursor-pointer items-center rounded-full border border-[#ebebeb] bg-white px-3 py-1.5 text-[12px] font-medium text-zinc-800 hover:bg-zinc-50">
+                            {uploadingHeroBackground ? 'Uploading…' : 'Upload background'}
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              className="sr-only"
+                              disabled={uploadingHeroBackground}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                e.target.value = ''
+                                if (file) void handleHeroBackgroundUpload(file)
+                              }}
+                            />
+                          </label>
+                          {form.hero_background_url?.trim() ? (
+                            <button
+                              type="button"
+                              onClick={() => void removeHeroBackground()}
+                              className="text-left text-[12px] font-medium text-red-600 hover:underline"
+                            >
+                              Remove background
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
                     <label className="block md:col-span-2">
                       <span className="mb-1.5 block text-[13px] font-medium text-zinc-700">
                         Hero title

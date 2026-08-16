@@ -11,6 +11,8 @@ values (
       "cta_find_seat_label": "Find My Seat",
       "cta_program_label": "See the Program"
     },
+    "header_logo_url": null,
+    "hero_background_url": null,
     "modules_order": ["seat-finder", "event-program", "mcs", "teams"],
     "modules": {
       "seat-finder": {

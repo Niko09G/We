@@ -40,6 +40,8 @@ export type LobbyHeroSettings = {
 
 export type LobbySettings = {
   hero: LobbyHeroSettings
+  header_logo_url: string | null
+  hero_background_url: string | null
   modules_order: LobbyModuleId[]
   modules: Record<LobbyModuleId, LobbyModuleConfig>
   event_program: LobbyProgramItem[]
@@ -81,6 +83,8 @@ export const DEFAULT_LOBBY_SETTINGS: LobbySettings = {
     cta_find_seat_label: 'Find My Seat',
     cta_program_label: 'See the Program',
   },
+  header_logo_url: null,
+  hero_background_url: null,
   modules_order: [...LOBBY_MODULE_IDS],
   modules: { ...DEFAULT_MODULES },
   event_program: [],
@@ -204,6 +208,8 @@ export function parseLobbySettings(value: unknown): LobbySettings {
         DEFAULT_LOBBY_SETTINGS.hero.cta_program_label
       ),
     },
+    header_logo_url: cleanNullableStr(o.header_logo_url),
+    hero_background_url: cleanNullableStr(o.hero_background_url),
     modules_order,
     modules,
     event_program,

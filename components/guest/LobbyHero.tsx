@@ -6,6 +6,8 @@ import type { LobbyHeroSettings } from '@/lib/lobby-settings'
 export type LobbyHeroProps = {
   loading: boolean
   hero: LobbyHeroSettings
+  headerLogoUrl?: string | null
+  heroBackgroundUrl?: string | null
   onFindSeat: () => void
   onSeeProgram: () => void
 }
@@ -13,12 +15,39 @@ export type LobbyHeroProps = {
 /**
  * Full-viewport lobby hero — welcome copy and CTAs only (no points/rank HUD).
  */
-export function LobbyHero({ loading, hero, onFindSeat, onSeeProgram }: LobbyHeroProps) {
+export function LobbyHero({
+  loading,
+  hero,
+  headerLogoUrl = null,
+  heroBackgroundUrl = null,
+  onFindSeat,
+  onSeeProgram,
+}: LobbyHeroProps) {
+  const logo = headerLogoUrl?.trim()
+  const background = heroBackgroundUrl?.trim()
+
   return (
     <section
-      className="relative isolate box-border flex h-full min-h-0 w-full max-w-full min-w-0 flex-col justify-between pb-10 pt-[env(safe-area-inset-top,0px)] text-white"
-      style={{ background: MISSIONS_HERO_BACKGROUND }}
+      className={`relative isolate box-border flex h-full min-h-0 w-full max-w-full min-w-0 flex-col justify-between pb-10 pt-[env(safe-area-inset-top,0px)] text-white ${
+        background ? 'bg-cover bg-center bg-no-repeat' : ''
+      }`}
+      style={
+        background
+          ? { backgroundImage: `url(${background})` }
+          : { background: MISSIONS_HERO_BACKGROUND }
+      }
     >
+      {logo ? (
+        <header className="relative z-20 flex shrink-0 justify-center px-5 pt-5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={logo}
+            alt=""
+            className="max-w-[250px] w-full object-contain"
+          />
+        </header>
+      ) : null}
+
       <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col justify-center px-5 pt-2">
         <div className="relative mx-auto w-full max-w-sm text-center">
           {loading ? (
