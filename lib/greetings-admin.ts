@@ -59,6 +59,28 @@ export async function fetchDisplayGreetings(): Promise<GreetingRow[]> {
   return (data ?? []) as GreetingRow[]
 }
 
+/** Newest ready greetings after a watermark (oldest first for queue insertion). */
+export async function fetchDisplayGreetingsSince(
+  sinceCreatedAt: string | null,
+  limit = 5
+): Promise<GreetingRow[]> {
+  const lim = Math.min(20, Math.max(1, Math.floor(limit)))
+  let query = supabase
+    .from('greetings')
+    .select(DISPLAY_SELECT)
+    .eq('status', 'ready')
+    .order('created_at', { ascending: true })
+    .limit(lim)
+
+  if (sinceCreatedAt) {
+    query = query.gt('created_at', sinceCreatedAt)
+  }
+
+  const { data, error } = await query
+  if (error) throw new Error(error.message || 'Failed to load greetings.')
+  return (data ?? []) as GreetingRow[]
+}
+
 /**
  * @deprecated Big screen now rotates client-side via `fetchDisplayGreetings`.
  * Kept for compatibility — next ready greeting by fair rotation.

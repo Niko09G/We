@@ -13,6 +13,7 @@ import {
 } from '@/lib/display-team-visuals'
 import {
   fetchDisplayGreetings,
+  fetchDisplayGreetingsSince,
   recordGreetingDisplayed,
   type GreetingRow,
 } from '@/lib/greetings-admin'
@@ -26,7 +27,8 @@ import { supabase } from '@/lib/supabase/client'
 const DISPLAY_GRID_CLASS = 'grid h-screen w-screen grid-cols-[8.6fr_3.4fr] gap-6 bg-zinc-950 p-6'
 
 const GREETING_ROTATE_MS = 10_000
-const LIVE_POLL_MS = 25_000
+const FALLBACK_POLL_MS = 5_000
+const FALLBACK_GREETING_LIMIT = 5
 const RECENT_FETCH_LIMIT = 8
 
 function sortGreetingsNewestFirst(rows: GreetingRow[]): GreetingRow[] {
@@ -145,6 +147,7 @@ export default function DisplayPage() {
   const prevLeaderboardRef = useRef<LeaderboardEntry[] | null>(null)
   const teamCardRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const animClearRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const maxSeenCreatedAtRef = useRef<string | null>(null)
 
   const feedItems = useMomentumFeed(recentActivity)
 
@@ -157,6 +160,13 @@ export default function DisplayPage() {
 
   const bumpRotationTimer = useCallback(() => {
     setRotationEpoch((n) => n + 1)
+  }, [])
+
+  const touchMaxSeenCreatedAt = useCallback((createdAt: string) => {
+    const current = maxSeenCreatedAtRef.current
+    if (!current || new Date(createdAt).getTime() > new Date(current).getTime()) {
+      maxSeenCreatedAtRef.current = createdAt
+    }
   }, [])
 
   const recordDisplayed = useCallback((greeting: GreetingRow | null) => {
@@ -233,6 +243,8 @@ export default function DisplayPage() {
     (row: GreetingRow) => {
       if (row.status !== 'ready') return
 
+      touchMaxSeenCreatedAt(row.created_at)
+
       const withoutDup = unseenQueueRef.current.filter((g) => g.id !== row.id)
       const nextQueue = [...withoutDup, row]
       unseenQueueRef.current = nextQueue
@@ -243,7 +255,7 @@ export default function DisplayPage() {
         showFromUnseenQueue({ resetTimer: true })
       }
     },
-    [recordDisplayed, showFromUnseenQueue]
+    [recordDisplayed, showFromUnseenQueue, touchMaxSeenCreatedAt]
   )
 
   const removeGreetingFromQueues = useCallback(
@@ -292,6 +304,9 @@ export default function DisplayPage() {
   const loadGreetings = useCallback(async () => {
     try {
       const pool = sortGreetingsNewestFirst(await fetchDisplayGreetings())
+      for (const row of pool) {
+        touchMaxSeenCreatedAt(row.created_at)
+      }
       recycledPoolRef.current = pool
       setRecycledPool(pool)
       unseenQueueRef.current = []
@@ -325,7 +340,7 @@ export default function DisplayPage() {
     } finally {
       setGreetingLoading(false)
     }
-  }, [bumpRotationTimer])
+  }, [bumpRotationTimer, touchMaxSeenCreatedAt])
 
   useEffect(() => {
     void loadGreetings()
@@ -388,64 +403,6 @@ export default function DisplayPage() {
       cancelled = true
     }
   }, [])
-
-  useEffect(() => {
-    const channel = supabase
-      .channel('public:greetings')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'greetings' },
-        (payload) => {
-          const row = greetingFromRealtimeRow(
-            payload.new as Record<string, unknown>
-          )
-          if (row) enqueueUnseenGreeting(row)
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'greetings' },
-        (payload) => {
-          const row = greetingFromRealtimeRow(
-            payload.new as Record<string, unknown>
-          )
-          if (row) {
-            enqueueUnseenGreeting(row)
-            return
-          }
-
-          const updatedId =
-            typeof (payload.new as { id?: unknown }).id === 'string'
-              ? (payload.new as { id: string }).id
-              : null
-          const newStatus =
-            typeof (payload.new as { status?: unknown }).status === 'string'
-              ? (payload.new as { status: string }).status
-              : null
-          if (!updatedId || newStatus === 'ready') return
-
-          removeGreetingFromQueues(updatedId)
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'greetings' },
-        (payload) => {
-          const deletedId =
-            typeof (payload.old as { id?: unknown }).id === 'string'
-              ? (payload.old as { id: string }).id
-              : null
-          if (!deletedId) return
-
-          removeGreetingFromQueues(deletedId)
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [enqueueUnseenGreeting, removeGreetingFromQueues])
 
   const spawnScoreCelebration = useCallback(
     (deltas: Array<{ tableId: string; delta: number }>) => {
@@ -536,58 +493,151 @@ export default function DisplayPage() {
     }
   }, [applyLiveBundle])
 
+  const pollDisplayFallback = useCallback(async () => {
+    try {
+      const rows = await fetchDisplayGreetingsSince(
+        maxSeenCreatedAtRef.current,
+        FALLBACK_GREETING_LIMIT
+      )
+      for (const row of rows) {
+        enqueueUnseenGreeting(row)
+      }
+    } catch {
+      /* polling safety net — ignore transient errors */
+    }
+
+    void refreshLiveData()
+  }, [enqueueUnseenGreeting, refreshLiveData])
+
   useEffect(() => {
     void refreshLiveData()
   }, [refreshLiveData])
 
   useEffect(() => {
-    const channel = supabase
-      .channel('display-live')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'completions' },
-        () => {
-          void refreshLiveData()
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'mission_submissions',
-          filter: 'status=eq.approved',
-        },
-        () => {
-          void refreshLiveData()
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'mission_submissions',
-          filter: 'status=eq.approved',
-        },
-        () => {
-          void refreshLiveData()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [refreshLiveData])
+    const id = window.setInterval(() => {
+      void pollDisplayFallback()
+    }, FALLBACK_POLL_MS)
+    return () => window.clearInterval(id)
+  }, [pollDisplayFallback])
 
   useEffect(() => {
-    const id = window.setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
-      void refreshLiveData()
-    }, LIVE_POLL_MS)
-    return () => window.clearInterval(id)
-  }, [refreshLiveData])
+    let cancelled = false
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let resubscribeTimer: number | null = null
+
+    const attachRealtimeChannel = () => {
+      if (cancelled) return
+
+      channel = supabase
+        .channel('display-realtime')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'greetings' },
+          (payload) => {
+            console.log('Realtime greeting received:', payload)
+            const row = greetingFromRealtimeRow(
+              payload.new as Record<string, unknown>
+            )
+            if (row) enqueueUnseenGreeting(row)
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'greetings' },
+          (payload) => {
+            const row = greetingFromRealtimeRow(
+              payload.new as Record<string, unknown>
+            )
+            if (row) {
+              enqueueUnseenGreeting(row)
+              return
+            }
+
+            const updatedId =
+              typeof (payload.new as { id?: unknown }).id === 'string'
+                ? (payload.new as { id: string }).id
+                : null
+            const newStatus =
+              typeof (payload.new as { status?: unknown }).status === 'string'
+                ? (payload.new as { status: string }).status
+                : null
+            if (!updatedId || newStatus === 'ready') return
+
+            removeGreetingFromQueues(updatedId)
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'greetings' },
+          (payload) => {
+            const deletedId =
+              typeof (payload.old as { id?: unknown }).id === 'string'
+                ? (payload.old as { id: string }).id
+                : null
+            if (!deletedId) return
+
+            removeGreetingFromQueues(deletedId)
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'tables' },
+          () => {
+            void refreshLiveData()
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'completions' },
+          () => {
+            void refreshLiveData()
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'mission_submissions',
+            filter: 'status=eq.approved',
+          },
+          () => {
+            void refreshLiveData()
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'mission_submissions',
+            filter: 'status=eq.approved',
+          },
+          () => {
+            void refreshLiveData()
+          }
+        )
+        .subscribe((status) => {
+          console.log('Realtime status:', status)
+          if (cancelled) return
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            if (channel) {
+              supabase.removeChannel(channel)
+              channel = null
+            }
+            resubscribeTimer = window.setTimeout(attachRealtimeChannel, 2_000)
+          }
+        })
+    }
+
+    attachRealtimeChannel()
+
+    return () => {
+      cancelled = true
+      if (resubscribeTimer) window.clearTimeout(resubscribeTimer)
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [enqueueUnseenGreeting, removeGreetingFromQueues, refreshLiveData])
 
   const leaderboardTableIdsKey = useMemo(() => {
     const ids = new Set<string>()
