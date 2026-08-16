@@ -7,10 +7,12 @@ import {
   APPROVAL_MODES,
   VALIDATION_TYPES,
   adminValidationTypeLabel,
+  coerceValidationTypeForDb,
   createMission,
   getMissionById,
   maxSubmissionsDisplayValue,
   updateMission,
+  validationTypeForAdminForm,
   type MissionRecord,
   type ValidationType,
 } from '@/lib/admin-missions'
@@ -93,9 +95,7 @@ function recordToForm(m: MissionRecord): FormState {
     title: m.title,
     description: m.description ?? '',
     points: String(m.points ?? 0),
-    validation_type: VALIDATION_TYPES.includes(m.validation_type as ValidationType)
-      ? (m.validation_type as ValidationType)
-      : 'photo',
+    validation_type: validationTypeForAdminForm(m.validation_type),
     approval_mode: APPROVAL_MODES.includes(m.approval_mode as 'auto' | 'manual')
       ? (m.approval_mode as 'auto' | 'manual')
       : 'auto',
@@ -271,7 +271,7 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
         title: form.title,
         description: form.description,
         points: pts,
-        validation_type: form.validation_type,
+        validation_type: coerceValidationTypeForDb(form.validation_type),
         approval_mode: form.approval_mode,
         is_active: isPublish,
         add_to_greetings: form.add_to_greetings,
@@ -636,7 +636,10 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
                       onChange={(e) =>
                         setForm((s) => ({
                           ...s,
-                          validation_type: e.target.value as ValidationType,
+                          validation_type: coerceValidationTypeForDb(
+                            e.target.value,
+                            s.validation_type
+                          ),
                         }))
                       }
                       className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"

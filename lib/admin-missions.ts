@@ -16,6 +16,54 @@ export const VALIDATION_TYPES = [
 ] as const
 export type ValidationType = (typeof VALIDATION_TYPES)[number]
 
+/** Canonical DB value for host-managed / special-event missions. */
+export const HOST_MANAGED_VALIDATION_TYPE = 'host_facilitated' as const satisfies ValidationType
+
+const HOST_MANAGED_VALIDATION_ALIASES = new Set([
+  'host_facilitated',
+  'special_event',
+  'host_managed',
+  'host-managed',
+])
+
+function normalizeValidationTypeToken(raw: unknown): string {
+  return String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/-/g, '_')
+}
+
+/** True when a raw value refers to a host-managed mission category. */
+export function isHostManagedValidationType(raw: unknown): boolean {
+  const v = normalizeValidationTypeToken(raw)
+  return v === HOST_MANAGED_VALIDATION_TYPE || HOST_MANAGED_VALIDATION_ALIASES.has(v)
+}
+
+/**
+ * Coerce admin/DB values to a Supabase `missions.validation_type` CHECK value.
+ * Host-managed aliases and empty values resolve to `host_facilitated`.
+ */
+export function coerceValidationTypeForDb(
+  raw: unknown,
+  fallback: ValidationType = HOST_MANAGED_VALIDATION_TYPE
+): ValidationType {
+  const v = normalizeValidationTypeToken(raw)
+  if ((VALIDATION_TYPES as readonly string[]).includes(v)) {
+    return v as ValidationType
+  }
+  if (!v || isHostManagedValidationType(v)) {
+    return HOST_MANAGED_VALIDATION_TYPE
+  }
+  if (v === 'manual') return 'photo'
+  return fallback
+}
+
+/** Normalize mission type when hydrating admin forms from Supabase rows. */
+export function validationTypeForAdminForm(raw: unknown): ValidationType {
+  return coerceValidationTypeForDb(raw, 'photo')
+}
+
 /** Human-friendly label for admin mission type dropdowns (value stays snake_case). */
 export function adminValidationTypeLabel(type: ValidationType): string {
   return missionValidationTypeLabel(type as MissionValidationType)
@@ -34,7 +82,7 @@ function missionRecordFromSupabaseRow(row: Record<string, unknown>): MissionReco
     description: (row.description as string | null) ?? null,
     points: Number(row.points) || 0,
     created_at: row.created_at as string,
-    validation_type: row.validation_type as string,
+    validation_type: validationTypeForAdminForm(row.validation_type),
     approval_mode: (row.approval_mode as string) ?? 'auto',
     is_active: row.is_active as boolean,
     add_to_greetings: Boolean(row.add_to_greetings),
@@ -95,7 +143,7 @@ export async function createMission(input: {
   title: string
   description: string
   points: number
-  validation_type: ValidationType
+  validation_type?: ValidationType | string | null
   approval_mode: ApprovalMode
   is_active: boolean
   add_to_greetings?: boolean
@@ -137,7 +185,7 @@ export async function createMission(input: {
     title: input.title.trim(),
     description: input.description.trim() || null,
     points: Math.max(0, Math.floor(input.points)),
-    validation_type: input.validation_type,
+    validation_type: coerceValidationTypeForDb(input.validation_type),
     approval_mode: input.approval_mode,
     is_active: input.is_active,
     sort_order: nextSortOrder,
@@ -185,7 +233,7 @@ export async function updateMission(
     title: string
     description: string | null
     points: number
-    validation_type: ValidationType
+    validation_type?: ValidationType | string | null
     approval_mode: ApprovalMode
     is_active: boolean
     add_to_greetings: boolean
@@ -208,7 +256,9 @@ export async function updateMission(
   if (patch.title !== undefined) row.title = patch.title.trim()
   if (patch.description !== undefined) row.description = patch.description?.trim() || null
   if (patch.points !== undefined) row.points = Math.max(0, Math.floor(patch.points))
-  if (patch.validation_type !== undefined) row.validation_type = patch.validation_type
+  if (patch.validation_type !== undefined) {
+    row.validation_type = coerceValidationTypeForDb(patch.validation_type)
+  }
   if (patch.approval_mode !== undefined) row.approval_mode = patch.approval_mode
   if (patch.is_active !== undefined) row.is_active = patch.is_active
   if (patch.add_to_greetings !== undefined) row.add_to_greetings = patch.add_to_greetings

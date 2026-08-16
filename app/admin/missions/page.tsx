@@ -6,6 +6,8 @@ import {
   adminValidationTypeLabel,
   APPROVAL_MODES,
   createMission,
+  coerceValidationTypeForDb,
+  validationTypeForAdminForm,
   deleteMission,
   listMissions,
   maxSubmissionsDisplayValue,
@@ -208,9 +210,7 @@ function formFromMission(m: MissionRecord): MissionForm {
     card_cover_image_url: m.card_cover_image_url ?? '',
     card_theme_index: themeOk ? Math.floor(idx) : null,
     points: String(m.points ?? 0),
-    validation_type: VALIDATION_TYPES.includes(m.validation_type as ValidationType)
-      ? (m.validation_type as ValidationType)
-      : 'photo',
+    validation_type: validationTypeForAdminForm(m.validation_type),
     approval_mode: APPROVAL_MODES.includes(m.approval_mode as 'auto' | 'manual')
       ? (m.approval_mode as 'auto' | 'manual')
       : 'auto',
@@ -909,7 +909,7 @@ export default function MissionsLibraryPage() {
         title: form.title,
         description: form.description,
         points: Math.max(0, Math.floor(Number(form.points) || 0)),
-        validation_type: form.validation_type,
+        validation_type: coerceValidationTypeForDb(form.validation_type),
         approval_mode: form.approval_mode,
         is_active: form.is_active,
         message_required: form.message_required,
@@ -1570,7 +1570,12 @@ export default function MissionsLibraryPage() {
                                           <button
                                             key={v}
                                             type="button"
-                                            onClick={() => setForm((s) => ({ ...s, validation_type: v }))}
+                                            onClick={() =>
+                                              setForm((s) => ({
+                                                ...s,
+                                                validation_type: v,
+                                              }))
+                                            }
                                             className={`group relative isolate flex h-[124px] w-full min-w-0 cursor-pointer overflow-hidden rounded-2xl border border-transparent text-left shadow-sm transition-[box-shadow,background-color,color] duration-200 ease-out ${
                                               selected
                                                 ? 'bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)] text-white shadow-md'
