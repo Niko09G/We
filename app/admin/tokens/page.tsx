@@ -9,6 +9,7 @@ import { rewardUnitCompactLabel } from '@/lib/reward-unit'
 import { tokenClaimUrl } from '@/lib/admin-tokens'
 import { copyTextWithFallback } from '@/lib/copy-text'
 import { downloadClaimQrPng, qrDownloadFilename } from '@/lib/token-qr'
+import TokenAmountCell from './_components/TokenAmountCell'
 import TokenQrPreviewModal from './_components/TokenQrPreviewModal'
 
 type EnrichedToken = {
@@ -60,6 +61,10 @@ export default function TokensAdminPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [previewToken, setPreviewToken] = useState<EnrichedToken | null>(null)
   const [downloadingQrId, setDownloadingQrId] = useState<string | null>(null)
+
+  function handleTokenAmountUpdated(tokenId: string, points: number) {
+    setTokens((prev) => prev.map((t) => (t.id === tokenId ? { ...t, points } : t)))
+  }
 
   const beatcoinMissions = useMemo(
     () => missions.filter((m) => m.validation_type === 'beatcoin'),
@@ -273,7 +278,7 @@ export default function TokensAdminPage() {
         </div>
       )}
 
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <section className="rounded-xl border border-neutral-200/60 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
         <h2 className="admin-section-title text-zinc-900 dark:text-zinc-100">Generate tokens</h2>
         <p className="admin-meta-text">
           Creates unique random tokens linked to a mission (validation type must be{' '}
@@ -289,7 +294,7 @@ export default function TokensAdminPage() {
               max={500}
               value={qty}
               onChange={(e) => setQty(e.target.value)}
-              className="w-24 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              className="w-24 rounded-lg border border-neutral-200/60 px-2 py-1.5 text-[14px] outline-none transition-colors focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-950"
             />
           </label>
           <label className="flex flex-col gap-2 admin-field-label text-zinc-600 dark:text-zinc-400">
@@ -302,7 +307,7 @@ export default function TokensAdminPage() {
               min={0}
               value={points}
               onChange={(e) => setPoints(e.target.value)}
-              className="w-24 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              className="w-24 rounded-lg border border-neutral-200/60 px-2 py-1.5 text-[14px] outline-none transition-colors focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-950"
               title={`${rewardUnit.name} granted per token when claimed`}
             />
             <span className="text-[10px] text-zinc-500">Per token ({rewardUnit.name})</span>
@@ -313,7 +318,7 @@ export default function TokensAdminPage() {
               value={missionId}
               onChange={(e) => setMissionId(e.target.value)}
               disabled={missionsLoading || beatcoinMissions.length === 0}
-              className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              className="rounded-lg border border-neutral-200/60 px-2 py-1.5 text-[14px] outline-none transition-colors focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-950"
             >
               {beatcoinMissions.length === 0 ? (
                 <option value="">No beatcoin missions — create one in Missions first</option>
@@ -335,16 +340,28 @@ export default function TokensAdminPage() {
               beatcoinMissions.length === 0
             }
             onClick={() => void handleGenerate()}
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
+            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-40"
           >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
             {generating ? 'Generating…' : 'Generate tokens'}
           </button>
         </div>
       </section>
 
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <section className="rounded-xl border border-neutral-200/60 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">All tokens</h2>
+          <h2 className="text-[14px] font-semibold text-zinc-900 dark:text-zinc-100">All tokens</h2>
           <div className="flex flex-wrap gap-3 text-xs text-zinc-600 dark:text-zinc-400">
             <span>
               Total: <strong className="text-zinc-900 dark:text-zinc-200">{summary.total}</strong>
@@ -360,114 +377,123 @@ export default function TokensAdminPage() {
           </div>
         </div>
 
-        <div className="mt-4 overflow-x-auto">
+        <div className="mt-4 min-w-0 overflow-x-auto">
           {loading ? (
-            <p className="text-sm text-zinc-500">Loading…</p>
+            <p className="text-[14px] text-zinc-500">Loading…</p>
           ) : misconfigured ? (
-            <p className="text-sm text-zinc-500">Configure the service role to list tokens.</p>
+            <p className="text-[14px] text-zinc-500">Configure the service role to list tokens.</p>
           ) : tokens.length === 0 ? (
-            <p className="text-sm text-zinc-500">No tokens yet. Generate a batch above.</p>
+            <p className="text-[14px] text-zinc-500">No tokens yet. Generate a batch above.</p>
           ) : (
-            <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-              <thead>
-                <tr className="border-b border-zinc-200 text-xs text-zinc-500 dark:border-zinc-700">
-                  <th className="pb-2 pr-2 font-medium">Token</th>
-                  <th className="pb-2 pr-2 font-medium">
-                    <span className="inline-flex items-center gap-1">
-                      Amount
-                      <RewardUnitIcon size={12} />
-                    </span>
-                  </th>
-                  <th className="pb-2 pr-2 font-medium">Status</th>
-                  <th className="pb-2 pr-2 font-medium">Redeemed by</th>
-                  <th className="pb-2 pr-2 font-medium">Redeemed at</th>
-                  <th className="pb-2 pr-2 font-medium">Mission</th>
-                  <th className="pb-2 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="text-zinc-800 dark:text-zinc-200">
-                {tokens.map((t) => {
-                  const claimed = Boolean(t.claimed_at)
-                  const url = tokenClaimUrl(t.token)
-                  return (
-                    <tr key={t.id} className="border-b border-zinc-100 align-top dark:border-zinc-800">
-                      <td className="py-2 pr-2 font-mono text-xs" title={t.token}>
-                        {truncateToken(t.token)}
-                      </td>
-                      <td className="py-2 pr-2 tabular-nums">{t.points}</td>
-                      <td className="py-2 pr-2">
-                        {claimed ? (
-                          <span className="rounded bg-zinc-200/80 px-1.5 py-0.5 text-xs dark:bg-zinc-700">
-                            Claimed
-                          </span>
-                        ) : (
-                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200">
-                            Available
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 pr-2 max-w-[140px] truncate" title={t.redeemed_by_name ?? ''}>
-                        {t.redeemed_by_name ?? '—'}
-                      </td>
-                      <td className="py-2 pr-2 whitespace-nowrap text-xs text-zinc-600 dark:text-zinc-400">
-                        {formatDate(t.claimed_at)}
-                      </td>
-                      <td className="py-2 pr-2 max-w-[160px] truncate" title={t.mission_title}>
-                        {t.mission_title}
-                      </td>
-                      <td className="py-2">
-                        <div className="flex flex-col gap-1.5">
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                            <button
-                              type="button"
-                              disabled={downloadingQrId === t.id || misconfigured}
-                              onClick={() => void handleDownloadQr(t)}
-                              className="rounded-md bg-zinc-900 px-2.5 py-1 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-                            >
-                              {downloadingQrId === t.id ? 'Preparing…' : 'Download QR'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setPreviewToken(t)}
-                              className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                            >
-                              Preview
-                            </button>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                            <a
-                              href={url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="font-medium text-zinc-600 underline hover:no-underline dark:text-zinc-400"
-                              title={url}
-                            >
-                              Open claim
-                            </a>
-                            <span className="text-zinc-300 dark:text-zinc-600">·</span>
-                            <button
-                              type="button"
-                              onClick={() => void copyClaimUrl(t)}
-                              className="font-medium text-zinc-500 underline hover:no-underline dark:text-zinc-500"
-                            >
-                              {copiedId === t.id ? 'Copied URL' : 'Copy URL'}
-                            </button>
-                          </div>
-                          <button
-                            type="button"
-                            disabled={resettingId === t.id || misconfigured}
-                            onClick={() => void handleReset(t)}
-                            className="text-left text-xs font-medium text-amber-800 underline hover:no-underline dark:text-amber-300"
-                          >
-                            {resettingId === t.id ? '…' : 'Reset / Unclaim'}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <div className="space-y-1">
+              <div className="grid min-w-[720px] grid-cols-[minmax(120px,1.2fr)_minmax(80px,0.7fr)_minmax(90px,0.8fr)_minmax(100px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)_minmax(200px,1.5fr)] gap-x-3 border-b border-neutral-200/60 px-3 pb-2 pt-1 text-[14px] font-medium text-[#18181b] dark:border-zinc-700 dark:text-zinc-100">
+                <div>Token</div>
+                <div className="inline-flex items-center gap-1">
+                  Amount
+                  <RewardUnitIcon size={12} />
+                </div>
+                <div>Status</div>
+                <div>Redeemed by</div>
+                <div>Redeemed at</div>
+                <div>Mission</div>
+                <div>Actions</div>
+              </div>
+              {tokens.map((t) => {
+                const claimed = Boolean(t.claimed_at)
+                const url = tokenClaimUrl(t.token)
+                return (
+                  <div
+                    key={t.id}
+                    className="grid min-w-[720px] grid-cols-[minmax(120px,1.2fr)_minmax(80px,0.7fr)_minmax(90px,0.8fr)_minmax(100px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)_minmax(200px,1.5fr)] items-start gap-x-3 rounded-lg border border-neutral-200/60 px-3 py-2.5 transition-colors hover:bg-neutral-50/80 dark:border-zinc-800 dark:hover:bg-zinc-800/40"
+                  >
+                    <div className="font-mono text-[13px] text-zinc-700 dark:text-zinc-300" title={t.token}>
+                      {truncateToken(t.token)}
+                    </div>
+                    <div>
+                      <TokenAmountCell
+                        tokenId={t.id}
+                        points={t.points}
+                        disabled={misconfigured}
+                        onUpdated={(next) => handleTokenAmountUpdated(t.id, next)}
+                        onError={(msg) => setError(msg)}
+                      />
+                    </div>
+                    <div>
+                      {claimed ? (
+                        <span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                          Claimed
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
+                          Available
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      className="max-w-[140px] truncate text-[14px] text-zinc-600 dark:text-zinc-400"
+                      title={t.redeemed_by_name ?? ''}
+                    >
+                      {t.redeemed_by_name ?? '—'}
+                    </div>
+                    <div className="whitespace-nowrap text-[13px] text-zinc-500 dark:text-zinc-400">
+                      {formatDate(t.claimed_at)}
+                    </div>
+                    <div
+                      className="max-w-[160px] truncate text-[14px] text-zinc-600 dark:text-zinc-400"
+                      title={t.mission_title}
+                    >
+                      {t.mission_title}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={downloadingQrId === t.id || misconfigured}
+                          onClick={() => void handleDownloadQr(t)}
+                          className="rounded-lg border border-neutral-200/60 px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-neutral-50/80 disabled:opacity-40 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                        >
+                          {downloadingQrId === t.id ? 'Preparing…' : 'Download QR'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewToken(t)}
+                          className="rounded-lg border border-neutral-200/60 px-2.5 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-neutral-50/80 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                        >
+                          Preview
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-zinc-600 underline hover:no-underline dark:text-zinc-400"
+                          title={url}
+                        >
+                          Open claim
+                        </a>
+                        <span className="text-zinc-300 dark:text-zinc-600">·</span>
+                        <button
+                          type="button"
+                          onClick={() => void copyClaimUrl(t)}
+                          className="font-medium text-zinc-500 underline hover:no-underline dark:text-zinc-500"
+                        >
+                          {copiedId === t.id ? 'Copied URL' : 'Copy URL'}
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={resettingId === t.id || misconfigured}
+                        onClick={() => void handleReset(t)}
+                        className="text-left text-xs font-medium text-amber-800 underline hover:no-underline dark:text-amber-300"
+                      >
+                        {resettingId === t.id ? '…' : 'Reset / Unclaim'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
       </section>
