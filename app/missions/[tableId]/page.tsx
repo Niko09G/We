@@ -969,9 +969,15 @@ export default function MissionsTablePage({
   }, [missions, statusFor])
 
   async function openMissionModal(
-    missionId: string,
+    missionOrId: MissionRow | string,
     opts?: { skipHydrate?: boolean; fromHero?: boolean }
   ) {
+    const missionId =
+      typeof missionOrId === 'string' ? missionOrId : missionOrId.id
+    const missionRow =
+      typeof missionOrId === 'string'
+        ? missions.find((m) => m.id === missionOrId)
+        : missionOrId
     setMissionOverlayVariant(
       opts?.fromHero === true ? 'hero-greeting' : 'missions-section'
     )
@@ -982,7 +988,7 @@ export default function MissionsTablePage({
     if (opts?.skipHydrate) {
       return
     }
-    const mission = missions.find((m) => m.id === missionId)
+    const mission = missionRow ?? missions.find((m) => m.id === missionId)
     const st = statusFor(missionId, mission)
     if (st === 'pending') {
       const { data } = await supabase
@@ -1053,9 +1059,13 @@ export default function MissionsTablePage({
           onStartMission={scrollToQuests}
           onSendGreeting={() => {
             if (greetingMissionId) {
-              setMissionOverlayVariant('hero-greeting')
+              const greetingMission =
+                missions.find((m) => m.id === greetingMissionId) ?? greetingMissionId
               setMissionModalReset((n) => n + 1)
-              void openMissionModal(greetingMissionId, { skipHydrate: true })
+              void openMissionModal(greetingMission, {
+                skipHydrate: true,
+                fromHero: true,
+              })
             } else {
               scrollToQuests()
             }
@@ -1144,7 +1154,7 @@ export default function MissionsTablePage({
                     type="button"
                     data-mission-card
                     disabled={limitReached}
-                    onClick={() => openMissionModal(m.id)}
+                    onClick={() => openMissionModal(m)}
                     className={`relative flex h-[min(420px,62vh)] w-[min(300px,78vw)] shrink-0 snap-start flex-col overflow-hidden rounded-3xl p-5 text-left transition active:scale-[0.99] ${limitReached ? 'opacity-95' : ''}`}
                     style={
                       isTrumpetStoryCard || isTableGreetingCard || customCardCover
@@ -1577,7 +1587,9 @@ export default function MissionsTablePage({
 
         {selectedMissionId
           ? (() => {
-              const m = orderedMissions.find((x) => x.id === selectedMissionId)
+              const m =
+                orderedMissions.find((x) => x.id === selectedMissionId) ??
+                missions.find((x) => x.id === selectedMissionId)
               if (!m) return null
               const selectedIdx = orderedMissions.findIndex((x) => x.id === selectedMissionId)
               const hasNav = orderedMissions.length > 1 && selectedIdx >= 0

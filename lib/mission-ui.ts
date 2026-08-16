@@ -1,5 +1,16 @@
 export const COIN_SIZE = 24
 
+/** Guest mission / greeting overlay heading — always prefer canonical `title`. */
+export function guestMissionModalTitle(
+  mission: { title?: string | null; name?: string | null } | null | undefined
+): string {
+  const title = mission?.title?.trim()
+  if (title) return title
+  const name = mission?.name?.trim()
+  if (name) return name
+  return 'Post a table greeting'
+}
+
 /** Non-negative, finite reward/points values for HUD, leaderboard, and overlays. */
 export function safeRewardPoints(value: unknown): number {
   const n = Number(value ?? 0)

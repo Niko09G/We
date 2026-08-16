@@ -48,6 +48,7 @@ import {
   MISSION_PRIMARY_CTA_CLASS,
   MISSION_SIGNATURE_TEXT,
   MISSION_SIGNATURE_TINT_BG,
+  guestMissionModalTitle,
 } from '@/lib/mission-ui'
 import { DEFAULT_MISSION_SUBMIT_SUCCESS_MESSAGE } from '@/lib/mission-success-copy'
 import { MissionSubmitConfetti } from '@/components/guest/MissionSubmitConfetti'
@@ -482,9 +483,7 @@ export function MissionModal({
     (pending && !success) ||
     atSubmissionLimit
 
-  const missionTitleText = isHeroOverlay
-    ? mission.title?.trim() || 'Post a table greeting'
-    : mission.header_title?.trim() || mission.title
+  const missionTitleText = guestMissionModalTitle(mission)
   const missionArtworkUrl = mission.header_image_url?.trim() || null
   const missionDescriptionBody =
     mission.description != null && mission.description.trim() !== ''
