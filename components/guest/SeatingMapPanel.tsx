@@ -929,19 +929,21 @@ export function SeatingMapPanel({
                   style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
                 >
                   <div
-                    className={`pointer-events-none relative flex w-full flex-col overflow-visible rounded-2xl border text-left transition-[transform,box-shadow] duration-200 ease-out ${
+                    className={`pointer-events-none relative flex w-full flex-col overflow-visible rounded-2xl border text-left transition-[background,box-shadow,border-color,transform] duration-200 ease-out ${
                       table ? '' : 'cursor-default opacity-55'
                     } ${
-                      isSelectedTable ? 'z-10 shadow-[0_14px_32px_rgba(0,0,0,0.18)]' : ''
-                    } ${!table ? 'border-zinc-200 bg-zinc-100 shadow-none' : ''}`}
-                    style={
                       table
+                        ? isSelectedTable
+                          ? 'z-10 shadow-[0_14px_32px_rgba(0,0,0,0.18)]'
+                          : 'border-neutral-200/80 bg-white shadow-[0_6px_18px_rgba(0,0,0,0.12)]'
+                        : 'border-zinc-200 bg-zinc-100 shadow-none'
+                    }`}
+                    style={
+                      table && isSelectedTable
                         ? {
                             background: tableStyle.background,
                             borderColor: tableStyle.borderColor,
-                            boxShadow: isSelectedTable
-                              ? `${tableStyle.shadow}, 0 0 0 3px rgba(255,255,255,0.85)`
-                              : tableStyle.shadow,
+                            boxShadow: `${tableStyle.shadow}, 0 0 0 3px rgba(255,255,255,0.85)`,
                           }
                         : undefined
                     }
@@ -956,8 +958,10 @@ export function SeatingMapPanel({
                           onSelectGuest={selectGuest}
                           tableLabel={
                             <span
-                              className={`max-w-full truncate text-center text-[11px] font-semibold tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)] ${
-                                table ? 'text-white' : 'text-zinc-600'
+                              className={`max-w-full truncate text-center text-[11px] font-semibold tracking-wide ${
+                                isSelectedTable
+                                  ? 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]'
+                                  : 'text-neutral-900'
                               }`}
                             >
                               {label}
