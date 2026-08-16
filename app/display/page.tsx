@@ -46,6 +46,10 @@ function greetingFromRealtimeRow(row: Record<string, unknown>): GreetingRow | nu
   const messageRaw = typeof row.message === 'string' ? row.message.trim() : ''
   const message = messageRaw.length > 0 ? messageRaw : 'Greeting'
 
+  const sourceTypeRaw = row.source_type
+  const source_type: GreetingRow['source_type'] =
+    sourceTypeRaw === 'mission' ? 'mission' : 'upload'
+
   return {
     id,
     message,
@@ -53,10 +57,7 @@ function greetingFromRealtimeRow(row: Record<string, unknown>): GreetingRow | nu
     status,
     created_at,
     name: typeof row.name === 'string' ? row.name : null,
-    source_type:
-      row.source_type === 'mission' || row.source_type === 'upload'
-        ? row.source_type
-        : undefined,
+    source_type,
     table_id: typeof row.table_id === 'string' ? row.table_id : null,
     table_name: typeof row.table_name === 'string' ? row.table_name : null,
     table_color: typeof row.table_color === 'string' ? row.table_color : null,
@@ -114,8 +115,11 @@ async function fetchLiveBundle(): Promise<{
 }
 
 export default function DisplayPage() {
-  const [greetings, setGreetings] = useState<GreetingRow[]>([])
-  const [currentIndex, setCurrentIndex] = useState(0)
+  const [unseenQueue, setUnseenQueue] = useState<GreetingRow[]>([])
+  const [recycledPool, setRecycledPool] = useState<GreetingRow[]>([])
+  const [recycledIndex, setRecycledIndex] = useState(0)
+  const [activeGreeting, setActiveGreeting] = useState<GreetingRow | null>(null)
+  const [isShowingRecycled, setIsShowingRecycled] = useState(false)
   const [greetingLoading, setGreetingLoading] = useState(true)
   const [rotationEpoch, setRotationEpoch] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -132,8 +136,11 @@ export default function DisplayPage() {
 
   const containerRef = useRef<HTMLDivElement>(null)
   const mainCanvasRef = useRef<HTMLDivElement>(null)
-  const greetingsRef = useRef<GreetingRow[]>([])
-  const currentIndexRef = useRef(0)
+  const unseenQueueRef = useRef<GreetingRow[]>([])
+  const recycledPoolRef = useRef<GreetingRow[]>([])
+  const recycledIndexRef = useRef(0)
+  const activeGreetingRef = useRef<GreetingRow | null>(null)
+  const isShowingRecycledRef = useRef(false)
   const rotateIntervalRef = useRef<number | ReturnType<typeof setInterval> | null>(null)
   const prevLeaderboardRef = useRef<LeaderboardEntry[] | null>(null)
   const teamCardRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -141,11 +148,7 @@ export default function DisplayPage() {
 
   const feedItems = useMomentumFeed(recentActivity)
 
-  const currentGreeting = useMemo(() => {
-    if (greetings.length === 0) return null
-    const idx = ((currentIndex % greetings.length) + greetings.length) % greetings.length
-    return greetings[idx] ?? null
-  }, [greetings, currentIndex])
+  const currentGreeting = activeGreeting
 
   const greetingTeamVisual = useMemo(() => {
     if (!currentGreeting?.table_id) return null
@@ -156,36 +159,169 @@ export default function DisplayPage() {
     setRotationEpoch((n) => n + 1)
   }, [])
 
-  const queueNewGreeting = useCallback(
-    (row: GreetingRow) => {
-      if (row.status !== 'ready') return
+  const recordDisplayed = useCallback((greeting: GreetingRow | null) => {
+    if (!greeting) return
+    void recordGreetingDisplayed(greeting.id).catch(() => {
+      /* RPC or columns not migrated yet */
+    })
+  }, [])
 
-      setGreetings((prev) => {
-        const withoutDup = prev.filter((g) => g.id !== row.id)
-        const next = sortGreetingsNewestFirst([row, ...withoutDup])
-        greetingsRef.current = next
-        return next
-      })
-      currentIndexRef.current = 0
-      setCurrentIndex(0)
-      bumpRotationTimer()
+  const showFromUnseenQueue = useCallback(
+    (options?: { resetTimer?: boolean }) => {
+      const queue = unseenQueueRef.current
+      if (queue.length === 0) return false
+
+      const next = queue[0]
+      const rest = queue.slice(1)
+      unseenQueueRef.current = rest
+      setUnseenQueue(rest)
+
+      const pool = [...recycledPoolRef.current, next]
+      recycledPoolRef.current = pool
+      setRecycledPool(pool)
+
+      activeGreetingRef.current = next
+      setActiveGreeting(next)
+      isShowingRecycledRef.current = false
+      setIsShowingRecycled(false)
+
+      if (options?.resetTimer) bumpRotationTimer()
+      return true
     },
     [bumpRotationTimer]
   )
 
+  const showRecycledAtIndex = useCallback((index: number) => {
+    const pool = recycledPoolRef.current
+    if (pool.length === 0) return false
+
+    const idx = ((index % pool.length) + pool.length) % pool.length
+    const next = pool[idx] ?? null
+    if (!next) return false
+
+    recycledIndexRef.current = idx
+    setRecycledIndex(idx)
+    activeGreetingRef.current = next
+    setActiveGreeting(next)
+    isShowingRecycledRef.current = true
+    setIsShowingRecycled(true)
+    return true
+  }, [])
+
+  const rotateGreeting = useCallback(() => {
+    recordDisplayed(activeGreetingRef.current)
+
+    if (unseenQueueRef.current.length > 0) {
+      showFromUnseenQueue()
+      return
+    }
+
+    const pool = recycledPoolRef.current
+    if (pool.length === 0) {
+      activeGreetingRef.current = null
+      setActiveGreeting(null)
+      isShowingRecycledRef.current = false
+      setIsShowingRecycled(false)
+      return
+    }
+
+    const nextIdx = (recycledIndexRef.current + 1) % pool.length
+    showRecycledAtIndex(nextIdx)
+  }, [recordDisplayed, showFromUnseenQueue, showRecycledAtIndex])
+
+  const enqueueUnseenGreeting = useCallback(
+    (row: GreetingRow) => {
+      if (row.status !== 'ready') return
+
+      const withoutDup = unseenQueueRef.current.filter((g) => g.id !== row.id)
+      const nextQueue = [...withoutDup, row]
+      unseenQueueRef.current = nextQueue
+      setUnseenQueue(nextQueue)
+
+      if (isShowingRecycledRef.current) {
+        recordDisplayed(activeGreetingRef.current)
+        showFromUnseenQueue({ resetTimer: true })
+      }
+    },
+    [recordDisplayed, showFromUnseenQueue]
+  )
+
+  const removeGreetingFromQueues = useCallback(
+    (greetingId: string) => {
+      const nextUnseen = unseenQueueRef.current.filter((g) => g.id !== greetingId)
+      unseenQueueRef.current = nextUnseen
+      setUnseenQueue(nextUnseen)
+
+      const removeIdx = recycledPoolRef.current.findIndex((g) => g.id === greetingId)
+      if (removeIdx === -1) return
+
+      const nextPool = recycledPoolRef.current.filter((g) => g.id !== greetingId)
+      recycledPoolRef.current = nextPool
+      setRecycledPool(nextPool)
+
+      let nextIdx = recycledIndexRef.current
+      if (nextPool.length === 0) {
+        nextIdx = 0
+      } else if (removeIdx < nextIdx) {
+        nextIdx -= 1
+      } else if (removeIdx === nextIdx) {
+        nextIdx = Math.min(nextIdx, nextPool.length - 1)
+      }
+      if (nextIdx >= nextPool.length) nextIdx = Math.max(0, nextPool.length - 1)
+
+      recycledIndexRef.current = nextIdx
+      setRecycledIndex(nextIdx)
+
+      if (activeGreetingRef.current?.id === greetingId) {
+        if (nextUnseen.length > 0) {
+          showFromUnseenQueue({ resetTimer: true })
+        } else if (nextPool.length > 0) {
+          showRecycledAtIndex(nextIdx)
+          bumpRotationTimer()
+        } else {
+          activeGreetingRef.current = null
+          setActiveGreeting(null)
+          isShowingRecycledRef.current = false
+          setIsShowingRecycled(false)
+        }
+      }
+    },
+    [bumpRotationTimer, showFromUnseenQueue, showRecycledAtIndex]
+  )
+
   const loadGreetings = useCallback(async () => {
     try {
-      const rows = sortGreetingsNewestFirst(await fetchDisplayGreetings())
-      greetingsRef.current = rows
-      setGreetings(rows)
-      currentIndexRef.current = 0
-      setCurrentIndex(0)
+      const pool = sortGreetingsNewestFirst(await fetchDisplayGreetings())
+      recycledPoolRef.current = pool
+      setRecycledPool(pool)
+      unseenQueueRef.current = []
+      setUnseenQueue([])
+      recycledIndexRef.current = 0
+      setRecycledIndex(0)
+
+      if (pool.length > 0) {
+        activeGreetingRef.current = pool[0]
+        setActiveGreeting(pool[0])
+        isShowingRecycledRef.current = true
+        setIsShowingRecycled(true)
+      } else {
+        activeGreetingRef.current = null
+        setActiveGreeting(null)
+        isShowingRecycledRef.current = false
+        setIsShowingRecycled(false)
+      }
       bumpRotationTimer()
     } catch {
-      greetingsRef.current = []
-      setGreetings([])
-      currentIndexRef.current = 0
-      setCurrentIndex(0)
+      recycledPoolRef.current = []
+      setRecycledPool([])
+      unseenQueueRef.current = []
+      setUnseenQueue([])
+      recycledIndexRef.current = 0
+      setRecycledIndex(0)
+      activeGreetingRef.current = null
+      setActiveGreeting(null)
+      isShowingRecycledRef.current = false
+      setIsShowingRecycled(false)
     } finally {
       setGreetingLoading(false)
     }
@@ -196,12 +332,24 @@ export default function DisplayPage() {
   }, [loadGreetings])
 
   useEffect(() => {
-    greetingsRef.current = greetings
-  }, [greetings])
+    unseenQueueRef.current = unseenQueue
+  }, [unseenQueue])
 
   useEffect(() => {
-    currentIndexRef.current = currentIndex
-  }, [currentIndex])
+    recycledPoolRef.current = recycledPool
+  }, [recycledPool])
+
+  useEffect(() => {
+    recycledIndexRef.current = recycledIndex
+  }, [recycledIndex])
+
+  useEffect(() => {
+    activeGreetingRef.current = activeGreeting
+  }, [activeGreeting])
+
+  useEffect(() => {
+    isShowingRecycledRef.current = isShowingRecycled
+  }, [isShowingRecycled])
 
   useEffect(() => {
     if (rotateIntervalRef.current) {
@@ -209,26 +357,13 @@ export default function DisplayPage() {
       rotateIntervalRef.current = null
     }
 
-    if (greetings.length === 0) return
+    const hasGreetings =
+      recycledPool.length > 0 || unseenQueue.length > 0 || activeGreeting !== null
+    if (!hasGreetings) return
 
     const id = window.setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
-
-      const list = greetingsRef.current
-      if (list.length <= 1) return
-
-      const prevIdx =
-        ((currentIndexRef.current % list.length) + list.length) % list.length
-      const prevGreeting = list[prevIdx]
-      if (prevGreeting) {
-        void recordGreetingDisplayed(prevGreeting.id).catch(() => {
-          /* RPC or columns not migrated yet */
-        })
-      }
-
-      const nextIdx = (prevIdx + 1) % list.length
-      currentIndexRef.current = nextIdx
-      setCurrentIndex(nextIdx)
+      rotateGreeting()
     }, GREETING_ROTATE_MS)
 
     rotateIntervalRef.current = id
@@ -237,7 +372,7 @@ export default function DisplayPage() {
       clearInterval(id)
       if (rotateIntervalRef.current === id) rotateIntervalRef.current = null
     }
-  }, [greetings.length, rotationEpoch])
+  }, [recycledPool.length, unseenQueue.length, rotationEpoch, rotateGreeting])
 
   useEffect(() => {
     let cancelled = false
@@ -256,7 +391,7 @@ export default function DisplayPage() {
 
   useEffect(() => {
     const channel = supabase
-      .channel('display-greetings')
+      .channel('public:greetings')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'greetings' },
@@ -264,7 +399,7 @@ export default function DisplayPage() {
           const row = greetingFromRealtimeRow(
             payload.new as Record<string, unknown>
           )
-          if (row) queueNewGreeting(row)
+          if (row) enqueueUnseenGreeting(row)
         }
       )
       .on(
@@ -275,7 +410,7 @@ export default function DisplayPage() {
             payload.new as Record<string, unknown>
           )
           if (row) {
-            queueNewGreeting(row)
+            enqueueUnseenGreeting(row)
             return
           }
 
@@ -289,28 +424,7 @@ export default function DisplayPage() {
               : null
           if (!updatedId || newStatus === 'ready') return
 
-          setGreetings((prev) => {
-            const removeIdx = prev.findIndex((g) => g.id === updatedId)
-            if (removeIdx === -1) return prev
-
-            const next = prev.filter((g) => g.id !== updatedId)
-            greetingsRef.current = next
-
-            let newIdx = currentIndexRef.current
-            if (next.length === 0) {
-              newIdx = 0
-            } else {
-              if (removeIdx < newIdx) newIdx -= 1
-              else if (removeIdx === newIdx && newIdx >= next.length) {
-                newIdx = next.length - 1
-              }
-              if (newIdx >= next.length) newIdx = next.length - 1
-            }
-
-            currentIndexRef.current = newIdx
-            setCurrentIndex(newIdx)
-            return next
-          })
+          removeGreetingFromQueues(updatedId)
         }
       )
       .on(
@@ -323,28 +437,7 @@ export default function DisplayPage() {
               : null
           if (!deletedId) return
 
-          setGreetings((prev) => {
-            const removeIdx = prev.findIndex((g) => g.id === deletedId)
-            if (removeIdx === -1) return prev
-
-            const next = prev.filter((g) => g.id !== deletedId)
-            greetingsRef.current = next
-
-            let newIdx = currentIndexRef.current
-            if (next.length === 0) {
-              newIdx = 0
-            } else {
-              if (removeIdx < newIdx) newIdx -= 1
-              else if (removeIdx === newIdx && newIdx >= next.length) {
-                newIdx = next.length - 1
-              }
-              if (newIdx >= next.length) newIdx = next.length - 1
-            }
-
-            currentIndexRef.current = newIdx
-            setCurrentIndex(newIdx)
-            return next
-          })
+          removeGreetingFromQueues(deletedId)
         }
       )
       .subscribe()
@@ -352,7 +445,7 @@ export default function DisplayPage() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [queueNewGreeting])
+  }, [enqueueUnseenGreeting, removeGreetingFromQueues])
 
   const spawnScoreCelebration = useCallback(
     (deltas: Array<{ tableId: string; delta: number }>) => {
