@@ -28,10 +28,23 @@ const HOST_MANAGED_VALIDATION_ALIASES = new Set([
 
 function normalizeValidationTypeToken(raw: unknown): string {
   return String(raw ?? '')
-    .trim()
     .toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/-/g, '_')
+    .trim()
+    .replace(/[\s-]+/g, '_')
+}
+
+const CURRENCY_FARM_VALIDATION_ALIASES = new Set([
+  'currencyfarm',
+  'currency_farm_qr',
+  'qr',
+])
+
+/** Map known aliases to canonical tokens before DB coercion. */
+function resolveValidationTypeAliases(normalized: string): string {
+  if (CURRENCY_FARM_VALIDATION_ALIASES.has(normalized)) {
+    return 'currency_farm'
+  }
+  return normalized
 }
 
 /** True when a raw value refers to a host-managed mission category. */
@@ -48,7 +61,7 @@ export function coerceValidationTypeForDb(
   raw: unknown,
   fallback: ValidationType = HOST_MANAGED_VALIDATION_TYPE
 ): ValidationType {
-  const v = normalizeValidationTypeToken(raw)
+  const v = resolveValidationTypeAliases(normalizeValidationTypeToken(raw))
   if ((VALIDATION_TYPES as readonly string[]).includes(v)) {
     return v as ValidationType
   }
@@ -56,6 +69,7 @@ export function coerceValidationTypeForDb(
     return HOST_MANAGED_VALIDATION_TYPE
   }
   if (v === 'manual') return 'photo'
+  if (v === 'currency_farm') return 'beatcoin'
   return fallback
 }
 
