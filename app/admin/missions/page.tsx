@@ -1328,15 +1328,19 @@ export default function MissionsLibraryPage() {
                   return (
                     <div
                       key={m.id}
-                      className="group relative isolate h-[320px] overflow-hidden rounded-2xl border border-zinc-200 text-left shadow-none transform-gpu transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Edit ${m.title}`}
+                      onClick={() => openEdit(m)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          openEdit(m)
+                        }
+                      }}
+                      className="group relative isolate h-[320px] cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 text-left shadow-none transform-gpu transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md"
                       style={{ background: themeBg }}
                     >
-                      <button
-                        type="button"
-                        onClick={() => openEdit(m)}
-                        className="absolute inset-0 z-0 cursor-pointer"
-                        aria-label={`Edit ${m.title}`}
-                      />
                       {coverImage ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -1346,14 +1350,12 @@ export default function MissionsLibraryPage() {
                         />
                       ) : null}
                       <span
-                        className="absolute right-3 top-3 z-20 max-w-[calc(100%-6rem)] truncate rounded-full bg-white/95 px-2.5 py-0.5 text-[11px] font-semibold text-zinc-800 shadow-sm backdrop-blur-[2px] transition-opacity duration-200 group-hover:opacity-0"
+                        className="pointer-events-none absolute right-3 top-3 z-20 max-w-[calc(100%-6rem)] truncate rounded-full bg-white/95 px-2.5 py-0.5 text-[11px] font-semibold text-zinc-800 shadow-sm backdrop-blur-[2px] transition-opacity duration-200 group-hover:opacity-0"
                         title={limitTitle}
                       >
                         {limitLabel}
                       </span>
-                      <div
-                        className="pointer-events-none absolute inset-0 z-20 opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100"
-                      >
+                      <div className="pointer-events-none absolute inset-0 z-20 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                         <div className="absolute left-3 top-3 flex flex-col gap-1">
                           <button
                             type="button"
@@ -1362,7 +1364,7 @@ export default function MissionsLibraryPage() {
                               e.stopPropagation()
                               void moveMissionSortOrder(m.id, 'up')
                             }}
-                            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-zinc-200/90 bg-white/95 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-[2px] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                            className="pointer-events-auto flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-zinc-200/90 bg-white/95 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-[2px] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
                             aria-label="Move mission up"
                           >
                             ↑
@@ -1374,7 +1376,7 @@ export default function MissionsLibraryPage() {
                               e.stopPropagation()
                               void moveMissionSortOrder(m.id, 'down')
                             }}
-                            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-zinc-200/90 bg-white/95 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-[2px] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                            className="pointer-events-auto flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-zinc-200/90 bg-white/95 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-[2px] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
                             aria-label="Move mission down"
                           >
                             ↓
@@ -1387,7 +1389,7 @@ export default function MissionsLibraryPage() {
                             e.stopPropagation()
                             void confirmDeleteMission(m)
                           }}
-                          className="absolute right-3 top-3 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-zinc-200/90 bg-white/95 text-sm font-semibold text-red-600 shadow-sm backdrop-blur-[2px] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                          className="pointer-events-auto absolute right-3 top-3 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-zinc-200/90 bg-white/95 text-sm font-semibold text-red-600 shadow-sm backdrop-blur-[2px] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                           aria-label={`Delete ${m.title}`}
                         >
                           ×
