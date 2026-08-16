@@ -586,6 +586,53 @@ export default function MissionsTablePage({
     loadMomentumFromScoringLogs,
   ])
 
+  const refreshTableDataRef = useRef(refreshTableData)
+  refreshTableDataRef.current = refreshTableData
+
+  useEffect(() => {
+    let cancelled = false
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let resubscribeTimer: number | null = null
+
+    const attachRealtimeChannel = () => {
+      if (cancelled) return
+      channel = supabase
+        .channel(`team-realtime-${tableId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'completions' },
+          () => {
+            refreshTableDataRef.current()
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'mission_submissions' },
+          () => {
+            refreshTableDataRef.current()
+          }
+        )
+        .subscribe((status) => {
+          if (cancelled) return
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            if (channel) {
+              supabase.removeChannel(channel)
+              channel = null
+            }
+            resubscribeTimer = window.setTimeout(attachRealtimeChannel, 2_000)
+          }
+        })
+    }
+
+    attachRealtimeChannel()
+
+    return () => {
+      cancelled = true
+      if (resubscribeTimer) window.clearTimeout(resubscribeTimer)
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [tableId])
+
   useEffect(() => {
     if (missionsEnabled !== true) {
       setMissionFeedItems([])

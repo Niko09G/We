@@ -588,31 +588,14 @@ export default function DisplayPage() {
         )
         .on(
           'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'completions' },
+          { event: '*', schema: 'public', table: 'completions' },
           () => {
             void refreshLiveData()
           }
         )
         .on(
           'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'mission_submissions',
-            filter: 'status=eq.approved',
-          },
-          () => {
-            void refreshLiveData()
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'mission_submissions',
-            filter: 'status=eq.approved',
-          },
+          { event: '*', schema: 'public', table: 'mission_submissions' },
           () => {
             void refreshLiveData()
           }
