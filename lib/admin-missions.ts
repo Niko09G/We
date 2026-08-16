@@ -139,11 +139,13 @@ export async function listMissions(): Promise<MissionRecord[]> {
   return (data ?? []).map((row) => missionRecordFromSupabaseRow(row as Record<string, unknown>))
 }
 
-export async function createMission(input: {
+export type MissionSaveInput = {
   title: string
   description: string
   points: number
   validation_type?: ValidationType | string | null
+  /** Optional UI alias; coerced to `validation_type` when that field is missing. */
+  category?: string | null
   approval_mode: ApprovalMode
   is_active: boolean
   add_to_greetings?: boolean
@@ -160,49 +162,45 @@ export async function createMission(input: {
   success_message?: string | null
   card_cta_label?: string | null
   card_completed_label?: string | null
-}): Promise<string> {
-  const max =
-    typeof input.max_submissions_per_table === 'string'
-      ? parseMaxSubmissionsInput(input.max_submissions_per_table)
-      : input.max_submissions_per_table === undefined
-        ? null
-        : input.max_submissions_per_table === null
-          ? null
-          : Math.max(1, Math.floor(Number(input.max_submissions_per_table)))
+}
 
-  const { data: maxOrderRow } = await supabase
-    .from('missions')
-    .select('sort_order')
-    .order('sort_order', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  const nextSortOrder =
-    typeof (maxOrderRow as { sort_order?: number } | null)?.sort_order === 'number'
-      ? Math.trunc((maxOrderRow as { sort_order: number }).sort_order) + 1
-      : 0
-
-  const row: Record<string, unknown> = {
-    title: input.title.trim(),
-    description: input.description.trim() || null,
-    points: Math.max(0, Math.floor(input.points)),
-    validation_type: coerceValidationTypeForDb(input.validation_type),
-    approval_mode: input.approval_mode,
-    is_active: input.is_active,
-    sort_order: nextSortOrder,
-    add_to_greetings: input.add_to_greetings ?? false,
-    max_submissions_per_table: max,
-    allow_multiple_submissions: allowMultipleSubmissionsFlag({
-      max_submissions_per_table: max,
-      allow_multiple_submissions: false,
-    }),
-    points_per_submission: input.points_per_submission ?? null,
-    target_person_name: input.target_person_name?.trim() || null,
-    submission_hint: input.submission_hint?.trim() || null,
-    header_title: input.header_title?.trim() || null,
-    header_image_url: input.header_image_url?.trim() || null,
-    message_required: input.message_required ?? false,
+export type MissionUpdateInput = Partial<
+  MissionSaveInput & {
+    description: string | null
+    add_to_greetings: boolean
+    sort_order: number
   }
+>
 
+function hasNonEmptyMissionTypeToken(raw: unknown): boolean {
+  return String(raw ?? '').trim().length > 0
+}
+
+/** Resolve `missions.validation_type` for Supabase: lowercase snake_case, default `host_facilitated`. */
+export function validationTypeForSavePayload(input: {
+  validation_type?: unknown
+  category?: unknown
+}): ValidationType {
+  const raw = hasNonEmptyMissionTypeToken(input.validation_type)
+    ? input.validation_type
+    : hasNonEmptyMissionTypeToken(input.category)
+      ? input.category
+      : undefined
+  return coerceValidationTypeForDb(raw, HOST_MANAGED_VALIDATION_TYPE)
+}
+
+function parseMaxSubmissionsForDb(
+  value: string | number | null | undefined
+): number | null {
+  if (typeof value === 'string') return parseMaxSubmissionsInput(value)
+  if (value === undefined || value === null) return null
+  return Math.max(1, Math.floor(Number(value)))
+}
+
+function appendOptionalMissionCardFields(
+  row: Record<string, unknown>,
+  input: MissionSaveInput
+): void {
   if (input.card_theme_index !== undefined) {
     row.card_theme_index =
       input.card_theme_index === null
@@ -221,43 +219,55 @@ export async function createMission(input: {
   if (input.card_completed_label !== undefined) {
     row.card_completed_label = input.card_completed_label?.trim() || null
   }
-
-  const { data, error } = await supabase.from('missions').insert(row).select('id').single()
-  if (error) throw new Error(error.message || 'Failed to create mission.')
-  return String((data as { id: string }).id)
 }
 
-export async function updateMission(
-  id: string,
-  patch: Partial<{
-    title: string
-    description: string | null
-    points: number
-    validation_type?: ValidationType | string | null
-    approval_mode: ApprovalMode
-    is_active: boolean
-    add_to_greetings: boolean
-    max_submissions_per_table: string | number | null
-    points_per_submission: number | null
-    target_person_name: string | null
-    submission_hint: string | null
-    header_title: string | null
-    header_image_url: string | null
-    message_required: boolean
-    card_theme_index: number | null
-    card_cover_image_url: string | null
-    success_message: string | null
-    card_cta_label: string | null
-    card_completed_label: string | null
-    sort_order: number
-  }>
-): Promise<void> {
+async function buildMissionInsertRow(input: MissionSaveInput): Promise<Record<string, unknown>> {
+  const max = parseMaxSubmissionsForDb(input.max_submissions_per_table)
+
+  const { data: maxOrderRow } = await supabase
+    .from('missions')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const nextSortOrder =
+    typeof (maxOrderRow as { sort_order?: number } | null)?.sort_order === 'number'
+      ? Math.trunc((maxOrderRow as { sort_order: number }).sort_order) + 1
+      : 0
+
+  const row: Record<string, unknown> = {
+    title: input.title.trim(),
+    description: input.description.trim() || null,
+    points: Math.max(0, Math.floor(input.points)),
+    validation_type: validationTypeForSavePayload(input),
+    approval_mode: input.approval_mode,
+    is_active: input.is_active,
+    sort_order: nextSortOrder,
+    add_to_greetings: input.add_to_greetings ?? false,
+    max_submissions_per_table: max,
+    allow_multiple_submissions: allowMultipleSubmissionsFlag({
+      max_submissions_per_table: max,
+      allow_multiple_submissions: false,
+    }),
+    points_per_submission: input.points_per_submission ?? null,
+    target_person_name: input.target_person_name?.trim() || null,
+    submission_hint: input.submission_hint?.trim() || null,
+    header_title: input.header_title?.trim() || null,
+    header_image_url: input.header_image_url?.trim() || null,
+    message_required: input.message_required ?? false,
+  }
+
+  appendOptionalMissionCardFields(row, input)
+  return row
+}
+
+function buildMissionUpdateRow(patch: MissionUpdateInput): Record<string, unknown> {
   const row: Record<string, unknown> = {}
   if (patch.title !== undefined) row.title = patch.title.trim()
   if (patch.description !== undefined) row.description = patch.description?.trim() || null
   if (patch.points !== undefined) row.points = Math.max(0, Math.floor(patch.points))
-  if (patch.validation_type !== undefined) {
-    row.validation_type = coerceValidationTypeForDb(patch.validation_type)
+  if (patch.validation_type !== undefined || patch.category !== undefined) {
+    row.validation_type = validationTypeForSavePayload(patch)
   }
   if (patch.approval_mode !== undefined) row.approval_mode = patch.approval_mode
   if (patch.is_active !== undefined) row.is_active = patch.is_active
@@ -293,12 +303,7 @@ export async function updateMission(
   }
 
   if (patch.max_submissions_per_table !== undefined) {
-    const max =
-      typeof patch.max_submissions_per_table === 'string'
-        ? parseMaxSubmissionsInput(patch.max_submissions_per_table)
-        : patch.max_submissions_per_table === null
-          ? null
-          : Math.max(1, Math.floor(Number(patch.max_submissions_per_table)))
+    const max = parseMaxSubmissionsForDb(patch.max_submissions_per_table)
     row.max_submissions_per_table = max
     row.allow_multiple_submissions = allowMultipleSubmissionsFlag({
       max_submissions_per_table: max,
@@ -306,6 +311,39 @@ export async function updateMission(
     })
   }
 
+  return row
+}
+
+/** Create or update a mission; logs the exact JSON row sent to Supabase. */
+export async function saveMission(
+  missionId: string | null,
+  input: MissionSaveInput
+): Promise<string> {
+  if (missionId) {
+    const row = buildMissionUpdateRow(input)
+    if (Object.keys(row).length === 0) return missionId
+    console.log('[saveMission] Supabase payload:', JSON.stringify(row))
+    const { error } = await supabase.from('missions').update(row).eq('id', missionId)
+    if (error) throw new Error(error.message || 'Failed to update mission.')
+    return missionId
+  }
+
+  const row = await buildMissionInsertRow(input)
+  console.log('[saveMission] Supabase payload:', JSON.stringify(row))
+  const { data, error } = await supabase.from('missions').insert(row).select('id').single()
+  if (error) throw new Error(error.message || 'Failed to create mission.')
+  return String((data as { id: string }).id)
+}
+
+export async function createMission(input: MissionSaveInput): Promise<string> {
+  const row = await buildMissionInsertRow(input)
+  const { data, error } = await supabase.from('missions').insert(row).select('id').single()
+  if (error) throw new Error(error.message || 'Failed to create mission.')
+  return String((data as { id: string }).id)
+}
+
+export async function updateMission(id: string, patch: MissionUpdateInput): Promise<void> {
+  const row = buildMissionUpdateRow(patch)
   if (Object.keys(row).length === 0) return
 
   const { error } = await supabase.from('missions').update(row).eq('id', id)

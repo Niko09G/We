@@ -8,10 +8,9 @@ import {
   VALIDATION_TYPES,
   adminValidationTypeLabel,
   coerceValidationTypeForDb,
-  createMission,
   getMissionById,
   maxSubmissionsDisplayValue,
-  updateMission,
+  saveMission,
   validationTypeForAdminForm,
   type MissionRecord,
   type ValidationType,
@@ -271,7 +270,7 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
         title: form.title,
         description: form.description,
         points: pts,
-        validation_type: coerceValidationTypeForDb(form.validation_type),
+        validation_type: form.validation_type,
         approval_mode: form.approval_mode,
         is_active: isPublish,
         add_to_greetings: form.add_to_greetings,
@@ -289,18 +288,13 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
         card_cover_image_url: form.card_cover_image_url.trim() || null,
       }
 
-      let id = workingId
-      if (!id) {
-        id = await createMission(payload)
+      const id = await saveMission(workingId, payload)
+      if (!workingId) {
         setWorkingId(id)
-        setSavedActive(isPublish)
-        setBannerOk(isPublish ? 'Mission published.' : 'Draft saved.')
         router.replace(`/admin/missions/${id}/edit`)
-      } else {
-        await updateMission(id, payload)
-        setSavedActive(isPublish)
-        setBannerOk(isPublish ? 'Mission published.' : 'Draft saved.')
       }
+      setSavedActive(isPublish)
+      setBannerOk(isPublish ? 'Mission published.' : 'Draft saved.')
       await refreshAssignmentsAndTables()
     } catch (e) {
       setBannerError(e instanceof Error ? e.message : 'Save failed.')
