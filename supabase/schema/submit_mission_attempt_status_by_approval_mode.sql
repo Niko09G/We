@@ -83,6 +83,9 @@ begin
   if coalesce(v_mission.validation_type, '') = 'beatcoin' then
     return jsonb_build_object('ok', false, 'error', 'beatcoin_requires_qr_claim');
   end if;
+  if coalesce(v_mission.validation_type, '') = 'host_facilitated' then
+    return jsonb_build_object('ok', false, 'error', 'host_facilitated_requires_host');
+  end if;
 
   v_message := btrim(coalesce(p_submission_data->>'message', ''));
   v_text := btrim(coalesce(p_submission_data->>'text', ''));

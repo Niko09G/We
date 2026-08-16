@@ -23,6 +23,7 @@ import {
   guestMissionDisplayReward,
 } from '@/lib/mission-limits'
 import {
+  isGuestSubmissionBlockedType,
   normalizeMissionValidationType,
   submissionTypeFromMissionValidation,
   type MissionValidationType,
@@ -216,8 +217,10 @@ export function MissionModal({
 
   const normalizedVt = normalizeMissionValidationType(mission.validation_type)
   const isBeatcoinMission = normalizedVt === 'beatcoin'
+  const isHostFacilitatedMission = normalizedVt === 'host_facilitated'
+  const isInfoOnlyMission = isGuestSubmissionBlockedType(normalizedVt)
   const submission_type = (
-    isBeatcoinMission ? 'text' : submissionTypeFromMissionValidation(mission.validation_type)
+    isInfoOnlyMission ? 'text' : submissionTypeFromMissionValidation(mission.validation_type)
   ) as SubmissionType
 
   useEffect(() => {
@@ -300,13 +303,13 @@ export function MissionModal({
     !pending &&
     !completed &&
     !atSubmissionLimit &&
-    !isBeatcoinMission &&
+    !isInfoOnlyMission &&
     messageOk &&
     (submission_type !== 'photo' || (!!file && photoStep === 2)) &&
     (submission_type !== 'video' || (!!videoFile && videoStep === 2)) &&
     (submission_type !== 'signature' || hasSignature)
 
-  const showInlineSuccess = success && missionsEnabled && !isBeatcoinMission
+  const showInlineSuccess = success && missionsEnabled && !isInfoOnlyMission
   const successBodyText =
     mission.success_message != null && mission.success_message.trim() !== ''
       ? mission.success_message.trim()
@@ -472,9 +475,9 @@ export function MissionModal({
   const inActiveMissionForm =
     missionsEnabled && !completed && !pending && !atSubmissionLimit
   const isPhotoTwoStep =
-    submission_type === 'photo' && inActiveMissionForm && !isBeatcoinMission
+    submission_type === 'photo' && inActiveMissionForm && !isInfoOnlyMission
   const isVideoTwoStep =
-    submission_type === 'video' && inActiveMissionForm && !isBeatcoinMission
+    submission_type === 'video' && inActiveMissionForm && !isInfoOnlyMission
   const showStandardMissionHeader = !isPhotoTwoStep && !isVideoTwoStep
   /** Same condition as the Done/Awaiting footer — primary CTAs must not duplicate this band. */
   const showOverlayTerminalFooter =
@@ -1417,6 +1420,44 @@ export function MissionModal({
                     </div>
                   </form>
                 ) : !showOverlayTerminalFooter &&
+                  isHostFacilitatedMission &&
+                  inActiveMissionForm ? (
+                  <>
+                    <div
+                      className={`${cardScrollAreaClass} font-sans text-[0.9rem] font-normal leading-relaxed sm:pt-2`}
+                    >
+                      <h2
+                        id="mission-modal-title"
+                        className="px-5 pt-2 text-center text-[1.2rem] font-semibold leading-snug text-zinc-900 sm:px-7"
+                      >
+                        {missionTitleText}
+                      </h2>
+                      {missionDescriptionBody ? (
+                        <p
+                          className={`mt-4 px-5 text-center sm:px-7 ${missionBodyTextClass}`}
+                        >
+                          {missionDescriptionBody}
+                        </p>
+                      ) : null}
+                      <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-[1.05rem] font-semibold tabular-nums text-zinc-900">
+                        <span>+{missionRewardDisplay}</span>
+                        <RewardUnitIcon size={COIN_SIZE} displayVariant="default" />
+                      </p>
+                      <p className="mx-auto mt-6 max-w-sm rounded-xl border border-amber-200/90 bg-amber-50 px-4 py-3 text-center text-[0.82rem] font-medium leading-relaxed text-amber-950">
+                        Points for this mission are awarded live by the event host.
+                      </p>
+                    </div>
+                    <div className={overlayCtaBarClass}>
+                      <button
+                        type="button"
+                        onClick={onClose}
+                        className={MISSION_PRIMARY_CTA_CLASS}
+                      >
+                        Got it
+                      </button>
+                    </div>
+                  </>
+                ) : !showOverlayTerminalFooter &&
                   isBeatcoinMission &&
                   inActiveMissionForm ? (
                   <>
@@ -1442,7 +1483,7 @@ export function MissionModal({
                     </div>
                   </>
                 ) : !showOverlayTerminalFooter &&
-                  !isBeatcoinMission &&
+                  !isInfoOnlyMission &&
                   (submission_type === 'text' || submission_type === 'signature') ? (
                   <form
                     onSubmit={handleSubmit}

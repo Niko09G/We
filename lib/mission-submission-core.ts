@@ -6,7 +6,13 @@ import {
 } from '@/lib/mission-limits'
 
 /** Mirrors mission_submissions.submission_type and missions.validation_type. */
-export type SubmissionType = 'signature' | 'photo' | 'video' | 'text' | 'beatcoin'
+export type SubmissionType =
+  | 'signature'
+  | 'photo'
+  | 'video'
+  | 'text'
+  | 'beatcoin'
+  | 'host_facilitated'
 
 export type MissionSubmissionInput = {
   table_id: string
@@ -70,6 +76,8 @@ export async function executeMissionSubmission(
     if (code === 'mission_not_found') throw new Error('Mission not found.')
     if (code === 'beatcoin_requires_qr_claim')
       throw new Error('Beatcoin missions are redeemed by scanning a QR code, not this form.')
+    if (code === 'host_facilitated_requires_host')
+      throw new Error('This mission is awarded live by the event host.')
     if (code === 'text_required') throw new Error('Message cannot be empty.')
     if (code === 'message_required') throw new Error('Message is required for this mission.')
     if (code === 'already_completed')
@@ -128,6 +136,9 @@ export async function executeMissionSubmission(
   const mRow = mission as Record<string, unknown>
   if (String(mRow.validation_type ?? '') === 'beatcoin') {
     throw new Error('Beatcoin missions are redeemed by scanning a QR code, not this form.')
+  }
+  if (String(mRow.validation_type ?? '') === 'host_facilitated') {
+    throw new Error('This mission is awarded live by the event host.')
   }
   const effectiveMax = effectiveMaxSubmissionsPerTable({
     max_submissions_per_table: mRow.max_submissions_per_table as number | null | undefined,

@@ -481,7 +481,8 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
     return activeTables.filter((t) => t.name.toLowerCase().includes(q))
   }, [activeTables, tableSearch])
 
-  const showMediaRules = form.validation_type !== 'beatcoin'
+  const showMediaRules =
+    form.validation_type !== 'beatcoin' && form.validation_type !== 'host_facilitated'
   const showGreetingOpt =
     form.validation_type === 'photo' ||
     form.validation_type === 'video' ||
@@ -651,6 +652,10 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
                     <p className="text-xs text-zinc-500 sm:col-span-1 sm:self-end">
                       BeatCoin missions use the token flow — media upload rules are hidden.
                     </p>
+                  ) : form.validation_type === 'host_facilitated' ? (
+                    <p className="text-xs text-zinc-500 sm:col-span-1 sm:self-end">
+                      Host facilitated missions are awarded live by staff — guests only see an info card.
+                    </p>
                   ) : null}
                 </div>
               </div>
@@ -672,7 +677,7 @@ export function MissionBuilder({ missionId }: { missionId: string | null }) {
                     className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
                   />
                 </label>
-                {form.validation_type !== 'beatcoin' ? (
+                {form.validation_type !== 'beatcoin' && form.validation_type !== 'host_facilitated' ? (
                   <label className="block text-xs">
                     <span className="font-medium text-zinc-600 dark:text-zinc-400">
                       Points per extra submission

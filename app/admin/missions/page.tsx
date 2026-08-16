@@ -103,6 +103,7 @@ const CATEGORY_DESCRIPTIONS: Record<ValidationType, string> = {
   text: 'Submit a response',
   signature: 'Get someone to confirm',
   beatcoin: 'Find and scan the hidden QR codes',
+  host_facilitated: 'Points awarded directly by event host/facilitator',
 }
 
 const MISSION_BUILDER_GRADIENT_HOVER =
@@ -412,6 +413,8 @@ function missionCategoryCardTitle(validationType: string): string {
   if (t === 'video') return 'Video mission: guests submit a video clip.'
   if (t === 'text') return 'Text mission: guests enter a written response.'
   if (t === 'beatcoin') return 'Beatcoin mission: tied to event currency / rewards.'
+  if (t === 'host_facilitated')
+    return 'Host facilitated: points are awarded live by the event host.'
   return 'Mission type'
 }
 

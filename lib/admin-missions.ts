@@ -6,7 +6,14 @@ import {
   type MissionValidationType,
 } from '@/lib/mission-validation-type'
 
-export const VALIDATION_TYPES = ['photo', 'video', 'signature', 'text', 'beatcoin'] as const
+export const VALIDATION_TYPES = [
+  'photo',
+  'video',
+  'signature',
+  'text',
+  'beatcoin',
+  'host_facilitated',
+] as const
 export type ValidationType = (typeof VALIDATION_TYPES)[number]
 
 /** Human-friendly label for admin mission type dropdowns (value stays snake_case). */

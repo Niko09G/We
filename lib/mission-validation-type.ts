@@ -3,7 +3,14 @@
  * approval_mode (auto/manual) is separate and controls whether admin must approve.
  */
 
-export const MISSION_VALIDATION_TYPES = ['photo', 'video', 'signature', 'text', 'beatcoin'] as const
+export const MISSION_VALIDATION_TYPES = [
+  'photo',
+  'video',
+  'signature',
+  'text',
+  'beatcoin',
+  'host_facilitated',
+] as const
 export type MissionValidationType = (typeof MISSION_VALIDATION_TYPES)[number]
 
 /** Normalize DB value; legacy 'manual' is treated as 'photo'. */
@@ -11,10 +18,22 @@ export function normalizeMissionValidationType(
   raw: string | null | undefined
 ): MissionValidationType {
   const v = String(raw ?? 'photo').toLowerCase()
-  if (v === 'signature' || v === 'photo' || v === 'video' || v === 'text' || v === 'beatcoin')
+  if (
+    v === 'signature' ||
+    v === 'photo' ||
+    v === 'video' ||
+    v === 'text' ||
+    v === 'beatcoin' ||
+    v === 'host_facilitated'
+  )
     return v
   if (v === 'manual') return 'photo'
   return 'photo'
+}
+
+/** Guest cannot self-submit (beatcoin QR, host-facilitated live awards). */
+export function isGuestSubmissionBlockedType(type: MissionValidationType): boolean {
+  return type === 'beatcoin' || type === 'host_facilitated'
 }
 
 /** Value stored in mission_submissions.submission_type (mirrors mission.validation_type). */
@@ -37,6 +56,8 @@ export function missionValidationTypeLabel(type: MissionValidationType): string 
       return 'Response'
     case 'beatcoin':
       return 'Currency farm'
+    case 'host_facilitated':
+      return 'Host Facilitated'
     default:
       return 'Photo'
   }
@@ -55,6 +76,8 @@ export function pendingReviewHintForMissionType(type: MissionValidationType): st
       return 'Awaiting review: read the response, then approve or reject.'
     case 'beatcoin':
       return 'Currency / token claim pending review.'
+    case 'host_facilitated':
+      return 'Points are awarded live by the event host.'
     default:
       return 'Awaiting review.'
   }
