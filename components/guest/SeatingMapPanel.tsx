@@ -237,6 +237,7 @@ function GuestTableSeatMap({
   selectedGuestId,
   onSelectGuest,
   tableLabel,
+  suppressPointerEvents = false,
 }: {
   capacity: number
   guests: GuestWithTable[]
@@ -244,6 +245,8 @@ function GuestTableSeatMap({
   selectedGuestId: string | null
   onSelectGuest: (guest: GuestWithTable) => void
   tableLabel: React.ReactNode
+  /** During pan/zoom transitions, disable hit targets on scaled seats/rings. */
+  suppressPointerEvents?: boolean
 }) {
   const middleRef = useRef<HTMLDivElement>(null)
   const [middleW, setMiddleW] = useState(0)
@@ -300,48 +303,53 @@ function GuestTableSeatMap({
     }
 
     return (
-      <button
+      <div
         key={guest.id}
-        type="button"
-        onClick={() => onSelectGuest(guest)}
-        className={`shrink-0 rounded-full transition-[box-shadow,border-color,transform] duration-200 ${
-          isSelected
-            ? 'animate-seat-selected-glow z-40 overflow-visible will-change-transform'
-            : 'overflow-hidden border border-zinc-300/70 hover:border-zinc-400'
-        }`}
-        style={{
-          width: size,
-          height: size,
-          ...(isSelected
-            ? ({
-                ['--seat-accent' as string]: tableAccent,
-                transform: 'scale(1.4)',
-                zIndex: 40,
-                willChange: 'transform',
-              } as React.CSSProperties)
-            : undefined),
-        }}
-        title={`${guest.full_name} · Seat ${guest.seat_number}`}
+        className="relative shrink-0"
+        style={{ width: size, height: size, flexShrink: 0 }}
       >
-        {guest.photo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={guest.photo_url}
-            alt=""
-            className={`block h-full w-full rounded-full object-cover ${
-              isSelected ? 'border-2 border-white' : ''
-            }`}
-          />
-        ) : (
-          <span
-            className={`flex h-full w-full items-center justify-center rounded-full bg-zinc-200 text-[9px] font-bold text-zinc-700 ${
-              isSelected ? 'border-2 border-white' : ''
-            }`}
-          >
-            {getInitials(guest.full_name)}
-          </span>
-        )}
-      </button>
+        <button
+          type="button"
+          onClick={() => onSelectGuest(guest)}
+          className={`absolute left-1/2 top-1/2 rounded-full transition-[box-shadow,border-color,transform] duration-200 ${
+            isSelected
+              ? 'animate-seat-selected-glow z-40 overflow-visible will-change-transform'
+              : 'overflow-hidden border border-zinc-300/70 hover:border-zinc-400'
+          } ${suppressPointerEvents ? 'pointer-events-none' : ''}`}
+          style={{
+            width: size,
+            height: size,
+            transform: isSelected ? 'translate(-50%, -50%) scale(1.4)' : 'translate(-50%, -50%)',
+            ...(isSelected
+              ? ({
+                  ['--seat-accent' as string]: tableAccent,
+                  zIndex: 40,
+                  willChange: 'transform',
+                } as React.CSSProperties)
+              : undefined),
+          }}
+          title={`${guest.full_name} · Seat ${guest.seat_number}`}
+        >
+          {guest.photo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={guest.photo_url}
+              alt=""
+              className={`block h-full w-full rounded-full object-cover ${
+                isSelected ? 'border-2 border-white' : ''
+              }`}
+            />
+          ) : (
+            <span
+              className={`flex h-full w-full items-center justify-center rounded-full bg-zinc-200 text-[9px] font-bold text-zinc-700 ${
+                isSelected ? 'border-2 border-white' : ''
+              }`}
+            >
+              {getInitials(guest.full_name)}
+            </span>
+          )}
+        </button>
+      </div>
     )
   }
 
@@ -392,7 +400,7 @@ function GuestTableSeatMap({
                 {renderSide(topStart, topEnd, topSizing)}
               </div>
             ) : null}
-            <div className="flex min-h-[24px] items-center justify-center px-1 text-center">
+            <div className="flex h-6 w-full min-w-0 shrink-0 items-center justify-center overflow-hidden px-1">
               {tableLabel}
             </div>
             {bottomCount > 0 ? (
@@ -1133,12 +1141,15 @@ export function SeatingMapPanel({
                     top: `${table.bounds.top}%`,
                     width: `${table.bounds.width}%`,
                     height: `${table.bounds.height}%`,
+                    minWidth: 0,
+                    minHeight: 0,
+                    contain: 'layout size',
                     willChange: 'transform',
                     transform: 'translate3d(0, 0, 0)',
                   }}
                 >
                   <div
-                    className={`pointer-events-none relative flex h-full w-full flex-col overflow-visible rounded-2xl border text-left transition-[background,box-shadow,border-color,opacity] duration-200 ease-out ${
+                    className={`pointer-events-none relative box-border flex h-full w-full min-h-0 min-w-0 flex-col overflow-visible rounded-2xl border text-left transition-[background,box-shadow,border-color,opacity] duration-200 ease-out ${
                       isSelectedTable
                         ? 'z-10 shadow-[0_14px_32px_rgba(0,0,0,0.18)]'
                         : isSiblingTable
@@ -1146,6 +1157,9 @@ export function SeatingMapPanel({
                           : 'border-neutral-200/80 bg-white shadow-[0_6px_18px_rgba(0,0,0,0.12)]'
                     }`}
                     style={{
+                      width: '100%',
+                      height: '100%',
+                      contain: 'layout style',
                       willChange: 'transform',
                       transform: 'translate3d(0, 0, 0)',
                       ...(isSelectedTable
@@ -1164,16 +1178,17 @@ export function SeatingMapPanel({
                           : undefined),
                     }}
                   >
-                    <div className="relative h-full w-full min-h-0 overflow-visible pointer-events-auto">
+                    <div className="pointer-events-auto relative h-full w-full min-h-0 min-w-0 overflow-visible">
                       <GuestTableSeatMap
                         capacity={table.capacity}
                         guests={table.guests}
                         tableAccent={tableStyle.accent}
                         selectedGuestId={selectedGuest?.id ?? null}
                         onSelectGuest={selectGuest}
+                        suppressPointerEvents={dragging || transitionTransform}
                         tableLabel={
                           <span
-                            className={`max-w-full truncate text-center text-[10px] font-semibold tracking-wide ${
+                            className={`block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-center text-[10px] font-semibold tracking-wide ${
                               highlighted
                                 ? 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]'
                                 : 'text-neutral-900'
