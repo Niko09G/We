@@ -395,7 +395,7 @@ function LargeSeatingOverlay({
 
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-3 pb-3 pt-2">
           <div
-            className="relative min-h-0 w-full min-w-0 shrink-0 rounded-xl border border-[#ebebeb] bg-[#fafafa] px-2 py-2 sm:px-3 sm:py-3"
+            className="relative min-h-0 w-full max-w-full min-w-0 shrink-0 overflow-x-auto rounded-xl border border-[#ebebeb] bg-[#fafafa] px-2 py-2 sm:px-3 sm:py-3"
             onDragOver={(e) => {
               if (!dragPartyKey) return
               e.preventDefault()

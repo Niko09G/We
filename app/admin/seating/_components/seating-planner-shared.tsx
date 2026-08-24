@@ -1,6 +1,6 @@
 'use client'
 
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 
 import type { AttendeeRow } from '@/lib/admin-attendees'
 import {
@@ -16,6 +16,22 @@ import {
   computePartyKidsCount,
   type SeatingParty,
 } from '@/lib/seating-planner'
+
+const GPU_LAYER_STYLE: CSSProperties = {
+  willChange: 'transform',
+  transform: 'translateZ(0)',
+}
+
+function seatCenterX(
+  colIndex: number,
+  count: number,
+  totalWidth: number,
+  gapPx: number
+): number {
+  if (count <= 0 || totalWidth <= 0) return 0
+  const trackWidth = (totalWidth - Math.max(0, count - 1) * gapPx) / count
+  return colIndex * (trackWidth + gapPx) + trackWidth / 2
+}
 
 export function seatRangeLabel(p: SeatingParty): string {
   if (p.minSeat == null || p.maxSeat == null) return '—'
@@ -73,12 +89,17 @@ export function AttendeeSeatAvatar({
   return (
     <div
       className={`shrink-0 overflow-hidden rounded-full border border-[#ebebeb] bg-zinc-100 ${className}`}
-      style={{ width: dim, height: dim }}
+      style={{ width: dim, height: dim, ...GPU_LAYER_STYLE }}
       aria-hidden
     >
       {attendee.photo_url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={attendee.photo_url} alt="" className="h-full w-full object-cover" />
+        <img
+          src={attendee.photo_url}
+          alt=""
+          className="h-full w-full object-cover"
+          style={GPU_LAYER_STYLE}
+        />
       ) : (
         <span className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-zinc-500">
           {initialsFromName(attendee.full_name)}
@@ -241,11 +262,17 @@ export function PartyAvatarCluster({
           <div
             key={m.id}
             className={`${dim} shrink-0 overflow-hidden rounded-full border border-[#ebebeb] bg-zinc-100`}
+            style={GPU_LAYER_STYLE}
             title={m.full_name}
           >
             {m.photo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={m.photo_url} alt="" className="h-full w-full object-cover" />
+              <img
+                src={m.photo_url}
+                alt=""
+                className="h-full w-full object-cover"
+                style={GPU_LAYER_STYLE}
+              />
             ) : (
               <span className="flex h-full w-full items-center justify-center font-semibold text-zinc-500">
                 {initialsFromName(m.full_name)}
@@ -279,6 +306,7 @@ type SeatMapSharedProps = {
     | null
   lockedSeatNums: ReadonlySet<number> | null
   remoteCoupleBadgeSeats: ReadonlySet<number>
+  isInteracting: boolean
 }
 
 function seatRangeOccupied(
@@ -306,6 +334,7 @@ function AdminSeatBubble({
   isLocked,
   showCoupleBadge,
   onSeatClick,
+  isInteracting,
 }: {
   seatNum: number
   seatPx: number
@@ -322,6 +351,7 @@ function AdminSeatBubble({
   onSeatClick:
     | ((seatNum: number, guest: AttendeeRow | null, anchor: DOMRectReadOnly) => void)
     | null
+  isInteracting: boolean
 }) {
   const title = guest
     ? `Seat ${seatNum} · ${guest.full_name}${party ? ` · ${party.title}` : ''}${showCoupleBadge ? ' · couple' : ''}`
@@ -378,13 +408,24 @@ function AdminSeatBubble({
             : undefined
         }
         data-seat-control
-        className={`flex items-center justify-center rounded-full border ${seatClass} ${ringClass} ${onSeatClick ? 'cursor-pointer transition-transform hover:scale-[1.04]' : ''}`}
-        style={{ width: seatPx, height: seatPx }}
+        className={`flex items-center justify-center rounded-full border ${seatClass} ${ringClass} ${
+          onSeatClick
+            ? isInteracting
+              ? 'cursor-pointer'
+              : 'cursor-pointer transition-transform hover:scale-[1.04]'
+            : ''
+        }`}
+        style={{ width: '100%', maxWidth: seatPx, aspectRatio: '1', ...GPU_LAYER_STYLE }}
       >
         {guest ? (
           guest.photo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={guest.photo_url} alt="" className="h-full w-full rounded-full object-cover" />
+            <img
+              src={guest.photo_url}
+              alt=""
+              className="h-full w-full rounded-full object-cover"
+              style={GPU_LAYER_STYLE}
+            />
           ) : (
             <span className="text-[10px] font-semibold text-zinc-900">
               {initialsFromName(guest.full_name)}
@@ -460,40 +501,30 @@ function EndCapSeat({
       isLocked={shared.lockedSeatNums?.has(seatNum) ?? false}
       showCoupleBadge={shared.remoteCoupleBadgeSeats.has(seatNum)}
       onSeatClick={shared.onSeatClick}
+      isInteracting={shared.isInteracting}
     />
   )
 }
 
 function CoupleHorizontalBridge({
   sideName,
-  colIndexA,
-  seatPx,
-  gapPx,
   link,
-  isLarge,
+  suppressMotion,
 }: {
   sideName: 'top' | 'bottom'
-  colIndexA: number
-  seatPx: number
-  gapPx: number
   link: CoupleLink
-  isLarge: boolean
+  suppressMotion: boolean
 }) {
-  const left = colIndexA * (seatPx + gapPx)
-  const width = seatPx * 2 + gapPx
   const colorClass = coupleLinkColorClass(link)
-  const seatTop = isLarge ? 32 : 20
-  const bracketTop = sideName === 'top' ? Math.max(0, seatTop - 12) : seatTop + seatPx + 2
+  const motionClass = suppressMotion ? 'transition-none' : ''
+  const bracketClass =
+    sideName === 'top'
+      ? 'absolute inset-x-0 top-0 h-2 rounded-t-md border-l-2 border-r-2 border-t-2'
+      : 'absolute inset-x-0 bottom-0 h-2 rounded-b-md border-l-2 border-r-2 border-b-2'
 
   return (
-    <div
-      className="pointer-events-none absolute"
-      style={{ left, top: bracketTop, width }}
-      aria-hidden
-    >
-      <div
-        className={`absolute inset-x-0 top-0 h-2 rounded-t-md border-l-2 border-r-2 border-t-2 ${colorClass}`}
-      />
+    <div className="pointer-events-none relative h-full" aria-hidden>
+      <div className={`${bracketClass} ${colorClass} ${motionClass}`} />
       {sideName === 'top' ? (
         <span
           className={`absolute left-1/2 top-0 max-w-[72px] -translate-x-1/2 -translate-y-[calc(100%+1px)] overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-emerald-200/80 bg-white/95 px-1 py-px text-[8px] font-semibold shadow-sm ${
@@ -520,7 +551,6 @@ function coupleLinkStrokeColor(link: CoupleLink): string {
 function CoupleVerticalConnectors({
   links,
   layout,
-  containerWidth,
   topSeatPx,
   topGapPx,
   topRowWidth,
@@ -528,10 +558,10 @@ function CoupleVerticalConnectors({
   bottomGapPx,
   bottomRowWidth,
   isLarge,
+  suppressMotion,
 }: {
   links: CoupleLink[]
   layout: FourSideLayout
-  containerWidth: number
   topSeatPx: number
   topGapPx: number
   topRowWidth: number
@@ -539,6 +569,7 @@ function CoupleVerticalConnectors({
   bottomGapPx: number
   bottomRowWidth: number
   isLarge: boolean
+  suppressMotion: boolean
 }) {
   const verticalLinks = links.filter((l) => l.kind === 'vertical')
   if (verticalLinks.length === 0) return null
@@ -548,12 +579,16 @@ function CoupleVerticalConnectors({
   const rowGap = 4
   const topCenterY = seatRowOffset + topSeatPx / 2
   const bottomCenterY = rowBandHeight + rowGap + seatRowOffset + bottomSeatPx / 2
-  const topRowOffsetX = Math.max(0, (containerWidth - topRowWidth) / 2)
-  const bottomRowOffsetX = Math.max(0, (containerWidth - bottomRowWidth) / 2)
+  const topCount = layout.topCount
+  const bottomCount = layout.bottomCount
+  const motionClass = suppressMotion ? 'transition-none' : ''
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[1]" aria-hidden>
-      <svg className="absolute inset-0 h-full w-full overflow-visible" aria-hidden>
+      <svg
+        className={`absolute inset-0 h-full w-full overflow-visible ${motionClass}`}
+        aria-hidden
+      >
         {verticalLinks.map((link) => {
           const pa = seatPlacement(link.seatA, layout)
           const pb = seatPlacement(link.seatB, layout)
@@ -562,9 +597,8 @@ function CoupleVerticalConnectors({
 
           const topCol = pa.side === 'top' ? pa.colIndex : pb.colIndex
           const bottomCol = pb.side === 'bottom' ? pb.colIndex : pa.colIndex
-          const topX = topRowOffsetX + topCol * (topSeatPx + topGapPx) + topSeatPx / 2
-          const bottomX =
-            bottomRowOffsetX + bottomCol * (bottomSeatPx + bottomGapPx) + bottomSeatPx / 2
+          const topX = seatCenterX(topCol, topCount, topRowWidth, topGapPx)
+          const bottomX = seatCenterX(bottomCol, bottomCount, bottomRowWidth, bottomGapPx)
 
           return (
             <line
@@ -576,6 +610,7 @@ function CoupleVerticalConnectors({
               stroke={coupleLinkStrokeColor(link)}
               strokeWidth={2}
               strokeLinecap="round"
+              className={motionClass}
             />
           )
         })}
@@ -736,6 +771,8 @@ export function AdminTableTwinSeatMap({
     return undefined
   }
 
+  const isInteracting = highlightPartyKey != null || previewSeatRange != null
+
   const shared: SeatMapSharedProps = {
     bySeat,
     partiesOnTable,
@@ -748,19 +785,18 @@ export function AdminTableTwinSeatMap({
     onSeatClick,
     lockedSeatNums,
     remoteCoupleBadgeSeats,
+    isInteracting,
   }
 
-  const rowWidthTop =
-    Math.max(0, topCount) * effectiveSeatPxTop +
+  const rowWidthTop = middleW > 0 ? middleW : Math.max(0, topCount) * effectiveSeatPxTop +
     Math.max(0, topCount - 1) * effectiveGapPxTop
-  const rowWidthBottom =
-    Math.max(0, bottomCount) * effectiveSeatPxBottom +
+  const rowWidthBottom = middleW > 0 ? middleW : Math.max(0, bottomCount) * effectiveSeatPxBottom +
     Math.max(0, bottomCount - 1) * effectiveGapPxBottom
 
   return (
-    <div className="w-full min-w-0 rounded-none bg-transparent p-0">
+    <div className="w-full max-w-full min-w-0 overflow-x-auto rounded-none bg-transparent p-0">
       <div
-        className="grid w-full min-w-0 grid-cols-[auto_1fr_auto] items-center gap-x-1"
+        className="grid w-full max-w-full min-w-0 grid-cols-[auto_1fr_auto] items-center gap-x-1"
         style={{
           paddingTop: layoutMetrics.edgePaddingTop,
           paddingBottom: layoutMetrics.edgePaddingBottom,
@@ -775,7 +811,7 @@ export function AdminTableTwinSeatMap({
           ) : null}
         </div>
 
-        <div ref={middleRef} className="min-w-0 self-stretch">
+        <div ref={middleRef} className="min-w-0 max-w-full self-stretch">
           <div
             className="relative flex min-w-0 flex-col gap-1"
             style={{ minHeight: layoutMetrics.centerBandPx }}
@@ -783,7 +819,6 @@ export function AdminTableTwinSeatMap({
             <CoupleVerticalConnectors
               links={coupleLinks}
               layout={fourSideLayout}
-              containerWidth={middleW}
               topSeatPx={effectiveSeatPxTop}
               topGapPx={effectiveGapPxTop}
               topRowWidth={rowWidthTop}
@@ -791,12 +826,12 @@ export function AdminTableTwinSeatMap({
               bottomGapPx={effectiveGapPxBottom}
               bottomRowWidth={rowWidthBottom}
               isLarge={size === 'large'}
+              suppressMotion={isInteracting}
             />
             <SideRow
               sideName="top"
               sideStart={topStart}
               sideEnd={topEnd}
-              rowWidth={rowWidthTop}
               seatPx={effectiveSeatPxTop}
               gapPx={effectiveGapPxTop}
               coupleLinks={coupleLinks}
@@ -807,7 +842,6 @@ export function AdminTableTwinSeatMap({
               sideName="bottom"
               sideStart={bottomStart}
               sideEnd={bottomEnd}
-              rowWidth={rowWidthBottom}
               seatPx={effectiveSeatPxBottom}
               gapPx={effectiveGapPxBottom}
               coupleLinks={coupleLinks}
@@ -834,7 +868,6 @@ function SideRow({
   sideName,
   sideStart,
   sideEnd,
-  rowWidth,
   seatPx,
   gapPx,
   coupleLinks,
@@ -844,7 +877,6 @@ function SideRow({
   sideName: 'top' | 'bottom'
   sideStart: number
   sideEnd: number
-  rowWidth: number
   seatPx: number
   gapPx: number
   coupleLinks: CoupleLink[]
@@ -867,6 +899,7 @@ function SideRow({
     onSeatClick,
     lockedSeatNums,
     remoteCoupleBadgeSeats,
+    isInteracting,
   } = shared
 
   const horizontalLinks = coupleLinks.filter((link) => {
@@ -877,53 +910,71 @@ function SideRow({
     return pa.side === side && pb.side === side
   })
 
+  const gridStyle: CSSProperties = {
+    gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`,
+    gap: `${gapPx}px`,
+  }
+
   return (
-    <div className="relative w-full min-w-0">
-      <div className="mx-auto flex w-full max-w-full items-center justify-center">
-        <div
-          className={`relative shrink-0 ${isLarge ? 'h-[108px]' : 'h-[72px]'}`}
-          style={{ width: rowWidth, maxWidth: '100%' }}
-        >
-          {horizontalLinks.map((link) => {
-            const pa = seatPlacement(link.seatA, layout)
-            const pb = seatPlacement(link.seatB, layout)
-            if (pa.side !== sideName || pb.side !== sideName) return null
-            const colIndexA = Math.min(pa.colIndex, pb.colIndex)
-            if (colIndexA < 0 || colIndexA >= count - 1) return null
-
-            return (
-              <CoupleHorizontalBridge
-                key={link.key}
-                sideName={sideName}
-                colIndexA={colIndexA}
-                seatPx={seatPx}
-                gapPx={gapPx}
-                link={link}
-                isLarge={isLarge}
-              />
-            )
-          })}
-
+    <div className="relative w-full min-w-0 max-w-full">
+      <div className={`relative w-full max-w-full ${isLarge ? 'min-h-[108px]' : 'min-h-[72px]'}`}>
+        {horizontalLinks.length > 0 ? (
           <div
-            className={`absolute left-0 flex items-center justify-start ${isLarge ? 'top-8' : 'top-5'}`}
-            style={{ gap: `${gapPx}px` }}
+            className={`pointer-events-none absolute inset-x-0 z-[2] grid ${
+              sideName === 'top'
+                ? isLarge
+                  ? 'top-0 h-8'
+                  : 'top-0 h-5'
+                : isLarge
+                  ? 'bottom-0 h-8'
+                  : 'bottom-0 h-5'
+            }`}
+            style={gridStyle}
+            aria-hidden
           >
-            {Array.from({ length: count }, (_, i) => {
-              const seatNum = sideStart + i
-              const guest = bySeat.get(seatNum)
-              const party = partyForSeat(seatNum)
-              const { filled, inPreview } = seatRangeOccupied(seatNum, bySeat, previewSeatRange)
-              const isActiveGroup =
-                party != null && highlightPartyKey != null && party.key === highlightPartyKey
-              const ghostInitial =
-                previewGhostInitials[
-                  (seatNum + previewGhostInitials.length) %
-                    Math.max(1, previewGhostInitials.length)
-                ] ?? '?'
+            {horizontalLinks.map((link) => {
+              const pa = seatPlacement(link.seatA, layout)
+              const pb = seatPlacement(link.seatB, layout)
+              if (pa.side !== sideName || pb.side !== sideName) return null
+              const colIndexA = Math.min(pa.colIndex, pb.colIndex)
+              if (colIndexA < 0 || colIndexA >= count - 1) return null
 
               return (
+                <div
+                  key={link.key}
+                  style={{ gridColumn: `${colIndexA + 1} / span 2` }}
+                >
+                  <CoupleHorizontalBridge
+                    sideName={sideName}
+                    link={link}
+                    suppressMotion={isInteracting}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        ) : null}
+
+        <div
+          className={`grid w-full max-w-full ${isLarge ? 'pt-8' : 'pt-5'}`}
+          style={gridStyle}
+        >
+          {Array.from({ length: count }, (_, i) => {
+            const seatNum = sideStart + i
+            const guest = bySeat.get(seatNum)
+            const party = partyForSeat(seatNum)
+            const { filled, inPreview } = seatRangeOccupied(seatNum, bySeat, previewSeatRange)
+            const isActiveGroup =
+              party != null && highlightPartyKey != null && party.key === highlightPartyKey
+            const ghostInitial =
+              previewGhostInitials[
+                (seatNum + previewGhostInitials.length) %
+                  Math.max(1, previewGhostInitials.length)
+              ] ?? '?'
+
+            return (
+              <div key={seatNum} className="flex min-w-0 w-full justify-center" style={GPU_LAYER_STYLE}>
                 <AdminSeatBubble
-                  key={seatNum}
                   seatNum={seatNum}
                   seatPx={seatPx}
                   guest={guest}
@@ -943,10 +994,11 @@ function SideRow({
                   isLocked={lockedSeatNums?.has(seatNum) ?? false}
                   showCoupleBadge={remoteCoupleBadgeSeats.has(seatNum)}
                   onSeatClick={onSeatClick}
+                  isInteracting={isInteracting}
                 />
-              )
-            })}
-          </div>
+              </div>
+            )
+          })}
         </div>
       </div>
     </div>
