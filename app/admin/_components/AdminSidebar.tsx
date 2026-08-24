@@ -17,6 +17,7 @@ type NavItem = {
     | 'missions'
     | 'tokens'
     | 'tables'
+    | 'floorplan'
     | 'seating'
     | 'attendees'
     | 'submissions'
@@ -90,6 +91,23 @@ const NAV_ITEMS: NavItem[] = [
     key: 'tables',
     section: 'event',
     icon: ({ active }) => <NavIcon active={active} d={<><rect x="4" y="6" width="16" height="12" rx="2" /><path d="M4 10h16M10 6v12" /></>} />,
+  },
+  {
+    href: '/admin/layout',
+    label: 'Floor plan',
+    key: 'floorplan',
+    section: 'event',
+    icon: ({ active }) => (
+      <NavIcon
+        active={active}
+        d={
+          <>
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M3 10h18M9 4v16M15 4v16" />
+          </>
+        }
+      />
+    ),
   },
   {
     href: '/admin/seating',
@@ -177,6 +195,7 @@ export default function AdminSidebar() {
     if (pathname.startsWith('/admin/tokens')) return 'tokens'
     if (pathname.startsWith('/admin/scoreboard')) return 'scoreboard'
     if (pathname.startsWith('/admin/tables')) return 'tables'
+    if (pathname.startsWith('/admin/layout')) return 'floorplan'
     if (pathname.startsWith('/admin/seating')) return 'seating'
     if (pathname.startsWith('/admin/attendees')) return 'attendees'
     if (pathname.startsWith('/admin/submissions')) return 'submissions'

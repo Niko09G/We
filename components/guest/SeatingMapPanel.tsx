@@ -17,6 +17,17 @@ import {
   seatSizingForSideCounts,
 } from '@/lib/seat-map-layout'
 import { teamPageAdminFormDefaults } from '@/lib/team-page-config'
+import { loadGuestFloorLayout } from '@/lib/admin-floor-layout'
+import {
+  FLOOR_GRID_COLS,
+  FLOOR_GRID_ROWS,
+  gridRectToPercentBounds,
+  landmarkBorderRadius,
+  normalizeFloorRect,
+  resolveTableGridUnits,
+  tableGridUnitsForCapacity,
+  type VenueLandmarkShape,
+} from '@/lib/floor-layout'
 import {
   groupTablesByTeamId,
   pickPrimaryTableForTeam,
@@ -41,6 +52,21 @@ type SeatFinderTable = {
   is_active?: boolean
   is_archived?: boolean
   team_id: string
+  grid_x: number | null
+  grid_y: number | null
+  width_units: number
+  height_units: number
+}
+
+type MapLandmark = {
+  id: string
+  name: string
+  shape: VenueLandmarkShape
+  color: string | null
+  left: number
+  top: number
+  width: number
+  height: number
 }
 
 type GuestWithTable = SeatFinderGuest & {
@@ -64,8 +90,7 @@ type TableOnMap = {
   team_id: string
   guests: GuestWithTable[]
   visual: TableVisual
-  x: number
-  y: number
+  bounds: { left: number; top: number; width: number; height: number }
   slotKey: MapSlotKey
   isTwin: boolean
 }
@@ -75,27 +100,17 @@ type MapSlotKey = (typeof MAP_SLOT_KEYS)[number]
 
 /** Vertical team lanes on the guest map. Sibling physical blocks share a lane. */
 const TEAM_LANE_Y = [18, 35, 52, 69] as const
-const MAP_CENTER_X = 38
-const PAIR_XS = [22, 54] as const
+const MAP_CENTER_X = 50
+const PAIR_XS = [28, 72] as const
 
-const LANDMARKS = [
-  { name: 'Lift Lobby', x: 5, y: 26 },
-  { name: 'Reception', x: 5, y: 73 },
-  { name: 'Kitchen', x: 19, y: 90 },
-  { name: 'Activity / screen', x: 83, y: 34 },
-  { name: 'Bar', x: 70, y: 80 },
-] as const
+const WORLD_W = 960
+const WORLD_H = 720
 
-const WORLD_W = 720
-const WORLD_H = 620
-
-/** Overview: default viewport (+2 zoom steps above fully zoomed-out baseline). */
-const DEFAULT_ZOOM = 0.68
 const FOCUS_ZOOM = 1.08
-const ZOOM_MIN = 0.52
+const ZOOM_MIN = 0.35
 const ZOOM_MAX = 1.28
 const TRANSFORM_MS = 280
-const OVERVIEW_PAD_X = 38
+const OVERVIEW_PAD = 16
 
 /** Vertical gradients per layout slot (team identity). `blue` slot = Kaypoh Auntie’s. */
 const TABLE_GRADIENT_BY_SLOT: Record<MapSlotKey, string> = {
@@ -156,9 +171,29 @@ function getInitials(name: string): string {
 function spreadLaneXs(count: number): number[] {
   if (count <= 1) return [MAP_CENTER_X]
   if (count === 2) return [...PAIR_XS]
-  const start = 16
-  const end = 60
+  const start = 22
+  const end = 78
   return Array.from({ length: count }, (_, i) => start + ((end - start) * i) / Math.max(1, count - 1))
+}
+
+function boundsFromCenter(x: number, y: number, capacity: number): {
+  left: number
+  top: number
+  width: number
+  height: number
+} {
+  const span = tableGridUnitsForCapacity(capacity)
+  return gridRectToPercentBounds(
+    normalizeFloorRect(
+      {
+        grid_x: Math.round((x / 100) * FLOOR_GRID_COLS - span.width_units / 2),
+        grid_y: Math.round((y / 100) * FLOOR_GRID_ROWS - span.height_units / 2),
+        width_units: span.width_units,
+        height_units: span.height_units,
+      },
+      { w: span.width_units, h: span.height_units }
+    )
+  )
 }
 
 function accentGlowShadow(accent: string, fallback: string): string {
@@ -269,16 +304,21 @@ function GuestTableSeatMap({
         key={guest.id}
         type="button"
         onClick={() => onSelectGuest(guest)}
-        className={`shrink-0 overflow-hidden rounded-full transition-[box-shadow] duration-200 ${
+        className={`shrink-0 rounded-full transition-[box-shadow,border-color,transform] duration-200 ${
           isSelected
-            ? 'animate-seat-selected-glow z-30 border-2 border-white p-0'
-            : 'border-2 border-zinc-300 bg-white shadow-sm hover:border-zinc-400'
+            ? 'animate-seat-selected-glow z-40 overflow-visible will-change-transform'
+            : 'overflow-hidden border border-zinc-300/70 hover:border-zinc-400'
         }`}
         style={{
           width: size,
           height: size,
           ...(isSelected
-            ? ({ ['--seat-accent' as string]: tableAccent } as React.CSSProperties)
+            ? ({
+                ['--seat-accent' as string]: tableAccent,
+                transform: 'scale(1.4)',
+                zIndex: 40,
+                willChange: 'transform',
+              } as React.CSSProperties)
             : undefined),
         }}
         title={`${guest.full_name} · Seat ${guest.seat_number}`}
@@ -288,10 +328,16 @@ function GuestTableSeatMap({
           <img
             src={guest.photo_url}
             alt=""
-            className="h-full w-full rounded-full object-cover"
+            className={`block h-full w-full rounded-full object-cover ${
+              isSelected ? 'border-2 border-white' : ''
+            }`}
           />
         ) : (
-          <span className="flex h-full w-full items-center justify-center bg-zinc-200 text-[9px] font-bold text-zinc-700">
+          <span
+            className={`flex h-full w-full items-center justify-center rounded-full bg-zinc-200 text-[9px] font-bold text-zinc-700 ${
+              isSelected ? 'border-2 border-white' : ''
+            }`}
+          >
             {getInitials(guest.full_name)}
           </span>
         )}
@@ -309,7 +355,7 @@ function GuestTableSeatMap({
 
     return (
       <div
-        className="mx-auto flex max-w-full items-center justify-center"
+        className="mx-auto flex max-w-full items-center justify-center overflow-visible"
         style={{ gap: `${sizing.gapPx}px` }}
       >
         {Array.from({ length: count }, (_, i) => renderSeat(sideStart + i, sizing.seatPx))}
@@ -322,35 +368,35 @@ function GuestTableSeatMap({
 
   return (
     <div
-      className="w-full min-w-0 px-1"
+      className="w-full min-w-0 overflow-visible px-1"
       style={{
         paddingTop: layoutMetrics.edgePaddingTop,
         paddingBottom: layoutMetrics.edgePaddingBottom,
       }}
     >
-      <div className="grid w-full min-w-0 grid-cols-[auto_1fr_auto] items-center gap-x-0.5">
+      <div className="grid w-full min-w-0 grid-cols-[auto_1fr_auto] items-center gap-x-0.5 overflow-visible">
         <div
-          className="flex shrink-0 items-center justify-center self-stretch"
+          className="flex shrink-0 items-center justify-center overflow-visible"
           style={{ width: leftEndSeat != null ? endCapSeatPx : 0 }}
         >
           {leftEndSeat != null ? renderSeat(leftEndSeat, endCapSeatPx) : null}
         </div>
 
-        <div ref={middleRef} className="min-w-0 self-stretch">
+        <div ref={middleRef} className="min-h-0 min-w-0 overflow-visible">
           <div
-            className="relative flex min-w-0 flex-col"
+            className="relative flex min-h-0 min-w-0 flex-col justify-center overflow-visible"
             style={{ minHeight: layoutMetrics.centerBandPx }}
           >
             {topCount > 0 ? (
-              <div className="pointer-events-auto z-[3] -translate-y-1/2">
+              <div className="pointer-events-auto z-[3] -translate-y-1/2 overflow-visible">
                 {renderSide(topStart, topEnd, topSizing)}
               </div>
             ) : null}
-            <div className="flex min-h-[30px] flex-1 items-center justify-center px-2 text-center">
+            <div className="flex min-h-[24px] items-center justify-center px-1 text-center">
               {tableLabel}
             </div>
             {bottomCount > 0 ? (
-              <div className="pointer-events-auto z-[3] translate-y-1/2">
+              <div className="pointer-events-auto z-[3] translate-y-1/2 overflow-visible">
                 {renderSide(bottomStart, bottomEnd, bottomSizing)}
               </div>
             ) : null}
@@ -358,36 +404,13 @@ function GuestTableSeatMap({
         </div>
 
         <div
-          className="flex shrink-0 items-center justify-center self-stretch"
+          className="flex shrink-0 items-center justify-center overflow-visible"
           style={{ width: rightEndSeat != null ? endCapSeatPx : 0 }}
         >
           {rightEndSeat != null ? renderSeat(rightEndSeat, endCapSeatPx) : null}
         </div>
       </div>
     </div>
-  )
-}
-
-/** Subtle interior guides — matches `border-zinc-200` map frame; rendered behind tables/labels/seats. */
-function SeatMapGuidelines() {
-  const w = WORLD_W
-  const h = WORLD_H
-  return (
-    <svg
-      className="pointer-events-none absolute inset-0 z-0 h-full w-full"
-      width={w}
-      height={h}
-      viewBox={`0 0 ${w} ${h}`}
-      aria-hidden
-    >
-      <g stroke="#e4e4e7" strokeWidth={1} fill="none" strokeLinecap="round" strokeLinejoin="round">
-        <line x1={w * 0.22} y1={42} x2={w * 0.22} y2={h - 44} />
-        <line x1={w * 0.5} y1={52} x2={w * 0.5} y2={h - 52} />
-        <line x1={20} y1={h * 0.28} x2={w - 20} y2={h * 0.28} />
-        <line x1={20} y1={h * 0.42} x2={w - 20} y2={h * 0.42} />
-        <line x1={20} y1={h * 0.58} x2={w - 20} y2={h * 0.58} />
-      </g>
-    </svg>
   )
 }
 
@@ -411,12 +434,14 @@ export function SeatingMapPanel({
 }) {
   const [rows, setRows] = useState<GuestWithTable[]>([])
   const [tableCatalog, setTableCatalog] = useState<SeatFinderTable[]>([])
+  const [landmarks, setLandmarks] = useState<MapLandmark[]>([])
+  const [layoutSchemaReady, setLayoutSchemaReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [searchResultsDismissed, setSearchResultsDismissed] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [zoom, setZoom] = useState(DEFAULT_ZOOM)
+  const [zoom, setZoom] = useState(ZOOM_MIN)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [transitionTransform, setTransitionTransform] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -425,7 +450,7 @@ export function SeatingMapPanel({
   const inputRef = useRef<HTMLInputElement | null>(null)
   const tableRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const dragRef = useRef<DragRef | null>(null)
-  const panZoomRef = useRef({ x: 0, y: 0, zoom: DEFAULT_ZOOM })
+  const panZoomRef = useRef({ x: 0, y: 0, zoom: ZOOM_MIN })
   const mapFrameRef = useRef<HTMLDivElement | null>(null)
   const pinchRef = useRef<{ d0: number; z0: number; wx: number; wy: number } | null>(null)
 
@@ -438,48 +463,128 @@ export function SeatingMapPanel({
       setError(null)
       setLoading(true)
       try {
-        const [attendeesRes, tablesRes] = await Promise.all([
+        const [attendeesRes, floorLayout] = await Promise.all([
           supabase
             .from('attendees')
             .select('id, full_name, photo_url, table_id, seat_number')
             .eq('is_archived', false)
             .not('table_id', 'is', null)
             .not('seat_number', 'is', null),
-          supabase
-            .from('tables')
-            .select('id, name, color, capacity, display_order, page_config, is_active, is_archived, team_id')
-            .eq('is_archived', false)
-            .eq('is_active', true)
-            .order('display_order')
-            .order('name'),
+          loadGuestFloorLayout().catch(() => null),
         ])
 
         if (attendeesRes.error) throw attendeesRes.error
-        if (tablesRes.error) throw tablesRes.error
 
-        const tables = (tablesRes.data ?? []).map((row) => {
-          const r = row as Record<string, unknown>
-          const cap = r.capacity
-          const ord = r.display_order
-          return {
-            id: row.id as string,
-            name: (row.name as string) ?? '',
-            color: (r.color as string | null) ?? null,
-            capacity:
+        let tables: SeatFinderTable[] = (floorLayout?.tables ?? []).map((row) => ({
+          id: row.id,
+          name: row.name,
+          color: row.color,
+          capacity: row.capacity,
+          display_order: row.display_order,
+          page_config: null,
+          is_active: row.is_active,
+          is_archived: row.is_archived,
+          team_id: row.team_id,
+          grid_x: row.grid_x,
+          grid_y: row.grid_y,
+          width_units: row.width_units,
+          height_units: row.height_units,
+        }))
+
+        if (tables.length === 0) {
+          const tablesRes = await supabase
+            .from('tables')
+            .select(
+              'id, name, color, capacity, display_order, page_config, is_active, is_archived, team_id, grid_x, grid_y, width_units, height_units'
+            )
+            .eq('is_archived', false)
+            .eq('is_active', true)
+            .order('display_order')
+            .order('name')
+          if (tablesRes.error) throw tablesRes.error
+          for (const row of tablesRes.data ?? []) {
+            const r = row as Record<string, unknown>
+            const cap = r.capacity
+            const ord = r.display_order
+            const units = resolveTableGridUnits(
               typeof cap === 'number' && Number.isFinite(cap) && cap >= 1
                 ? Math.trunc(cap)
                 : 10,
-            display_order:
-              typeof ord === 'number' && Number.isFinite(ord) ? Math.trunc(ord) : 0,
-            page_config: r.page_config ?? null,
-            is_active: (r.is_active as boolean | undefined) ?? true,
-            is_archived: (r.is_archived as boolean | undefined) ?? false,
-            team_id: resolveTeamId({
+              {
+                width_units:
+                  typeof r.width_units === 'number' && Number.isFinite(r.width_units)
+                    ? Math.trunc(r.width_units)
+                    : undefined,
+                height_units:
+                  typeof r.height_units === 'number' && Number.isFinite(r.height_units)
+                    ? Math.trunc(r.height_units)
+                    : undefined,
+              }
+            )
+            tables.push({
               id: row.id as string,
-              team_id: (r.team_id as string | null | undefined) ?? null,
-            }),
-          } satisfies SeatFinderTable
-        })
+              name: (row.name as string) ?? '',
+              color: (r.color as string | null) ?? null,
+              capacity:
+                typeof cap === 'number' && Number.isFinite(cap) && cap >= 1
+                  ? Math.trunc(cap)
+                  : 10,
+              display_order:
+                typeof ord === 'number' && Number.isFinite(ord) ? Math.trunc(ord) : 0,
+              page_config: r.page_config ?? null,
+              is_active: (r.is_active as boolean | undefined) ?? true,
+              is_archived: (r.is_archived as boolean | undefined) ?? false,
+              team_id: resolveTeamId({
+                id: row.id as string,
+                team_id: (r.team_id as string | null | undefined) ?? null,
+              }),
+              grid_x: typeof r.grid_x === 'number' ? Math.trunc(r.grid_x) : null,
+              grid_y: typeof r.grid_y === 'number' ? Math.trunc(r.grid_y) : null,
+              width_units: units.width_units,
+              height_units: units.height_units,
+            })
+          }
+        } else {
+          const pageConfigRes = await supabase
+            .from('tables')
+            .select('id, page_config')
+            .in(
+              'id',
+              tables.map((t) => t.id)
+            )
+          if (!pageConfigRes.error) {
+            const configById = new Map(
+              (pageConfigRes.data ?? []).map((row) => [
+                row.id as string,
+                (row as { page_config?: unknown }).page_config ?? null,
+              ])
+            )
+            for (const t of tables) {
+              t.page_config = configById.get(t.id) ?? null
+            }
+          }
+        }
+
+        if (floorLayout) {
+          setLayoutSchemaReady(floorLayout.layoutSchemaReady)
+        }
+
+        if (floorLayout?.landmarks?.length) {
+          setLandmarks(
+            floorLayout.landmarks.map((lm) => {
+              const bounds = gridRectToPercentBounds(lm)
+              return {
+                id: lm.id,
+                name: lm.label,
+                shape: lm.shape,
+                color: lm.color,
+                ...bounds,
+              }
+            })
+          )
+        } else {
+          setLandmarks([])
+        }
         const tableNameById = new Map(tables.map((t) => [t.id, t.name]))
 
         const seatedRows = (attendeesRes.data ?? []) as Array<
@@ -537,13 +642,55 @@ export function SeatingMapPanel({
     })
 
     const placed: TableOnMap[] = []
+    const placedFromGrid = new Set<string>()
+
+    for (const meta of orderedTables) {
+      if (!layoutSchemaReady) continue
+      if (meta.grid_x == null || meta.grid_y == null) continue
+      const teamId = meta.team_id
+      const laneIdx = teams.findIndex(([id]) => id === teamId)
+      const slotKey = MAP_SLOT_KEYS[Math.max(0, laneIdx)] ?? MAP_SLOT_KEYS[0]!
+      const teamMembers = teams.find(([id]) => id === teamId)?.[1] ?? [meta]
+      const primary = pickPrimaryTableForTeam(teamMembers, teamId)
+      const visual = tableVisualFromTeam(primary.color, primary.page_config, primary.name, slotKey)
+      const units = resolveTableGridUnits(meta.capacity, {
+        width_units: meta.width_units,
+        height_units: meta.height_units,
+      })
+      const bounds = gridRectToPercentBounds({
+        grid_x: meta.grid_x,
+        grid_y: meta.grid_y,
+        width_units: units.width_units,
+        height_units: units.height_units,
+      })
+      const guests = [...(guestByTable.get(meta.id) ?? [])].sort(
+        (a, b) => a.seat_number - b.seat_number
+      )
+      placed.push({
+        id: meta.id,
+        name: meta.name,
+        capacity: meta.capacity,
+        display_order: meta.display_order,
+        team_id: teamId,
+        guests,
+        visual,
+        bounds,
+        slotKey,
+        isTwin: teamMembers.length > 1,
+      })
+      placedFromGrid.add(meta.id)
+    }
+
     teams.slice(0, TEAM_LANE_Y.length).forEach(([teamId, members], laneIdx) => {
       const slotKey = MAP_SLOT_KEYS[laneIdx]!
       const y = TEAM_LANE_Y[laneIdx]!
-      const sortedMembers = [...members].sort((a, b) => {
-        if (a.display_order !== b.display_order) return a.display_order - b.display_order
-        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-      })
+      const sortedMembers = [...members]
+        .filter((m) => !placedFromGrid.has(m.id))
+        .sort((a, b) => {
+          if (a.display_order !== b.display_order) return a.display_order - b.display_order
+          return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        })
+      if (sortedMembers.length === 0) return
       const xs = spreadLaneXs(sortedMembers.length)
       const primary = pickPrimaryTableForTeam(sortedMembers, teamId)
       const visual = tableVisualFromTeam(primary.color, primary.page_config, primary.name, slotKey)
@@ -553,6 +700,7 @@ export function SeatingMapPanel({
         const guests = [...(guestByTable.get(meta.id) ?? [])].sort(
           (a, b) => a.seat_number - b.seat_number
         )
+        const centerX = xs[i] ?? MAP_CENTER_X
         placed.push({
           id: meta.id,
           name: meta.name,
@@ -561,8 +709,7 @@ export function SeatingMapPanel({
           team_id: teamId,
           guests,
           visual,
-          x: xs[i] ?? MAP_CENTER_X,
-          y,
+          bounds: boundsFromCenter(centerX, y, meta.capacity),
           slotKey,
           isTwin,
         })
@@ -570,7 +717,7 @@ export function SeatingMapPanel({
     })
 
     return placed
-  }, [rows, tableCatalog])
+  }, [rows, tableCatalog, layoutSchemaReady])
 
   const selectedGuest = useMemo(
     () => rows.find((r) => r.id === selectedId) ?? null,
@@ -602,13 +749,17 @@ export function SeatingMapPanel({
     }
   }, [])
 
-  /** Zoomed-out overview: world’s left edge near viewport left, vertically centered. */
+  /** Zoomed-out overview: fit the entire floor plan in the viewport. */
   const applyOverviewCamera = useCallback(() => {
     const vp = viewportRef.current
     if (!vp) return
-    const z = DEFAULT_ZOOM
-    const panX = OVERVIEW_PAD_X
-    const panY = vp.clientHeight / 2 - (WORLD_H * z) / 2
+    const fitZoom = Math.min(
+      (vp.clientWidth - OVERVIEW_PAD * 2) / WORLD_W,
+      (vp.clientHeight - OVERVIEW_PAD * 2) / WORLD_H
+    )
+    const z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, fitZoom))
+    const panX = (vp.clientWidth - WORLD_W * z) / 2
+    const panY = (vp.clientHeight - WORLD_H * z) / 2
     setZoom(z)
     setPan({ x: panX, y: panY })
   }, [])
@@ -722,8 +873,8 @@ export function SeatingMapPanel({
     if (!selectedGuest) return
     const table = tablesUsed.find((t) => t.id === selectedGuest.table_id)
     if (!table) return
-    const wx = (table.x / 100) * WORLD_W
-    const wy = (table.y / 100) * WORLD_H
+    const wx = ((table.bounds.left + table.bounds.width / 2) / 100) * WORLD_W
+    const wy = ((table.bounds.top + table.bounds.height / 2) / 100) * WORLD_H
 
     setTransitionTransform(true)
     const z = FOCUS_ZOOM
@@ -942,14 +1093,22 @@ export function SeatingMapPanel({
                 : 'none',
             }}
           >
-            <SeatMapGuidelines />
-            {LANDMARKS.map((lm) => (
+            {landmarks.map((lm) => (
               <div
-                key={lm.name}
-                className="absolute z-[5] -translate-x-1/2 -translate-y-1/2 rounded-full border border-zinc-200/90 bg-white/95 px-2.5 py-1 text-[10px] font-medium tracking-wide text-zinc-500 shadow-sm"
-                style={{ left: `${lm.x}%`, top: `${lm.y}%` }}
+                key={lm.id}
+                className="absolute z-[5] box-border overflow-hidden border border-zinc-200/90 px-1.5 py-1 text-center text-[10px] font-medium tracking-wide text-zinc-600 shadow-sm"
+                style={{
+                  left: `${lm.left}%`,
+                  top: `${lm.top}%`,
+                  width: `${lm.width}%`,
+                  height: `${lm.height}%`,
+                  backgroundColor: lm.color ?? '#ffffff',
+                  borderRadius: landmarkBorderRadius(lm.shape),
+                }}
               >
-                {lm.name}
+                <span className="flex h-full w-full items-center justify-center leading-tight">
+                  {lm.name}
+                </span>
               </div>
             ))}
             {tablesUsed.map((table) => {
@@ -968,21 +1127,28 @@ export function SeatingMapPanel({
                   ref={(el) => {
                     tableRefs.current[table.id] = el
                   }}
-                  className={`absolute z-[6] w-[min(90vw,500px)] -translate-x-1/2 -translate-y-1/2 ${
-                    table.isTwin ? 'max-w-[42%]' : 'max-w-[68%]'
-                  }`}
-                  style={{ left: `${table.x}%`, top: `${table.y}%` }}
+                  className="absolute z-[6] box-border overflow-visible"
+                  style={{
+                    left: `${table.bounds.left}%`,
+                    top: `${table.bounds.top}%`,
+                    width: `${table.bounds.width}%`,
+                    height: `${table.bounds.height}%`,
+                    willChange: 'transform',
+                    transform: 'translate3d(0, 0, 0)',
+                  }}
                 >
                   <div
-                    className={`pointer-events-none relative flex w-full flex-col overflow-visible rounded-2xl border text-left transition-[background,box-shadow,border-color,transform,opacity] duration-200 ease-out ${
+                    className={`pointer-events-none relative flex h-full w-full flex-col overflow-visible rounded-2xl border text-left transition-[background,box-shadow,border-color,opacity] duration-200 ease-out ${
                       isSelectedTable
                         ? 'z-10 shadow-[0_14px_32px_rgba(0,0,0,0.18)]'
                         : isSiblingTable
                           ? 'z-[9] border-white/40'
                           : 'border-neutral-200/80 bg-white shadow-[0_6px_18px_rgba(0,0,0,0.12)]'
                     }`}
-                    style={
-                      isSelectedTable
+                    style={{
+                      willChange: 'transform',
+                      transform: 'translate3d(0, 0, 0)',
+                      ...(isSelectedTable
                         ? {
                             background: tableStyle.background,
                             borderColor: tableStyle.borderColor,
@@ -995,10 +1161,10 @@ export function SeatingMapPanel({
                               boxShadow: `0 0 0 2px color-mix(in srgb, ${tableStyle.accent} 45%, transparent), 0 8px 20px rgba(0,0,0,0.1)`,
                               opacity: 0.72,
                             }
-                          : undefined
-                    }
+                          : undefined),
+                    }}
                   >
-                    <div className="relative w-full pointer-events-auto">
+                    <div className="relative h-full w-full min-h-0 overflow-visible pointer-events-auto">
                       <GuestTableSeatMap
                         capacity={table.capacity}
                         guests={table.guests}
@@ -1007,7 +1173,7 @@ export function SeatingMapPanel({
                         onSelectGuest={selectGuest}
                         tableLabel={
                           <span
-                            className={`max-w-full truncate text-center text-[11px] font-semibold tracking-wide ${
+                            className={`max-w-full truncate text-center text-[10px] font-semibold tracking-wide ${
                               highlighted
                                 ? 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]'
                                 : 'text-neutral-900'

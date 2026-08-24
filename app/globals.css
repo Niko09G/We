@@ -225,22 +225,18 @@ select {
   }
 }
 
-/* Seat finder: selected seat — outer white ring + team accent glow only (no inner avatar stroke; --seat-accent on element) */
+/* Seat finder: selected seat — team-colored pulse ring (--seat-accent on element) */
 @keyframes seatSelectedTeamGlow {
   0%,
   100% {
     box-shadow:
-      0 0 0 3px rgba(255, 255, 255, 1),
-      0 0 0 6px var(--seat-accent, #6366f1),
-      0 0 16px 8px color-mix(in srgb, var(--seat-accent, #6366f1) 42%, transparent),
-      0 0 32px 12px color-mix(in srgb, var(--seat-accent, #6366f1) 22%, transparent);
+      0 0 0 3px var(--seat-accent, #6366f1),
+      0 0 12px var(--seat-accent, #6366f1);
   }
   50% {
     box-shadow:
-      0 0 0 3px rgba(255, 255, 255, 1),
-      0 0 0 9px var(--seat-accent, #6366f1),
-      0 0 24px 12px color-mix(in srgb, var(--seat-accent, #6366f1) 50%, transparent),
-      0 0 40px 16px color-mix(in srgb, var(--seat-accent, #6366f1) 18%, transparent);
+      0 0 0 3px var(--seat-accent, #6366f1),
+      0 0 20px var(--seat-accent, #6366f1);
   }
 }
 
