@@ -4,7 +4,10 @@ import Link from 'next/link'
 import { teamPageAdminFormDefaults } from '@/lib/team-page-config'
 
 export type LobbyTeamRow = {
+  /** Primary physical table id for `/missions/[tableId]`. */
   id: string
+  /** Parent team id — sibling physical blocks share this. */
+  teamId?: string
   name: string
   color: string | null
   page_config: unknown
@@ -35,9 +38,11 @@ export function LobbyTeamsSection({ title, description, tables }: LobbyTeamsSect
               tableColor: row.color,
               tableName: row.name,
             })
+            const art =
+              resolved.heroImageUrl.trim() || resolved.avatarImageUrl.trim() || null
             return (
               <Link
-                key={row.id}
+                key={row.teamId ?? row.id}
                 href={`/missions/${row.id}`}
                 className="group relative h-[220px] overflow-hidden rounded-2xl border border-zinc-200 text-left outline-none transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-zinc-400/70 focus-visible:ring-offset-2 sm:h-[250px]"
                 style={{
@@ -48,10 +53,10 @@ export function LobbyTeamsSection({ title, description, tables }: LobbyTeamsSect
                   <p className="relative z-[1] text-center text-sm font-bold leading-tight sm:text-base">
                     {row.name}
                   </p>
-                  {resolved.heroImageUrl.trim() ? (
+                  {art ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={resolved.heroImageUrl.trim()}
+                      src={art}
                       alt=""
                       className="relative z-[1] mx-auto mt-2 h-28 w-full max-w-full flex-1 object-contain opacity-95 sm:h-32"
                     />

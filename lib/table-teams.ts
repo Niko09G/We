@@ -52,6 +52,85 @@ export function pickPrimaryTableForTeam<T extends TableTeamRef>(members: T[], te
   return sorted[0]!
 }
 
+export type LobbyParentTeamInput = {
+  id: string
+  name: string
+  color?: string | null
+  sort_order?: number
+}
+
+export type LobbyPhysicalTable = TableTeamRef & {
+  name: string
+  color: string | null
+  page_config: unknown
+  is_active?: boolean
+}
+
+export type LobbyTeamCardRow = {
+  /** Primary physical table id — used for `/missions/[tableId]` links. */
+  id: string
+  /** Parent team id for stable keys and deduping. */
+  teamId: string
+  name: string
+  color: string | null
+  page_config: unknown
+}
+
+/** One lobby card per parent team; visuals from the canonical physical table row. */
+export function lobbyRowsFromParentTeams(
+  teams: LobbyParentTeamInput[],
+  physicalTables: LobbyPhysicalTable[]
+): LobbyTeamCardRow[] {
+  const active = physicalTables.filter((t) => (t.is_active ?? true) !== false)
+  const grouped = groupTablesByTeamId(active)
+  const rows: LobbyTeamCardRow[] = []
+  const seen = new Set<string>()
+
+  const sortedTeams = [...teams].sort((a, b) => {
+    const d = (a.sort_order ?? 0) - (b.sort_order ?? 0)
+    if (d !== 0) return d
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+  })
+
+  for (const team of sortedTeams) {
+    const members = grouped.get(team.id)
+    if (!members?.length) continue
+    seen.add(team.id)
+    const primary = pickPrimaryTableForTeam(members, team.id)
+    const canonical = members.find((m) => m.id === team.id) ?? primary
+    const teamName = team.name.trim() || canonical.name
+    const teamColor = (team.color ?? '').trim() || canonical.color
+    rows.push({
+      id: primary.id,
+      teamId: team.id,
+      name: teamName,
+      color: teamColor,
+      page_config: canonical.page_config,
+    })
+  }
+
+  const fallback: LobbyTeamCardRow[] = []
+  for (const [teamId, members] of grouped) {
+    if (seen.has(teamId)) continue
+    const primary = pickPrimaryTableForTeam(members, teamId)
+    fallback.push({
+      id: primary.id,
+      teamId,
+      name: primary.name,
+      color: primary.color,
+      page_config: primary.page_config,
+    })
+  }
+  fallback.sort((a, b) => {
+    const aOrder = active.find((t) => t.id === a.id)?.display_order ?? 0
+    const bOrder = active.find((t) => t.id === b.id)?.display_order ?? 0
+    if (aOrder !== bOrder) return aOrder - bOrder
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+  })
+
+  return [...rows, ...fallback]
+}
+
 /** One representative table per team, ordered for lobby / mission pickers. */
 export function canonicalTablesForLobby<T extends TableTeamRef>(tables: T[]): T[] {
   const grouped = groupTablesByTeamId(tables)

@@ -14,7 +14,7 @@ import {
 } from '@/lib/lobby-settings'
 import { MISSIONS_HERO_THEME_COLOR } from '@/lib/guest-missions-gradients'
 import { supabase } from '@/lib/supabase/client'
-import { canonicalTablesForLobby, resolveTeamId } from '@/lib/table-teams'
+import { lobbyRowsFromParentTeams } from '@/lib/table-teams'
 
 function scrollToSection(id: string) {
   const el = document.getElementById(id)
@@ -47,9 +47,15 @@ export default function LobbyPage() {
             .from('tables')
             .select('id,name,color,page_config,is_active,display_order,team_id')
             .eq('is_archived', false)
+            .eq('is_active', true)
             .order('display_order')
             .order('name'),
-          supabase.from('teams').select('id,name'),
+          supabase
+            .from('teams')
+            .select('id,name,color,sort_order,is_active')
+            .eq('is_active', true)
+            .order('sort_order')
+            .order('name'),
         ])
 
         if (tablesRes.error) throw tablesRes.error
@@ -58,28 +64,18 @@ export default function LobbyPage() {
         if (cancelled) return
 
         setSettings(lobby)
-        const teamNameById = new Map<string, string>()
-        for (const row of teamsRes.data ?? []) {
-          teamNameById.set(row.id as string, (row.name as string) ?? '')
-        }
-        const rows = (tablesRes.data ?? []) as (LobbyTeamRow & {
+        const physical = ((tablesRes.data ?? []) as (LobbyTeamRow & {
           is_active?: boolean
           display_order?: number
           team_id?: string | null
-        })[]
-        const active = rows
-          .filter((t) => (t.is_active ?? true) === true)
-          .filter((t) => isUuid(t.id))
-        const canonical = canonicalTablesForLobby(active).map((t) => {
-          const teamId = resolveTeamId(t)
-          const teamName = teamNameById.get(teamId)?.trim()
-          return {
-            ...t,
-            name: teamName || t.name,
-            page_config: t.page_config,
-          }
-        })
-        setTables(canonical.slice(0, 4))
+        })[]).filter((t) => isUuid(t.id))
+        const parentTeams = (teamsRes.data ?? []) as Array<{
+          id: string
+          name: string
+          color?: string | null
+          sort_order?: number
+        }>
+        setTables(lobbyRowsFromParentTeams(parentTeams, physical))
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : 'Failed to load lobby.')
