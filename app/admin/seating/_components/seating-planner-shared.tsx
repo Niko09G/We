@@ -100,6 +100,130 @@ function partyGroupSeatingComplete(p: SeatingParty): boolean {
   )
 }
 
+type FourSideLayout = ReturnType<typeof computeFourSideCounts>
+
+type SeatPlacement =
+  | { side: 'left_cap' | 'right_cap' }
+  | { side: 'top' | 'bottom'; colIndex: number }
+
+type CoupleLinkKind = 'horizontal' | 'vertical' | 'remote'
+
+type CoupleLink = {
+  key: string
+  partyKey: string
+  seatA: number
+  seatB: number
+  kind: CoupleLinkKind
+  title: string
+  isActive: boolean
+  linkedComplete: boolean
+  isSplit: boolean
+}
+
+function seatPlacement(seatNum: number, layout: FourSideLayout): SeatPlacement {
+  const { leftEndSeat, topStart, topCount, rightEndSeat, bottomStart, bottomCount } = layout
+  const topEnd = topCount > 0 ? topStart + topCount - 1 : topStart - 1
+  const bottomEnd = bottomCount > 0 ? bottomStart + bottomCount - 1 : bottomStart - 1
+
+  if (leftEndSeat != null && seatNum === leftEndSeat) return { side: 'left_cap' }
+  if (rightEndSeat != null && seatNum === rightEndSeat) return { side: 'right_cap' }
+  if (seatNum >= topStart && seatNum <= topEnd) {
+    return { side: 'top', colIndex: seatNum - topStart }
+  }
+  if (seatNum >= bottomStart && seatNum <= bottomEnd) {
+    return { side: 'bottom', colIndex: seatNum - bottomStart }
+  }
+  return { side: 'top', colIndex: 0 }
+}
+
+function validSeatNum(n: unknown): n is number {
+  return typeof n === 'number' && Number.isFinite(n)
+}
+
+function couplePairFromParty(p: SeatingParty): { lead: AttendeeRow; spouse: AttendeeRow } | null {
+  const lead = p.members.find(
+    (m) => !m.is_placeholder && (m.party_role === 'lead_adult' || m.party_role === 'lead')
+  )
+  const spouse = p.members.find((m) => !m.is_placeholder && m.party_role === 'spouse')
+  if (!lead || !spouse) return null
+  return { lead, spouse }
+}
+
+function classifyCoupleSeats(
+  seatA: number,
+  seatB: number,
+  layout: FourSideLayout
+): CoupleLinkKind {
+  const pa = seatPlacement(seatA, layout)
+  const pb = seatPlacement(seatB, layout)
+
+  if (pa.side === 'left_cap' || pa.side === 'right_cap') return 'remote'
+  if (pb.side === 'left_cap' || pb.side === 'right_cap') return 'remote'
+
+  if (pa.side === pb.side && (pa.side === 'top' || pa.side === 'bottom')) {
+    if (Math.abs(pa.colIndex - pb.colIndex) === 1) return 'horizontal'
+    return 'remote'
+  }
+
+  const across =
+    (pa.side === 'top' && pb.side === 'bottom') || (pa.side === 'bottom' && pb.side === 'top')
+  if (across && pa.colIndex === pb.colIndex) return 'vertical'
+  return 'remote'
+}
+
+function buildCoupleLinks(
+  parties: SeatingParty[],
+  layout: FourSideLayout,
+  highlightPartyKey: string | null
+): { links: CoupleLink[]; remoteBadgeSeats: Set<number> } {
+  const links: CoupleLink[] = []
+  const remoteBadgeSeats = new Set<number>()
+
+  for (const p of parties) {
+    const pair = couplePairFromParty(p)
+    if (!pair) continue
+
+    const seatA = pair.lead.seat_number
+    const seatB = pair.spouse.seat_number
+    if (!validSeatNum(seatA) || !validSeatNum(seatB)) continue
+
+    const snA = Math.trunc(seatA)
+    const snB = Math.trunc(seatB)
+    const kind = classifyCoupleSeats(snA, snB, layout)
+    const linkedComplete = partyGroupSeatingComplete(p)
+
+    if (kind === 'remote') {
+      remoteBadgeSeats.add(snA)
+      remoteBadgeSeats.add(snB)
+      continue
+    }
+
+    links.push({
+      key: `${p.key}:${snA}-${snB}`,
+      partyKey: p.key,
+      seatA: Math.min(snA, snB),
+      seatB: Math.max(snA, snB),
+      kind,
+      title: p.title,
+      isActive: highlightPartyKey != null && p.key === highlightPartyKey,
+      linkedComplete,
+      isSplit: p.splitWarning,
+    })
+  }
+
+  return { links, remoteBadgeSeats }
+}
+
+function coupleLinkColorClass(link: CoupleLink): string {
+  if (link.linkedComplete && !link.isSplit) {
+    return link.isActive ? 'border-emerald-500/95' : 'border-emerald-500/55'
+  }
+  if (link.isActive) {
+    return link.isSplit ? 'border-amber-500/90' : 'border-[#5b38f2]/90'
+  }
+  return link.isSplit ? 'border-amber-300/70' : 'border-zinc-300/80'
+}
+
 export function PartyAvatarCluster({
   members,
   size = 'md',
@@ -154,6 +278,7 @@ type SeatMapSharedProps = {
     | ((seatNum: number, guest: AttendeeRow | null, anchor: DOMRectReadOnly) => void)
     | null
   lockedSeatNums: ReadonlySet<number> | null
+  remoteCoupleBadgeSeats: ReadonlySet<number>
 }
 
 function seatRangeOccupied(
@@ -179,6 +304,7 @@ function AdminSeatBubble({
   namePlacement,
   isActiveGroup,
   isLocked,
+  showCoupleBadge,
   onSeatClick,
 }: {
   seatNum: number
@@ -192,12 +318,13 @@ function AdminSeatBubble({
   namePlacement: 'above' | 'below' | 'none'
   isActiveGroup: boolean
   isLocked: boolean
+  showCoupleBadge: boolean
   onSeatClick:
     | ((seatNum: number, guest: AttendeeRow | null, anchor: DOMRectReadOnly) => void)
     | null
 }) {
   const title = guest
-    ? `Seat ${seatNum} · ${guest.full_name}${party ? ` · ${party.title}` : ''}`
+    ? `Seat ${seatNum} · ${guest.full_name}${party ? ` · ${party.title}` : ''}${showCoupleBadge ? ' · couple' : ''}`
     : inPreview
       ? `Seat ${seatNum} · preview`
       : `Seat ${seatNum} · empty`
@@ -276,6 +403,15 @@ function AdminSeatBubble({
             L
           </span>
         ) : null}
+        {showCoupleBadge && guest ? (
+          <span
+            className="pointer-events-none absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-white bg-emerald-500/90 text-[7px] font-bold text-white shadow-sm"
+            title="Couple (partner not adjacent)"
+            aria-hidden
+          >
+            &
+          </span>
+        ) : null}
       </div>
       {showSeatNames && guest && namePlacement === 'below' ? (
         <span className="mt-1 max-w-[88px] truncate text-center text-[10px] font-medium text-zinc-600">
@@ -322,8 +458,129 @@ function EndCapSeat({
       namePlacement={shared.showSeatNames && guest ? 'above' : 'none'}
       isActiveGroup={isActiveGroup}
       isLocked={shared.lockedSeatNums?.has(seatNum) ?? false}
+      showCoupleBadge={shared.remoteCoupleBadgeSeats.has(seatNum)}
       onSeatClick={shared.onSeatClick}
     />
+  )
+}
+
+function CoupleHorizontalBridge({
+  sideName,
+  colIndexA,
+  seatPx,
+  gapPx,
+  link,
+  isLarge,
+}: {
+  sideName: 'top' | 'bottom'
+  colIndexA: number
+  seatPx: number
+  gapPx: number
+  link: CoupleLink
+  isLarge: boolean
+}) {
+  const left = colIndexA * (seatPx + gapPx)
+  const width = seatPx * 2 + gapPx
+  const colorClass = coupleLinkColorClass(link)
+  const seatTop = isLarge ? 32 : 20
+  const bracketTop = sideName === 'top' ? Math.max(0, seatTop - 12) : seatTop + seatPx + 2
+
+  return (
+    <div
+      className="pointer-events-none absolute"
+      style={{ left, top: bracketTop, width }}
+      aria-hidden
+    >
+      <div
+        className={`absolute inset-x-0 top-0 h-2 rounded-t-md border-l-2 border-r-2 border-t-2 ${colorClass}`}
+      />
+      {sideName === 'top' ? (
+        <span
+          className={`absolute left-1/2 top-0 max-w-[72px] -translate-x-1/2 -translate-y-[calc(100%+1px)] overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-emerald-200/80 bg-white/95 px-1 py-px text-[8px] font-semibold shadow-sm ${
+            link.isActive ? 'text-emerald-800' : 'text-emerald-700/90'
+          }`}
+        >
+          {link.title}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+function coupleLinkStrokeColor(link: CoupleLink): string {
+  if (link.linkedComplete && !link.isSplit) {
+    return link.isActive ? 'rgba(16, 185, 129, 0.9)' : 'rgba(16, 185, 129, 0.55)'
+  }
+  if (link.isActive) {
+    return link.isSplit ? 'rgba(245, 158, 11, 0.9)' : 'rgba(91, 56, 242, 0.9)'
+  }
+  return link.isSplit ? 'rgba(252, 211, 77, 0.75)' : 'rgba(161, 161, 170, 0.75)'
+}
+
+function CoupleVerticalConnectors({
+  links,
+  layout,
+  containerWidth,
+  topSeatPx,
+  topGapPx,
+  topRowWidth,
+  bottomSeatPx,
+  bottomGapPx,
+  bottomRowWidth,
+  isLarge,
+}: {
+  links: CoupleLink[]
+  layout: FourSideLayout
+  containerWidth: number
+  topSeatPx: number
+  topGapPx: number
+  topRowWidth: number
+  bottomSeatPx: number
+  bottomGapPx: number
+  bottomRowWidth: number
+  isLarge: boolean
+}) {
+  const verticalLinks = links.filter((l) => l.kind === 'vertical')
+  if (verticalLinks.length === 0) return null
+
+  const seatRowOffset = isLarge ? 32 : 20
+  const rowBandHeight = isLarge ? 108 : 72
+  const rowGap = 4
+  const topCenterY = seatRowOffset + topSeatPx / 2
+  const bottomCenterY = rowBandHeight + rowGap + seatRowOffset + bottomSeatPx / 2
+  const topRowOffsetX = Math.max(0, (containerWidth - topRowWidth) / 2)
+  const bottomRowOffsetX = Math.max(0, (containerWidth - bottomRowWidth) / 2)
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-[1]" aria-hidden>
+      <svg className="absolute inset-0 h-full w-full overflow-visible" aria-hidden>
+        {verticalLinks.map((link) => {
+          const pa = seatPlacement(link.seatA, layout)
+          const pb = seatPlacement(link.seatB, layout)
+          if (pa.side !== 'top' && pa.side !== 'bottom') return null
+          if (pb.side !== 'top' && pb.side !== 'bottom') return null
+
+          const topCol = pa.side === 'top' ? pa.colIndex : pb.colIndex
+          const bottomCol = pb.side === 'bottom' ? pb.colIndex : pa.colIndex
+          const topX = topRowOffsetX + topCol * (topSeatPx + topGapPx) + topSeatPx / 2
+          const bottomX =
+            bottomRowOffsetX + bottomCol * (bottomSeatPx + bottomGapPx) + bottomSeatPx / 2
+
+          return (
+            <line
+              key={link.key}
+              x1={topX}
+              y1={topCenterY}
+              x2={bottomX}
+              y2={bottomCenterY}
+              stroke={coupleLinkStrokeColor(link)}
+              strokeWidth={2}
+              strokeLinecap="round"
+            />
+          )
+        })}
+      </svg>
+    </div>
   )
 }
 
@@ -385,6 +642,21 @@ export function AdminTableTwinSeatMap({
     bottomStart,
     bottomCount,
   } = computeFourSideCounts(safeCapacity)
+
+  const fourSideLayout: FourSideLayout = {
+    leftEndSeat,
+    topStart,
+    topCount,
+    rightEndSeat,
+    bottomStart,
+    bottomCount,
+  }
+
+  const { links: coupleLinks, remoteBadgeSeats: remoteCoupleBadgeSeats } = buildCoupleLinks(
+    partiesOnTable,
+    fourSideLayout,
+    highlightPartyKey
+  )
 
   const topEnd = topCount > 0 ? topStart + topCount - 1 : topStart - 1
   const bottomEnd = bottomCount > 0 ? bottomStart + bottomCount - 1 : bottomStart - 1
@@ -475,6 +747,7 @@ export function AdminTableTwinSeatMap({
     isLarge: size === 'large',
     onSeatClick,
     lockedSeatNums,
+    remoteCoupleBadgeSeats,
   }
 
   const rowWidthTop =
@@ -504,9 +777,21 @@ export function AdminTableTwinSeatMap({
 
         <div ref={middleRef} className="min-w-0 self-stretch">
           <div
-            className="flex min-w-0 flex-col gap-1"
+            className="relative flex min-w-0 flex-col gap-1"
             style={{ minHeight: layoutMetrics.centerBandPx }}
           >
+            <CoupleVerticalConnectors
+              links={coupleLinks}
+              layout={fourSideLayout}
+              containerWidth={middleW}
+              topSeatPx={effectiveSeatPxTop}
+              topGapPx={effectiveGapPxTop}
+              topRowWidth={rowWidthTop}
+              bottomSeatPx={effectiveSeatPxBottom}
+              bottomGapPx={effectiveGapPxBottom}
+              bottomRowWidth={rowWidthBottom}
+              isLarge={size === 'large'}
+            />
             <SideRow
               sideName="top"
               sideStart={topStart}
@@ -514,6 +799,8 @@ export function AdminTableTwinSeatMap({
               rowWidth={rowWidthTop}
               seatPx={effectiveSeatPxTop}
               gapPx={effectiveGapPxTop}
+              coupleLinks={coupleLinks}
+              layout={fourSideLayout}
               shared={shared}
             />
             <SideRow
@@ -523,6 +810,8 @@ export function AdminTableTwinSeatMap({
               rowWidth={rowWidthBottom}
               seatPx={effectiveSeatPxBottom}
               gapPx={effectiveGapPxBottom}
+              coupleLinks={coupleLinks}
+              layout={fourSideLayout}
               shared={shared}
             />
           </div>
@@ -548,6 +837,8 @@ function SideRow({
   rowWidth,
   seatPx,
   gapPx,
+  coupleLinks,
+  layout,
   shared,
 }: {
   sideName: 'top' | 'bottom'
@@ -556,6 +847,8 @@ function SideRow({
   rowWidth: number
   seatPx: number
   gapPx: number
+  coupleLinks: CoupleLink[]
+  layout: FourSideLayout
   shared: SeatMapSharedProps
 }) {
   const count = Math.max(0, sideEnd - sideStart + 1)
@@ -565,7 +858,6 @@ function SideRow({
 
   const {
     bySeat,
-    partiesOnTable,
     highlightPartyKey,
     previewSeatRange,
     previewGhostInitials,
@@ -574,7 +866,16 @@ function SideRow({
     isLarge,
     onSeatClick,
     lockedSeatNums,
+    remoteCoupleBadgeSeats,
   } = shared
+
+  const horizontalLinks = coupleLinks.filter((link) => {
+    if (link.kind !== 'horizontal') return false
+    const pa = seatPlacement(link.seatA, layout)
+    const pb = seatPlacement(link.seatB, layout)
+    const side = sideName
+    return pa.side === side && pb.side === side
+  })
 
   return (
     <div className="relative w-full min-w-0">
@@ -583,59 +884,23 @@ function SideRow({
           className={`relative shrink-0 ${isLarge ? 'h-[108px]' : 'h-[72px]'}`}
           style={{ width: rowWidth, maxWidth: '100%' }}
         >
-          {partiesOnTable.map((p) => {
-            if (p.minSeat == null || p.maxSeat == null) return null
-            if (p.members.length <= 1) return null
-            const overlapStart = clamp(p.minSeat, sideStart, sideEnd)
-            const overlapEnd = clamp(p.maxSeat, sideStart, sideEnd)
-            if (overlapStart > overlapEnd) return null
-
-            const localStartIdx = overlapStart - sideStart
-            const localEndIdx = overlapEnd - sideStart
-            const left = localStartIdx * (seatPx + gapPx)
-            const width =
-              (localEndIdx - localStartIdx + 1) * seatPx +
-              (localEndIdx - localStartIdx) * gapPx
-
-            const isActive = highlightPartyKey != null && p.key === highlightPartyKey
-            const isSplit = p.splitWarning
-            const linkedComplete = partyGroupSeatingComplete(p)
-            const colorClass =
-              linkedComplete && !isSplit
-                ? isActive
-                  ? 'border-emerald-500/95'
-                  : 'border-emerald-500/55'
-                : isActive
-                  ? isSplit
-                    ? 'border-amber-500/90'
-                    : 'border-[#5b38f2]/90'
-                  : isSplit
-                    ? 'border-amber-300/70'
-                    : 'border-zinc-300/80'
-
-            const centerSeat = (p.minSeat + p.maxSeat) / 2
-            const showLabel =
-              width >= seatPx * 2 && centerSeat >= sideStart && centerSeat <= sideEnd
+          {horizontalLinks.map((link) => {
+            const pa = seatPlacement(link.seatA, layout)
+            const pb = seatPlacement(link.seatB, layout)
+            if (pa.side !== sideName || pb.side !== sideName) return null
+            const colIndexA = Math.min(pa.colIndex, pb.colIndex)
+            if (colIndexA < 0 || colIndexA >= count - 1) return null
 
             return (
-              <div
-                key={p.key}
-                className="pointer-events-none absolute"
-                style={{ left, top: 0, width }}
-              >
-                <div className={`absolute left-0 top-0 h-3 w-0 border-l-2 ${colorClass}`} />
-                <div className={`absolute right-0 top-0 h-3 w-0 border-r-2 ${colorClass}`} />
-                <div className={`absolute left-0 top-0 h-0.5 w-full border-t-2 ${colorClass}`} />
-                {showLabel ? (
-                  <span
-                    className={`absolute -top-2 left-1/2 max-w-[86px] -translate-x-1/2 -translate-y-0 overflow-hidden text-ellipsis whitespace-nowrap rounded-full px-1.5 py-0.5 text-[9px] font-semibold shadow-sm ${
-                      isActive ? 'bg-white text-zinc-800' : 'bg-white text-zinc-700'
-                    }`}
-                  >
-                    {p.title}
-                  </span>
-                ) : null}
-              </div>
+              <CoupleHorizontalBridge
+                key={link.key}
+                sideName={sideName}
+                colIndexA={colIndexA}
+                seatPx={seatPx}
+                gapPx={gapPx}
+                link={link}
+                isLarge={isLarge}
+              />
             )
           })}
 
@@ -676,6 +941,7 @@ function SideRow({
                   }
                   isActiveGroup={isActiveGroup}
                   isLocked={lockedSeatNums?.has(seatNum) ?? false}
+                  showCoupleBadge={remoteCoupleBadgeSeats.has(seatNum)}
                   onSeatClick={onSeatClick}
                 />
               )
