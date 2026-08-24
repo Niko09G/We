@@ -5,8 +5,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { DynamicThemeColor } from '@/components/DynamicThemeColor'
 import { supabase } from '@/lib/supabase/client'
 import { getMissionsEnabled } from '@/lib/app-settings'
+import { canonicalTablesForLobby, resolveTeamId } from '@/lib/table-teams'
 
-type GuestTable = { id: string; name: string; color: string | null; is_active: boolean }
+type GuestTable = {
+  id: string
+  name: string
+  color: string | null
+  is_active: boolean
+  team_id?: string | null
+  display_order?: number
+}
 
 function isUuid(value: unknown): value is string {
   if (typeof value !== 'string') return false
@@ -47,18 +55,31 @@ export default function MissionsEntryPage() {
         if (cancelled) return
         setMissionsEnabled(enabled)
 
-        const { data, error: tErr } = await supabase
-          .from('tables')
-          .select('id,name,color,is_active')
-          .eq('is_archived', false)
-          .order('name')
+        const [{ data, error: tErr }, teamsRes] = await Promise.all([
+          supabase
+            .from('tables')
+            .select('id,name,color,is_active,team_id,display_order')
+            .eq('is_archived', false)
+            .order('name'),
+          supabase.from('teams').select('id,name'),
+        ])
 
         if (tErr) throw tErr
+        if (teamsRes.error) throw teamsRes.error
+        const teamNameById = new Map<string, string>()
+        for (const row of teamsRes.data ?? []) {
+          teamNameById.set(row.id as string, (row.name as string) ?? '')
+        }
         const rows = (data ?? []) as GuestTable[]
         const activeRows = rows
           .filter((t) => (t.is_active ?? true) === true)
-          .filter((t) => isUuid((t as any).id))
-        setTables(activeRows)
+          .filter((t) => isUuid(t.id))
+        setTables(
+          canonicalTablesForLobby(activeRows).map((t) => ({
+            ...t,
+            name: teamNameById.get(resolveTeamId(t))?.trim() || t.name,
+          }))
+        )
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load tables.')
       } finally {

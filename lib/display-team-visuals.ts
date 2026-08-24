@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { resolveTeamPageConfig, type ResolvedTeamPageConfig } from '@/lib/team-page-config'
+import { groupTablesByTeamId, pickPrimaryTableForTeam } from '@/lib/table-teams'
 
 export type DisplayTeamVisual = {
   avatarUrl: string | null
@@ -36,17 +37,42 @@ export async function fetchDisplayTeamVisuals(
 
   const { data, error } = await client
     .from('tables')
-    .select('id, name, color, page_config')
-    .in('id', tableIds)
+    .select('id, name, color, page_config, team_id')
+    .eq('is_archived', false)
 
   if (error || !data) return {}
 
+  const wanted = new Set(tableIds)
+  const rows = data as Array<{
+    id: string
+    name: string
+    color: string | null
+    page_config: unknown
+    team_id: string | null
+  }>
+
+  const byKey = new Map<string, (typeof rows)[number]>()
+  for (const [teamId, members] of groupTablesByTeamId(rows)) {
+    const primary = pickPrimaryTableForTeam(members, teamId)
+    byKey.set(teamId, primary)
+    for (const member of members) {
+      if (wanted.has(member.id)) byKey.set(member.id, primary)
+    }
+  }
+  for (const id of tableIds) {
+    if (!byKey.has(id)) {
+      const row = rows.find((r) => r.id === id)
+      if (row) byKey.set(id, row)
+    }
+  }
+
   const out: Record<string, DisplayTeamVisual> = {}
-  for (const row of data) {
-    const id = row.id as string
+  for (const id of tableIds) {
+    const row = byKey.get(id)
+    if (!row) continue
     const resolved = resolveTeamPageConfig(row.page_config, {
-      tableColor: (row as { color?: string | null }).color ?? null,
-      tableName: row.name as string,
+      tableColor: row.color ?? null,
+      tableName: row.name,
     })
     const base = displayVisualFromConfig(resolved)
     out[id] = {

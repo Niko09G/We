@@ -17,6 +17,11 @@ import {
   seatSizingForSideCounts,
 } from '@/lib/seat-map-layout'
 import { teamPageAdminFormDefaults } from '@/lib/team-page-config'
+import {
+  groupTablesByTeamId,
+  pickPrimaryTableForTeam,
+  resolveTeamId,
+} from '@/lib/table-teams'
 
 type SeatFinderGuest = {
   id: string
@@ -35,10 +40,12 @@ type SeatFinderTable = {
   page_config: unknown
   is_active?: boolean
   is_archived?: boolean
+  team_id: string
 }
 
 type GuestWithTable = SeatFinderGuest & {
   table_name: string
+  team_id: string
 }
 
 type TableVisual = {
@@ -54,16 +61,22 @@ type TableOnMap = {
   name: string
   capacity: number
   display_order: number
+  team_id: string
   guests: GuestWithTable[]
   visual: TableVisual
+  x: number
+  y: number
+  slotKey: MapSlotKey
+  isTwin: boolean
 }
 
-const TABLE_LAYOUT_SLOTS = [
-  { key: 'gold', x: 38, y: 18, expectedName: 'gold' },
-  { key: 'blue', x: 38, y: 35, expectedName: 'blue' },
-  { key: 'red', x: 38, y: 52, expectedName: 'red' },
-  { key: 'green', x: 38, y: 69, expectedName: 'green' },
-] as const
+const MAP_SLOT_KEYS = ['gold', 'blue', 'red', 'green'] as const
+type MapSlotKey = (typeof MAP_SLOT_KEYS)[number]
+
+/** Vertical team lanes on the guest map. Sibling physical blocks share a lane. */
+const TEAM_LANE_Y = [18, 35, 52, 69] as const
+const MAP_CENTER_X = 38
+const PAIR_XS = [22, 54] as const
 
 const LANDMARKS = [
   { name: 'Lift Lobby', x: 5, y: 26 },
@@ -85,7 +98,7 @@ const TRANSFORM_MS = 280
 const OVERVIEW_PAD_X = 38
 
 /** Vertical gradients per layout slot (team identity). `blue` slot = Kaypoh Auntie’s. */
-const TABLE_GRADIENT_BY_SLOT: Record<(typeof TABLE_LAYOUT_SLOTS)[number]['key'], string> = {
+const TABLE_GRADIENT_BY_SLOT: Record<MapSlotKey, string> = {
   gold: 'linear-gradient(to bottom, #f75f0c 0%, #fca16a 100%)',
   blue: 'linear-gradient(to bottom, #952dfe 0%, #5a35f9 50%, #889af9 100%)',
   red: 'linear-gradient(to bottom, #ff3b4a 0%, #ff997a 100%)',
@@ -93,7 +106,7 @@ const TABLE_GRADIENT_BY_SLOT: Record<(typeof TABLE_LAYOUT_SLOTS)[number]['key'],
 }
 
 /** Subtle themed glow for the selected-guest bar (matches table slot). */
-const TABLE_RESULT_GLOW_BY_SLOT: Record<(typeof TABLE_LAYOUT_SLOTS)[number]['key'], string> = {
+const TABLE_RESULT_GLOW_BY_SLOT: Record<MapSlotKey, string> = {
   gold: '0 12px 36px rgba(247, 95, 12, 0.28), 0 0 0 1px rgba(247, 95, 12, 0.12)',
   blue: '0 12px 36px rgba(149, 45, 254, 0.26), 0 0 0 1px rgba(90, 53, 249, 0.14)',
   red: '0 12px 36px rgba(255, 59, 74, 0.28), 0 0 0 1px rgba(255, 59, 74, 0.12)',
@@ -101,7 +114,7 @@ const TABLE_RESULT_GLOW_BY_SLOT: Record<(typeof TABLE_LAYOUT_SLOTS)[number]['key
 }
 
 /** Solid accent (first gradient stop) for rings and result icons. */
-const TABLE_SOLID_ACCENT_BY_SLOT: Record<(typeof TABLE_LAYOUT_SLOTS)[number]['key'], string> = {
+const TABLE_SOLID_ACCENT_BY_SLOT: Record<MapSlotKey, string> = {
   gold: '#f75f0c',
   blue: '#952dfe',
   red: '#ff3b4a',
@@ -140,6 +153,14 @@ function getInitials(name: string): string {
   return out || 'G'
 }
 
+function spreadLaneXs(count: number): number[] {
+  if (count <= 1) return [MAP_CENTER_X]
+  if (count === 2) return [...PAIR_XS]
+  const start = 16
+  const end = 60
+  return Array.from({ length: count }, (_, i) => start + ((end - start) * i) / Math.max(1, count - 1))
+}
+
 function accentGlowShadow(accent: string, fallback: string): string {
   const h = accent.trim().replace('#', '')
   if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(h)) return fallback
@@ -154,7 +175,7 @@ function tableVisualFromTeam(
   color: string | null,
   pageConfig: unknown,
   tableName: string,
-  slotKey: (typeof TABLE_LAYOUT_SLOTS)[number]['key']
+  slotKey: MapSlotKey
 ): TableVisual {
   const d = teamPageAdminFormDefaults(pageConfig, { tableColor: color, tableName })
   const top = d.tableGradTop.trim()
@@ -426,7 +447,7 @@ export function SeatingMapPanel({
             .not('seat_number', 'is', null),
           supabase
             .from('tables')
-            .select('id, name, color, capacity, display_order, page_config, is_active, is_archived')
+            .select('id, name, color, capacity, display_order, page_config, is_active, is_archived, team_id')
             .eq('is_archived', false)
             .eq('is_active', true)
             .order('display_order')
@@ -453,6 +474,10 @@ export function SeatingMapPanel({
             page_config: r.page_config ?? null,
             is_active: (r.is_active as boolean | undefined) ?? true,
             is_archived: (r.is_archived as boolean | undefined) ?? false,
+            team_id: resolveTeamId({
+              id: row.id as string,
+              team_id: (r.team_id as string | null | undefined) ?? null,
+            }),
           } satisfies SeatFinderTable
         })
         const tableNameById = new Map(tables.map((t) => [t.id, t.name]))
@@ -470,6 +495,8 @@ export function SeatingMapPanel({
             table_id: r.table_id as string,
             seat_number: Number(r.seat_number),
             table_name: tableNameById.get(r.table_id as string) ?? 'Table',
+            team_id:
+              tables.find((t) => t.id === r.table_id)?.team_id ?? (r.table_id as string),
           }))
           .sort((a, b) =>
             a.full_name.localeCompare(b.full_name, undefined, {
@@ -501,27 +528,49 @@ export function SeatingMapPanel({
       return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
     })
 
-    const withGuests = orderedTables.slice(0, TABLE_LAYOUT_SLOTS.length)
-
-    return withGuests.map((meta, idx) => {
-      const slotKey = TABLE_LAYOUT_SLOTS[idx]!.key
-      const guests = [...(guestByTable.get(meta.id) ?? [])].sort(
-        (a, b) => a.seat_number - b.seat_number
-      )
-      return {
-        id: meta.id,
-        name: meta.name,
-        capacity: meta.capacity,
-        display_order: meta.display_order,
-        guests,
-        visual: tableVisualFromTeam(meta.color, meta.page_config, meta.name, slotKey),
-      }
+    const teams = [...groupTablesByTeamId(orderedTables).entries()].sort((a, b) => {
+      const minOrd = (members: SeatFinderTable[]) =>
+        Math.min(...members.map((t) => t.display_order))
+      const d = minOrd(a[1]) - minOrd(b[1])
+      if (d !== 0) return d
+      return a[1][0]!.name.localeCompare(b[1][0]!.name, undefined, { sensitivity: 'base' })
     })
-  }, [rows, tableCatalog])
 
-  const tableBySlot = useMemo(() => {
-    return TABLE_LAYOUT_SLOTS.map((_, idx) => tablesUsed[idx] ?? null)
-  }, [tablesUsed])
+    const placed: TableOnMap[] = []
+    teams.slice(0, TEAM_LANE_Y.length).forEach(([teamId, members], laneIdx) => {
+      const slotKey = MAP_SLOT_KEYS[laneIdx]!
+      const y = TEAM_LANE_Y[laneIdx]!
+      const sortedMembers = [...members].sort((a, b) => {
+        if (a.display_order !== b.display_order) return a.display_order - b.display_order
+        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      })
+      const xs = spreadLaneXs(sortedMembers.length)
+      const primary = pickPrimaryTableForTeam(sortedMembers, teamId)
+      const visual = tableVisualFromTeam(primary.color, primary.page_config, primary.name, slotKey)
+      const isTwin = sortedMembers.length > 1
+
+      sortedMembers.forEach((meta, i) => {
+        const guests = [...(guestByTable.get(meta.id) ?? [])].sort(
+          (a, b) => a.seat_number - b.seat_number
+        )
+        placed.push({
+          id: meta.id,
+          name: meta.name,
+          capacity: meta.capacity,
+          display_order: meta.display_order,
+          team_id: teamId,
+          guests,
+          visual,
+          x: xs[i] ?? MAP_CENTER_X,
+          y,
+          slotKey,
+          isTwin,
+        })
+      })
+    })
+
+    return placed
+  }, [rows, tableCatalog])
 
   const selectedGuest = useMemo(
     () => rows.find((r) => r.id === selectedId) ?? null,
@@ -671,11 +720,10 @@ export function SeatingMapPanel({
 
   useEffect(() => {
     if (!selectedGuest) return
-    const idx = tableBySlot.findIndex((t) => t?.id === selectedGuest.table_id)
-    if (idx < 0) return
-    const slot = TABLE_LAYOUT_SLOTS[idx]!
-    const wx = (slot.x / 100) * WORLD_W
-    const wy = (slot.y / 100) * WORLD_H
+    const table = tablesUsed.find((t) => t.id === selectedGuest.table_id)
+    if (!table) return
+    const wx = (table.x / 100) * WORLD_W
+    const wy = (table.y / 100) * WORLD_H
 
     setTransitionTransform(true)
     const z = FOCUS_ZOOM
@@ -683,7 +731,7 @@ export function SeatingMapPanel({
     setPan(centerPanForWorldPoint(wx, wy, z))
     const t = window.setTimeout(() => setTransitionTransform(false), TRANSFORM_MS + 40)
     return () => window.clearTimeout(t)
-  }, [selectedGuest, tableBySlot, centerPanForWorldPoint])
+  }, [selectedGuest, tablesUsed, centerPanForWorldPoint])
 
   const setZoomAnchored = (next: number) => {
     const el = viewportRef.current
@@ -904,77 +952,71 @@ export function SeatingMapPanel({
                 {lm.name}
               </div>
             ))}
-            {TABLE_LAYOUT_SLOTS.map((slot, idx) => {
-              const table = tableBySlot[idx] ?? null
-              const label =
-                table?.name ??
-                `${slot.expectedName.charAt(0).toUpperCase()}${slot.expectedName.slice(1)} Table`
-
-              const isSelectedTable = Boolean(table && selectedGuest?.table_id === table.id)
-              const tableStyle = table?.visual ?? {
-                background: TABLE_GRADIENT_BY_SLOT[slot.key],
-                borderColor: 'rgba(255,255,255,0.28)',
-                shadow: '0 6px 18px rgba(0,0,0,0.12)',
-                accent: TABLE_SOLID_ACCENT_BY_SLOT[slot.key],
-                resultGlow: TABLE_RESULT_GLOW_BY_SLOT[slot.key],
-              }
+            {tablesUsed.map((table) => {
+              const isSelectedTable = selectedGuest?.table_id === table.id
+              const isSiblingTable = Boolean(
+                selectedGuest &&
+                  !isSelectedTable &&
+                  selectedGuest.team_id === table.team_id
+              )
+              const tableStyle = table.visual
+              const highlighted = isSelectedTable || isSiblingTable
 
               return (
                 <div
-                  key={slot.key}
+                  key={table.id}
                   ref={(el) => {
-                    if (table) tableRefs.current[table.id] = el
+                    tableRefs.current[table.id] = el
                   }}
-                  className="absolute z-[6] w-[min(90vw,500px)] max-w-[68%] -translate-x-1/2 -translate-y-1/2"
-                  style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
+                  className={`absolute z-[6] w-[min(90vw,500px)] -translate-x-1/2 -translate-y-1/2 ${
+                    table.isTwin ? 'max-w-[42%]' : 'max-w-[68%]'
+                  }`}
+                  style={{ left: `${table.x}%`, top: `${table.y}%` }}
                 >
                   <div
-                    className={`pointer-events-none relative flex w-full flex-col overflow-visible rounded-2xl border text-left transition-[background,box-shadow,border-color,transform] duration-200 ease-out ${
-                      table ? '' : 'cursor-default opacity-55'
-                    } ${
-                      table
-                        ? isSelectedTable
-                          ? 'z-10 shadow-[0_14px_32px_rgba(0,0,0,0.18)]'
+                    className={`pointer-events-none relative flex w-full flex-col overflow-visible rounded-2xl border text-left transition-[background,box-shadow,border-color,transform,opacity] duration-200 ease-out ${
+                      isSelectedTable
+                        ? 'z-10 shadow-[0_14px_32px_rgba(0,0,0,0.18)]'
+                        : isSiblingTable
+                          ? 'z-[9] border-white/40'
                           : 'border-neutral-200/80 bg-white shadow-[0_6px_18px_rgba(0,0,0,0.12)]'
-                        : 'border-zinc-200 bg-zinc-100 shadow-none'
                     }`}
                     style={
-                      table && isSelectedTable
+                      isSelectedTable
                         ? {
                             background: tableStyle.background,
                             borderColor: tableStyle.borderColor,
                             boxShadow: `${tableStyle.shadow}, 0 0 0 3px rgba(255,255,255,0.85)`,
                           }
-                        : undefined
+                        : isSiblingTable
+                          ? {
+                              background: tableStyle.background,
+                              borderColor: tableStyle.borderColor,
+                              boxShadow: `0 0 0 2px color-mix(in srgb, ${tableStyle.accent} 45%, transparent), 0 8px 20px rgba(0,0,0,0.1)`,
+                              opacity: 0.72,
+                            }
+                          : undefined
                     }
                   >
                     <div className="relative w-full pointer-events-auto">
-                      {table ? (
-                        <GuestTableSeatMap
-                          capacity={table.capacity}
-                          guests={table.guests}
-                          tableAccent={tableStyle.accent}
-                          selectedGuestId={selectedGuest?.id ?? null}
-                          onSelectGuest={selectGuest}
-                          tableLabel={
-                            <span
-                              className={`max-w-full truncate text-center text-[11px] font-semibold tracking-wide ${
-                                isSelectedTable
-                                  ? 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]'
-                                  : 'text-neutral-900'
-                              }`}
-                            >
-                              {label}
-                            </span>
-                          }
-                        />
-                      ) : (
-                        <div className="px-4 py-3">
-                          <span className="block truncate text-center text-[11px] font-semibold tracking-wide text-zinc-600">
-                            {label}
+                      <GuestTableSeatMap
+                        capacity={table.capacity}
+                        guests={table.guests}
+                        tableAccent={tableStyle.accent}
+                        selectedGuestId={selectedGuest?.id ?? null}
+                        onSelectGuest={selectGuest}
+                        tableLabel={
+                          <span
+                            className={`max-w-full truncate text-center text-[11px] font-semibold tracking-wide ${
+                              highlighted
+                                ? 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]'
+                                : 'text-neutral-900'
+                            }`}
+                          >
+                            {table.name}
                           </span>
-                        </div>
-                      )}
+                        }
+                      />
                     </div>
                   </div>
                 </div>

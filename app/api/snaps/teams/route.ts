@@ -5,16 +5,19 @@ import {
   type SnapsActivityItem,
 } from '@/lib/snaps'
 import { ensureSnapsMissionId, mapTableToSnapsTeam } from '@/lib/snaps-mission'
+import { canonicalTablesForLobby, resolveTeamId } from '@/lib/table-teams'
 import { requireAdminSessionOrRespond } from '@/lib/require-admin-session'
 import { createServiceRoleClient, isServiceRoleConfigured } from '@/lib/supabase/service-role'
 
 export const runtime = 'nodejs'
 
-type TableRow = {
+type TableVisualRow = {
   id: string
   name: string
   color: string | null
   page_config: unknown
+  team_id?: string | null
+  display_order?: number
 }
 
 type SubmissionRow = {
@@ -48,7 +51,7 @@ export async function GET() {
     const [teamsRes, activityRes] = await Promise.all([
       supabase
         .from('tables')
-        .select('id,name,color,page_config,display_order')
+        .select('id,name,color,page_config,display_order,team_id')
         .eq('is_archived', false)
         .eq('is_active', true)
         .order('display_order', { ascending: true })
@@ -65,7 +68,13 @@ export async function GET() {
     if (teamsRes.error) throw new Error(teamsRes.error.message)
     if (activityRes.error) throw new Error(activityRes.error.message)
 
-    const teams = ((teamsRes.data ?? []) as TableRow[]).map(mapTableToSnapsTeam)
+    const physical = (teamsRes.data ?? []) as TableVisualRow[]
+    const canonical = canonicalTablesForLobby(physical)
+    const teams = canonical.map(mapTableToSnapsTeam)
+    const physicalToTeamId = new Map<string, string>()
+    for (const row of physical) {
+      physicalToTeamId.set(row.id, resolveTeamId(row))
+    }
     const teamById = new Map(teams.map((t) => [t.id, t]))
     const activityRows = (activityRes.data ?? []) as SubmissionRow[]
 
@@ -73,12 +82,13 @@ export async function GET() {
       .filter((row) => row.submission_data?.source === SNAPS_SUBMISSION_SOURCE)
       .slice(0, 3)
       .map((row) => {
-        const team = teamById.get(row.table_id)
+        const teamId = physicalToTeamId.get(row.table_id) ?? row.table_id
+        const team = teamById.get(teamId) ?? teamById.get(row.table_id)
         const raw = row.submission_data?.points_awarded
         const n = typeof raw === 'number' ? raw : Number(raw)
         return {
           id: row.id,
-          teamId: row.table_id,
+          teamId,
           teamName: team?.name ?? '—',
           teamColor: team?.color ?? '#71717a',
           points: Number.isFinite(n) && n > 0 ? n : SNAPS_SHOT_POINTS,

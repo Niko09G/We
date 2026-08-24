@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client'
+import { resolveCreditTableId } from '@/lib/table-teams'
 import type { MissionsTableRow } from '@/lib/missions-schema'
 
 export type AdminTable = { id: string; name: string }
@@ -41,8 +42,19 @@ export async function fetchAdminMissionData(): Promise<{
 }
 
 export async function insertCompletion(tableId: string, missionId: string): Promise<void> {
+  const { data: tableRow, error: tableErr } = await supabase
+    .from('tables')
+    .select('id,team_id')
+    .eq('id', tableId)
+    .maybeSingle()
+  if (tableErr) throw new Error(tableErr.message || 'Failed to load table.')
+  const creditTableId = resolveCreditTableId({
+    id: tableId,
+    team_id: (tableRow as { team_id?: string | null } | null)?.team_id ?? null,
+  })
+
   const { error } = await supabase.from('completions').insert({
-    table_id: tableId,
+    table_id: creditTableId,
     mission_id: missionId,
   })
   if (error) {

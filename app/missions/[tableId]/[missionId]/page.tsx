@@ -31,6 +31,10 @@ import { RewardAmount } from '@/components/reward/RewardAmount'
 import { SignaturePad } from '@/components/SignaturePad'
 import { createClientRequestId } from '@/lib/client-request-id'
 import { guestMissionDisplayReward } from '@/lib/mission-limits'
+import {
+  resolveTeamId,
+  tableIdsInTeamScope,
+} from '@/lib/table-teams'
 
 type Params = { tableId: string; missionId: string }
 
@@ -109,12 +113,13 @@ export default function MissionDetailPage({
           return
         }
 
-        const [tRes, mRes, aRes, cRes, pRes] = await Promise.all([
+        const [tRes, scopeRes, mRes] = await Promise.all([
           supabase
             .from('tables')
-            .select('name,is_active,is_archived')
+            .select('name,is_active,is_archived,team_id')
             .eq('id', tableId)
             .maybeSingle(),
+          supabase.from('tables').select('id,team_id').eq('is_archived', false),
           supabase
             .from('missions')
             .select(
@@ -122,29 +127,43 @@ export default function MissionDetailPage({
             )
             .eq('id', missionId)
             .maybeSingle(),
+        ])
+
+        if (tRes.error) throw tRes.error
+        if (scopeRes.error) throw scopeRes.error
+        if (mRes.error) throw mRes.error
+
+        const teamId = resolveTeamId({
+          id: tableId,
+          team_id: (tRes.data as { team_id?: string | null } | null)?.team_id ?? null,
+        })
+        const scopeIds = tableIdsInTeamScope(
+          teamId,
+          (scopeRes.data ?? []) as Array<{ id: string; team_id?: string | null }>
+        )
+
+        const [aRes, cRes, pRes] = await Promise.all([
           supabase
             .from('mission_assignments')
             .select('id')
-            .eq('table_id', tableId)
+            .in('table_id', scopeIds)
             .eq('mission_id', missionId)
             .eq('is_active', true)
-            .maybeSingle(),
+            .limit(1),
           supabase
             .from('completions')
             .select('mission_id')
-            .eq('table_id', tableId)
+            .in('table_id', scopeIds)
             .eq('mission_id', missionId),
           supabase
             .from('mission_submissions')
             .select('id,status,submission_data')
-            .eq('table_id', tableId)
+            .in('table_id', scopeIds)
             .eq('mission_id', missionId)
             .eq('status', 'pending')
             .limit(1),
         ])
 
-        if (tRes.error) throw tRes.error
-        if (mRes.error) throw mRes.error
         if (aRes.error) throw aRes.error
         if (cRes.error) throw cRes.error
         if (pRes.error) throw pRes.error
@@ -162,7 +181,7 @@ export default function MissionDetailPage({
           return
         }
 
-        const assignmentExists = !!aRes.data
+        const assignmentExists = (aRes.data ?? []).length > 0
         if (!assignmentExists) {
           setError('This mission is not available for this table.')
           setLoading(false)

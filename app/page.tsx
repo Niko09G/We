@@ -14,6 +14,7 @@ import {
 } from '@/lib/lobby-settings'
 import { MISSIONS_HERO_THEME_COLOR } from '@/lib/guest-missions-gradients'
 import { supabase } from '@/lib/supabase/client'
+import { canonicalTablesForLobby, resolveTeamId } from '@/lib/table-teams'
 
 function scrollToSection(id: string) {
   const el = document.getElementById(id)
@@ -40,31 +41,45 @@ export default function LobbyPage() {
       setLoading(true)
       setError(null)
       try {
-        const [lobby, tablesRes] = await Promise.all([
+        const [lobby, tablesRes, teamsRes] = await Promise.all([
           fetchLobbySettings(),
           supabase
             .from('tables')
-            .select('id,name,color,page_config,is_active,display_order')
+            .select('id,name,color,page_config,is_active,display_order,team_id')
             .eq('is_archived', false)
             .order('display_order')
             .order('name'),
+          supabase.from('teams').select('id,name'),
         ])
 
         if (tablesRes.error) throw tablesRes.error
+        if (teamsRes.error) throw teamsRes.error
 
         if (cancelled) return
 
         setSettings(lobby)
+        const teamNameById = new Map<string, string>()
+        for (const row of teamsRes.data ?? []) {
+          teamNameById.set(row.id as string, (row.name as string) ?? '')
+        }
         const rows = (tablesRes.data ?? []) as (LobbyTeamRow & {
           is_active?: boolean
           display_order?: number
+          team_id?: string | null
         })[]
-        setTables(
-          rows
-            .filter((t) => (t.is_active ?? true) === true)
-            .filter((t) => isUuid(t.id))
-            .slice(0, 4)
-        )
+        const active = rows
+          .filter((t) => (t.is_active ?? true) === true)
+          .filter((t) => isUuid(t.id))
+        const canonical = canonicalTablesForLobby(active).map((t) => {
+          const teamId = resolveTeamId(t)
+          const teamName = teamNameById.get(teamId)?.trim()
+          return {
+            ...t,
+            name: teamName || t.name,
+            page_config: t.page_config,
+          }
+        })
+        setTables(canonical.slice(0, 4))
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : 'Failed to load lobby.')

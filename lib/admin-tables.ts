@@ -1,4 +1,10 @@
 import { supabase } from '@/lib/supabase/client'
+import { resolveTeamId } from '@/lib/table-teams'
+
+export type AdminTableTeam = {
+  id: string
+  name: string
+}
 
 export type AdminTableRow = {
   id: string
@@ -16,16 +22,76 @@ export type AdminTableRow = {
   occupied_count: number
   /** Guest team page JSON (`/missions/[tableId]`). */
   page_config: unknown | null
+  /** Parent logical team. Sibling physical blocks share this id. */
+  team_id: string
+  /** Leaderboard / lobby name for the parent team. */
+  team_name: string
+}
+
+export async function listTableTeams(): Promise<AdminTableTeam[]> {
+  const { data, error } = await supabase.from('teams').select('id,name').order('name')
+  if (error) throw new Error(error.message || 'Failed to load teams.')
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    name: (row.name as string) ?? '',
+  }))
+}
+
+async function ensureTableTeam(input: { id?: string; name: string }): Promise<string> {
+  if (input.id) {
+    const { data, error } = await supabase
+      .from('teams')
+      .select('id')
+      .eq('id', input.id)
+      .maybeSingle()
+    if (error) throw new Error(error.message || 'Failed to resolve team.')
+    if (data?.id) return data.id as string
+  }
+
+  const name = input.name.trim()
+  if (!name) throw new Error('Team name is required.')
+
+  const { data: existing, error: existingErr } = await supabase
+    .from('teams')
+    .select('id')
+    .eq('name', name)
+    .maybeSingle()
+  if (existingErr) throw new Error(existingErr.message || 'Failed to resolve team.')
+  if (existing?.id) return existing.id as string
+
+  const insertRow: Record<string, unknown> = { name }
+  if (input.id) insertRow.id = input.id
+
+  const { data: created, error } = await supabase
+    .from('teams')
+    .insert(insertRow)
+    .select('id')
+    .single()
+  if (error) {
+    if (error.code === '23505') {
+      const { data: again } = await supabase.from('teams').select('id').eq('name', name).maybeSingle()
+      if (again?.id) return again.id as string
+    }
+    throw new Error(error.message || 'Failed to create team.')
+  }
+  return created.id as string
 }
 
 export async function listTablesForAdmin(): Promise<AdminTableRow[]> {
-  const [{ data, error }, { data: assignments, error: assignmentsError }] = await Promise.all([
+  const [{ data, error }, { data: assignments, error: assignmentsError }, teamsRes] = await Promise.all([
     supabase.from('tables').select('*').order('name'),
     supabase.from('attendees').select('table_id,seat_number,is_archived').not('table_id', 'is', null),
+    supabase.from('teams').select('id,name'),
   ])
 
   if (error) throw new Error(error.message || 'Failed to load tables.')
   if (assignmentsError) throw new Error(assignmentsError.message || 'Failed to load table seat assignments.')
+  if (teamsRes.error) throw new Error(teamsRes.error.message || 'Failed to load teams.')
+
+  const teamNameById = new Map<string, string>()
+  for (const row of teamsRes.data ?? []) {
+    teamNameById.set(row.id as string, (row.name as string) ?? '')
+  }
 
   const occupiedByTableId = new Map<string, number>()
   for (const row of assignments ?? []) {
@@ -49,6 +115,10 @@ export async function listTablesForAdmin(): Promise<AdminTableRow[]> {
     const ordRaw = r.display_order
     const display_order =
       typeof ordRaw === 'number' && Number.isFinite(ordRaw) ? Math.trunc(ordRaw) : 0
+    const team_id = resolveTeamId({
+      id: row.id as string,
+      team_id: (r.team_id as string | null | undefined) ?? null,
+    })
     return {
       id: row.id as string,
       name: (row.name as string) ?? '',
@@ -61,6 +131,8 @@ export async function listTablesForAdmin(): Promise<AdminTableRow[]> {
       capacity,
       occupied_count: occupiedByTableId.get(row.id as string) ?? 0,
       page_config: (r.page_config as unknown) ?? null,
+      team_id,
+      team_name: teamNameById.get(team_id) || ((row.name as string) ?? ''),
     }
   })
   rows.sort((a, b) => {
@@ -77,6 +149,8 @@ export async function createTable(input: {
   color?: string | null
   is_active?: boolean
   capacity?: number
+  /** Existing parent team. Omit to create a new 1:1 team for this table. */
+  team_id?: string | null
 }): Promise<void> {
   const name = input.name.trim()
   if (!name) throw new Error('Table name is required.')
@@ -97,21 +171,31 @@ export async function createTable(input: {
       ? Math.trunc((maxRow as { display_order: number }).display_order) + 1
       : 0
 
-  const { error } = await supabase.from('tables').insert({
-    name,
-    color: input.color?.trim() || null,
-    is_active: input.is_active ?? true,
-    is_archived: false,
-    archived_at: null,
-    capacity: cap,
-    display_order: nextOrder,
-  })
-
+  const { data: created, error } = await supabase
+    .from('tables')
+    .insert({
+      name,
+      color: input.color?.trim() || null,
+      is_active: input.is_active ?? true,
+      is_archived: false,
+      archived_at: null,
+      capacity: cap,
+      display_order: nextOrder,
+    })
+    .select('id')
+    .single()
   if (error) {
-    if (error.code === '23505')
-      throw new Error('A table with this name already exists.')
+    if (error.code === '23505') throw new Error('A table with this name already exists.')
     throw new Error(error.message || 'Failed to create table.')
   }
+
+  const tableId = created.id as string
+  const teamId = await ensureTableTeam({
+    id: input.team_id?.trim() || tableId,
+    name,
+  })
+  const { error: teamErr } = await supabase.from('tables').update({ team_id: teamId }).eq('id', tableId)
+  if (teamErr) throw new Error(teamErr.message || 'Failed to link table to team.')
 }
 
 export async function updateTable(
@@ -124,6 +208,8 @@ export async function updateTable(
     display_order?: number
     /** JSON object for `tables.page_config` (omit to leave unchanged). */
     page_config?: Record<string, unknown> | null
+    /** Parent logical team. Pass empty/null to leave unchanged. */
+    team_id?: string | null
   }
 ): Promise<void> {
   const row: Record<string, unknown> = {}
@@ -138,6 +224,10 @@ export async function updateTable(
     row.display_order = Math.trunc(patch.display_order)
   }
   if (patch.page_config !== undefined) row.page_config = patch.page_config
+  if (patch.team_id !== undefined) {
+    const teamId = patch.team_id?.trim()
+    if (teamId) row.team_id = await ensureTableTeam({ id: teamId, name: patch.name?.trim() || id })
+  }
   if (Object.keys(row).length === 0) return
 
   const { error } = await supabase.from('tables').update(row).eq('id', id)

@@ -22,6 +22,7 @@ import {
   type GuestEmblemsSettingsValue,
 } from '@/lib/guest-emblem-config'
 import type { LeaderboardEntry, RecentActivityItem } from '@/lib/leaderboard'
+import { leaderboardEntryTeamKey } from '@/lib/leaderboard'
 import { supabase } from '@/lib/supabase/client'
 
 const DISPLAY_GRID_CLASS = 'grid h-screen w-screen grid-cols-[8.6fr_3.4fr] gap-6 bg-zinc-950 p-6'
@@ -451,14 +452,15 @@ export default function DisplayPage() {
       const celebrationDeltas: Array<{ tableId: string; delta: number }> = []
 
       if (prev && prev.length > 0 && next.length > 0) {
-        const oldPts = new Map(prev.map((e) => [e.tableId, e.totalPoints]))
+        const oldPts = new Map(prev.map((e) => [leaderboardEntryTeamKey(e), e.totalPoints]))
         next.forEach((e) => {
-          const op = oldPts.get(e.tableId)
+          const teamKey = leaderboardEntryTeamKey(e)
+          const op = oldPts.get(teamKey)
           if (op === undefined) return
           const delta = e.totalPoints > op ? e.totalPoints - op : undefined
           if (delta != null && delta > 0) {
-            nextRowAnim[e.tableId] = { delta }
-            celebrationDeltas.push({ tableId: e.tableId, delta })
+            nextRowAnim[teamKey] = { delta }
+            celebrationDeltas.push({ tableId: teamKey, delta })
           }
         })
       }
@@ -625,7 +627,10 @@ export default function DisplayPage() {
   const leaderboardTableIdsKey = useMemo(() => {
     const ids = new Set<string>()
     if (leaderboard?.length) {
-      for (const e of leaderboard) ids.add(e.tableId)
+      for (const e of leaderboard) {
+        ids.add(leaderboardEntryTeamKey(e))
+        for (const memberId of e.memberTableIds ?? []) ids.add(memberId)
+      }
     }
     if (currentGreeting?.table_id) ids.add(currentGreeting.table_id)
     return [...ids].sort().join(',')

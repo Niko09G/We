@@ -3,6 +3,11 @@ import { supabase } from '@/lib/supabase/client'
 import { deleteMissionGeneratedGreetingsBySubmissionId } from './greetings-admin'
 import { isRepeatableAutoMission } from '@/lib/mission-limits'
 import { adminResetWithArchive } from '@/lib/admin-recovery'
+import {
+  groupTablesByTeamId,
+  pickPrimaryTableForTeam,
+  resolveTeamId,
+} from '@/lib/table-teams'
 
 export type ScoreEventKind = 'completion' | 'repeatable_approved_submission'
 
@@ -10,7 +15,9 @@ export type ScoreEvent = {
   kind: ScoreEventKind
   /** completion.id or mission_submissions.id */
   eventId: string
+  /** Physical table that earned the points. */
   tableId: string
+  physicalTableName: string
   missionId: string
   missionTitle: string
   points: number
@@ -25,6 +32,7 @@ export type TableScoreBreakdown = {
   tableColor: string | null
   totalPoints: number
   events: ScoreEvent[]
+  memberTableIds: string[]
 }
 
 const COMPLETIONS_DELETE_POLICY_HINT =
@@ -57,13 +65,14 @@ function formatPoints(points: number): number {
 export async function fetchAdminScoreBreakdown(): Promise<
   TableScoreBreakdown[]
 > {
-  const [tablesRes, missionsRes, completionsRes, repeatableApprovedRes] =
+  const [tablesRes, teamsRes, missionsRes, completionsRes, repeatableApprovedRes] =
     await Promise.all([
       supabase
         .from('tables')
-        .select('id,name,color')
+        .select('id,name,color,team_id')
         .eq('is_archived', false)
         .order('name'),
+      supabase.from('teams').select('id,name'),
       supabase.from('missions').select(
         'id,title,points,allow_multiple_submissions,max_submissions_per_table,points_per_submission,approval_mode,validation_type,add_to_greetings'
       ),
@@ -77,6 +86,7 @@ export async function fetchAdminScoreBreakdown(): Promise<
     ])
 
   throwIfError('Load tables', tablesRes.error)
+  throwIfError('Load teams', teamsRes.error)
   throwIfError('Load missions', missionsRes.error)
   throwIfError('Load completions', completionsRes.error)
   throwIfError('Load approved mission submissions', repeatableApprovedRes.error)
@@ -85,7 +95,12 @@ export async function fetchAdminScoreBreakdown(): Promise<
     id: string
     name: string
     color: string | null
+    team_id: string | null
   }>
+  const teamNameById = new Map<string, string>()
+  for (const row of teamsRes.data ?? []) {
+    teamNameById.set(row.id as string, (row.name as string) ?? '')
+  }
 
   const missions = (missionsRes.data ?? []) as Array<{
     id: string
@@ -148,16 +163,23 @@ export async function fetchAdminScoreBreakdown(): Promise<
     submission_data: { points_awarded?: number } | null
   }>
 
-  const breakdownByTable = new Map<string, TableScoreBreakdown>()
-  tables.forEach((t) => {
-    breakdownByTable.set(t.id, {
-      tableId: t.id,
-      tableName: t.name,
-      tableColor: t.color,
+  const physicalTableName = new Map<string, string>()
+  for (const t of tables) physicalTableName.set(t.id, t.name)
+
+  const breakdownByTeam = new Map<string, TableScoreBreakdown>()
+  const physicalToTeamId = new Map<string, string>()
+  for (const [teamId, members] of groupTablesByTeamId(tables)) {
+    const primary = pickPrimaryTableForTeam(members, teamId)
+    for (const m of members) physicalToTeamId.set(m.id, teamId)
+    breakdownByTeam.set(teamId, {
+      tableId: teamId,
+      tableName: teamNameById.get(teamId) || primary.name,
+      tableColor: primary.color,
       totalPoints: 0,
       events: [],
+      memberTableIds: members.map((m) => m.id),
     })
-  })
+  }
 
   for (const c of completions) {
     const mission = missionById.get(c.mission_id)
@@ -165,12 +187,14 @@ export async function fetchAdminScoreBreakdown(): Promise<
     const points = oneTimeCompletionPoints.get(c.mission_id) ?? 0
     const ts = c.created_at
 
-    const table = breakdownByTable.get(c.table_id)
+    const teamId = physicalToTeamId.get(c.table_id)
+    const table = teamId ? breakdownByTeam.get(teamId) : undefined
     if (!table) continue
     table.events.push({
       kind: 'completion',
       eventId: c.id,
       tableId: c.table_id,
+      physicalTableName: physicalTableName.get(c.table_id) ?? c.table_id,
       missionId: c.mission_id,
       missionTitle: mission.title ?? c.mission_id,
       points: formatPoints(points),
@@ -195,7 +219,8 @@ export async function fetchAdminScoreBreakdown(): Promise<
     }
 
     const ts = s.approved_at ?? ''
-    const table = breakdownByTable.get(s.table_id)
+    const teamId = physicalToTeamId.get(s.table_id)
+    const table = teamId ? breakdownByTeam.get(teamId) : undefined
     if (!table) continue
 
     const isGreeting = mission.add_to_greetings === true
@@ -203,6 +228,7 @@ export async function fetchAdminScoreBreakdown(): Promise<
       kind: 'repeatable_approved_submission',
       eventId: s.id,
       tableId: s.table_id,
+      physicalTableName: physicalTableName.get(s.table_id) ?? s.table_id,
       missionId: s.mission_id,
       missionTitle: mission.title ?? s.mission_id,
       points,
@@ -216,13 +242,14 @@ export async function fetchAdminScoreBreakdown(): Promise<
     })
   }
 
-  for (const table of breakdownByTable.values()) {
+  for (const table of breakdownByTeam.values()) {
     table.events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     table.totalPoints = table.events.reduce((sum, e) => sum + (e.points ?? 0), 0)
   }
 
-  const out = tables.map((t) => breakdownByTable.get(t.id)!).filter(Boolean)
-  return out
+  return [...breakdownByTeam.values()].sort((a, b) =>
+    a.tableName.localeCompare(b.tableName, undefined, { sensitivity: 'base' })
+  )
 }
 
 export async function undoAdminScoreEvent(event: ScoreEvent): Promise<void> {
@@ -326,11 +353,25 @@ export async function undoAdminScoreEvents(events: ScoreEvent[]): Promise<void> 
 }
 
 export async function resetAdminScoresForTable(tableId: string): Promise<void> {
-  await adminResetWithArchive({
-    scope: 'table_all_progress',
-    table_id: tableId,
-    note: 'Scoreboard: reset all progress for one table',
-  })
+  const { data, error } = await supabase
+    .from('tables')
+    .select('id,team_id')
+    .eq('is_archived', false)
+  if (error) throw new Error(error.message || 'Failed to load tables for team reset.')
+
+  const rows = (data ?? []) as Array<{ id: string; team_id: string | null }>
+  const target = rows.find((r) => r.id === tableId)
+  const teamId = target ? resolveTeamId(target) : tableId
+  const memberIds = rows.filter((r) => resolveTeamId(r) === teamId).map((r) => r.id)
+  const ids = memberIds.length > 0 ? memberIds : [tableId]
+
+  for (const id of ids) {
+    await adminResetWithArchive({
+      scope: 'table_all_progress',
+      table_id: id,
+      note: 'Scoreboard: reset all progress for one team',
+    })
+  }
 }
 
 export async function resetAdminAllScores(): Promise<void> {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'reac
 import { archiveAttendee, listAttendeesForAdmin, type AttendeeRow } from '@/lib/admin-attendees'
 import { listAttendeeGroups, type AttendeeGroupRow } from '@/lib/admin-attendee-groups'
 import { listTablesForAdmin, type AdminTableRow } from '@/lib/admin-tables'
+import { physicalTableAdminLabel, resolveTeamId } from '@/lib/table-teams'
 import { AdminFilterRowSegmented } from '@/app/admin/_components/AdminFilterRowSegmented'
 import { AdminSelectDropdown } from '@/app/admin/_components/AdminSelectDropdown'
 import {
@@ -203,7 +204,7 @@ function MiniAvatarStack({
 
 function computePartySeatAndTable(
   members: AttendeeRow[],
-  tableNameById: Map<string, string>
+  tables: AdminTableRow[]
 ): { tableLabel: string; seatLabel: string } {
   const seated = members.filter(
     (m) => m.table_id != null && m.seat_number != null
@@ -211,21 +212,45 @@ function computePartySeatAndTable(
 
   if (seated.length === 0) return { tableLabel: '—', seatLabel: '—' }
 
-  const uniqueTableIds = Array.from(new Set(seated.map((m) => m.table_id)))
-  if (uniqueTableIds.length !== 1) return { tableLabel: '—', seatLabel: '—' }
-
-  const tableId = uniqueTableIds[0] as string
-  const tableLabel = tableNameById.get(tableId) ?? tableId.slice(0, 8)
+  const tableById = new Map(tables.map((t) => [t.id, t]))
+  const uniqueTableIds = Array.from(new Set(seated.map((m) => m.table_id))) as string[]
+  const uniqueTeamIds = Array.from(
+    new Set(
+      uniqueTableIds.map((id) => {
+        const t = tableById.get(id)
+        return t ? resolveTeamId(t) : id
+      })
+    )
+  )
 
   const seatNums = seated
     .map((m) => m.seat_number)
     .filter((n): n is number => n != null)
-
   const min = Math.min(...seatNums)
   const max = Math.max(...seatNums)
-  const seatLabel = seatNums.length === 1 ? String(min) : `${min}–${max}`
+  const seatLabel = uniqueTableIds.length === 1
+    ? seatNums.length === 1
+      ? String(min)
+      : `${min}–${max}`
+    : '—'
 
-  return { tableLabel, seatLabel }
+  if (uniqueTableIds.length === 1) {
+    const table = tableById.get(uniqueTableIds[0]!)
+    return {
+      tableLabel: table ? physicalTableAdminLabel(table, tables) : uniqueTableIds[0]!.slice(0, 8),
+      seatLabel,
+    }
+  }
+
+  if (uniqueTeamIds.length === 1) {
+    const teamTable = tables.find((t) => resolveTeamId(t) === uniqueTeamIds[0])
+    return {
+      tableLabel: teamTable?.team_name || teamTable?.name || '—',
+      seatLabel,
+    }
+  }
+
+  return { tableLabel: '—', seatLabel: '—' }
 }
 
 function computePartyRsvpBadge(members: AttendeeRow[]): {
@@ -330,7 +355,7 @@ export default function AdminAttendeesPage() {
 
   const tableNameById = useMemo(() => {
     const m = new Map<string, string>()
-    for (const t of tables) m.set(t.id, t.name)
+    for (const t of tables) m.set(t.id, physicalTableAdminLabel(t, tables))
     return m
   }, [tables])
 
@@ -356,7 +381,7 @@ export default function AdminAttendeesPage() {
   const tableOptionsWithCounts = useMemo(() => {
     return tables.map((t) => ({
       id: t.id,
-      name: t.name,
+      name: physicalTableAdminLabel(t, tables),
       count: rows.filter((r) => r.table_id === t.id).length,
     }))
   }, [tables, rows])
@@ -673,7 +698,7 @@ export default function AdminAttendeesPage() {
                   const childMembers = childMembersOf(p.members)
                   const extraGuestsMembers = extraGuestsMembersOf(p.members)
                   const parentMembers = parentMembersOf(p.members)
-                  const seatSummary = computePartySeatAndTable(p.members, tableNameById)
+                  const seatSummary = computePartySeatAndTable(p.members, tables)
                   const rsvpBadge = computePartyRsvpBadge(p.members)
                   const partyTitle =
                     p.kind === 'solo'

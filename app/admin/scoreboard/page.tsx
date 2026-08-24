@@ -107,9 +107,11 @@ export default function ScoreboardAdminPage() {
     }
   }
 
-  async function handleResetTable(tableId: string) {
+  async function handleResetTable(tableId: string, tableName: string, multiBlock: boolean) {
     const ok = window.confirm(
-      `Reset all leaderboard scores for this table?\n\nThis will remove completions, revert approved mission submissions, and clear greetings for this table (history preserved).`
+      multiBlock
+        ? `Reset all leaderboard scores for "${tableName}"?\n\nThis removes completions and submissions for every physical block in this team (history preserved).`
+        : `Reset all leaderboard scores for this table?\n\nThis will remove completions, revert approved mission submissions, and clear greetings for this table (history preserved).`
     )
     if (!ok) return
     const typed = window.prompt('Type RESET to confirm table reset:')
@@ -224,6 +226,7 @@ export default function ScoreboardAdminPage() {
       {!loading && tables && tables.length > 0 && (
         <div className="space-y-5">
           {tables.map((t) => {
+            const multiBlock = (t.memberTableIds?.length ?? 0) > 1
             const allKeysForTable = t.events.map((e) => eventKey(e))
             const selectedForTable = allKeysForTable.filter((k) =>
               selectedEventKeys.has(k)
@@ -255,6 +258,9 @@ export default function ScoreboardAdminPage() {
                     </div>
                     <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                       Total: <span className="font-semibold text-zinc-700 dark:text-zinc-200">{t.totalPoints}</span> pts
+                      {multiBlock ? (
+                        <span className="text-zinc-400"> · {t.memberTableIds.length} blocks</span>
+                      ) : null}
                     </div>
                   </div>
 
@@ -285,10 +291,10 @@ export default function ScoreboardAdminPage() {
                     <button
                       type="button"
                       disabled={resettingTableId === t.tableId || t.events.length === 0}
-                      onClick={() => void handleResetTable(t.tableId)}
+                      onClick={() => void handleResetTable(t.tableId, t.tableName, multiBlock)}
                       className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 disabled:opacity-40 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
                     >
-                      {resettingTableId === t.tableId ? 'Resetting…' : 'Reset table'}
+                      {resettingTableId === t.tableId ? 'Resetting…' : multiBlock ? 'Reset team' : 'Reset table'}
                     </button>
                   </div>
                 </div>
@@ -332,6 +338,14 @@ export default function ScoreboardAdminPage() {
                               <span className="font-medium text-zinc-900 dark:text-zinc-100 tabular-nums">
                                 +{e.points} pts
                               </span>
+                              {multiBlock ? (
+                                <>
+                                  <span className="text-zinc-500 dark:text-zinc-400"> · </span>
+                                  <span className="text-zinc-500 dark:text-zinc-400">
+                                    {e.physicalTableName}
+                                  </span>
+                                </>
+                              ) : null}
                               <span className="text-zinc-500 dark:text-zinc-400"> · </span>
                               <span className="text-zinc-500 dark:text-zinc-400">
                                 {new Date(e.timestamp).toLocaleString()}

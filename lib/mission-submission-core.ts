@@ -4,6 +4,11 @@ import {
   effectiveMaxSubmissionsPerTable,
   isRepeatableAutoMission,
 } from '@/lib/mission-limits'
+import {
+  resolveCreditTableId,
+  tableIdsInTeamScope,
+  type TableTeamRef,
+} from '@/lib/table-teams'
 
 /** Mirrors mission_submissions.submission_type and missions.validation_type. */
 export type SubmissionType =
@@ -28,6 +33,57 @@ export type MissionSubmissionResult = {
   repeatable: boolean
   approvedCount?: number
   missionSubmissionId?: string
+}
+
+async function resolveMissionTeamScope(
+  supabase: SupabaseClient,
+  physicalTableId: string
+): Promise<{
+  creditTableId: string
+  scopeTableIds: string[]
+  tableRow: {
+    id: string
+    is_archived?: boolean
+    is_active?: boolean
+    name?: string | null
+    color?: string | null
+  }
+}> {
+  const { data: tableRow, error: teamErr } = await supabase
+    .from('tables')
+    .select('id,is_archived,is_active,name,color,team_id')
+    .eq('id', physicalTableId)
+    .maybeSingle()
+  if (teamErr) throw new Error(teamErr.message || 'Failed to verify table.')
+  if (!tableRow) throw new Error('Table not found.')
+
+  const creditTableId = resolveCreditTableId({
+    id: physicalTableId,
+    team_id: (tableRow as { team_id?: string | null }).team_id ?? null,
+  })
+
+  const { data: allTables, error: allErr } = await supabase
+    .from('tables')
+    .select('id,team_id')
+    .eq('is_archived', false)
+  if (allErr) throw new Error(allErr.message || 'Failed to load team tables.')
+
+  const scopeTableIds = tableIdsInTeamScope(
+    creditTableId,
+    (allTables ?? []) as TableTeamRef[]
+  )
+
+  return {
+    creditTableId,
+    scopeTableIds,
+    tableRow: tableRow as {
+      id: string
+      is_archived?: boolean
+      is_active?: boolean
+      name?: string | null
+      color?: string | null
+    },
+  }
 }
 
 /**
@@ -95,26 +151,24 @@ export async function executeMissionSubmission(
     throw new Error('Missions are currently opening soon. Please try again later.')
   }
 
+  const { creditTableId, scopeTableIds, tableRow: teamRow } = await resolveMissionTeamScope(
+    supabase,
+    input.table_id
+  )
+
   const { data: assignment, error: aErr } = await supabase
     .from('mission_assignments')
     .select('id')
-    .eq('table_id', input.table_id)
+    .in('table_id', scopeTableIds)
     .eq('mission_id', input.mission_id)
     .eq('is_active', true)
-    .maybeSingle()
+    .limit(1)
 
   if (aErr) throw new Error(aErr.message || 'Failed to validate mission availability.')
-  if (!assignment) {
+  if (!assignment?.length) {
     throw new Error('This mission is not available for your table.')
   }
 
-  const { data: teamRow, error: teamErr } = await supabase
-    .from('tables')
-    .select('id,is_archived,is_active')
-    .eq('id', input.table_id)
-    .maybeSingle()
-  if (teamErr) throw new Error(teamErr.message || 'Failed to verify table.')
-  if (!teamRow) throw new Error('Table not found.')
   if ((teamRow as { is_archived?: boolean }).is_archived === true) {
     throw new Error('This table is archived.')
   }
@@ -167,7 +221,7 @@ export async function executeMissionSubmission(
     const compRes = await supabase
       .from('completions')
       .select('id')
-      .eq('table_id', input.table_id)
+      .in('table_id', scopeTableIds)
       .eq('mission_id', input.mission_id)
       .limit(1)
     if (compRes.error) throw new Error(compRes.error.message || 'Failed to validate mission completion.')
@@ -179,7 +233,7 @@ export async function executeMissionSubmission(
   const { count: usedCount, error: cntErr } = await supabase
     .from('mission_submissions')
     .select('id', { count: 'exact', head: true })
-    .eq('table_id', input.table_id)
+    .in('table_id', scopeTableIds)
     .eq('mission_id', input.mission_id)
     .in('status', ['pending', 'approved'])
 
@@ -194,7 +248,7 @@ export async function executeMissionSubmission(
   const { data: inserted, error } = await supabase
     .from('mission_submissions')
     .insert({
-      table_id: input.table_id,
+      table_id: creditTableId,
       mission_id: input.mission_id,
       status: insertStatus,
       submission_type: input.submission_type,
@@ -212,7 +266,7 @@ export async function executeMissionSubmission(
 
   if (isAutoApprove && effectiveMax === 1) {
     const { error: compErr } = await supabase.from('completions').insert({
-      table_id: input.table_id,
+      table_id: creditTableId,
       mission_id: input.mission_id,
     })
     if (compErr && compErr.code !== '23505') {
@@ -230,20 +284,23 @@ export async function executeMissionSubmission(
       const missionTitle = String((mission as Record<string, unknown>).title ?? 'Greeting')
       const greetingMessage = message && message.length > 0 ? message : missionTitle
       const missionSubmissionId = inserted?.id as string | undefined
-      const { data: table } = await supabase
+      const { data: creditTable } = await supabase
         .from('tables')
         .select('id,name,color')
-        .eq('id', input.table_id)
+        .eq('id', creditTableId)
         .maybeSingle()
       await supabase.from('greetings').insert({
-        name: (table?.name as string | undefined) ?? null,
+        name: (creditTable?.name as string | undefined) ?? (teamRow.name as string | undefined) ?? null,
         message: greetingMessage,
         image_url: imageUrl,
         status: 'ready',
         source_type: 'mission',
-        table_id: input.table_id,
-        table_name: (table?.name as string | undefined) ?? null,
-        table_color: ((table as { color?: string | null } | null)?.color as string | null) ?? null,
+        table_id: creditTableId,
+        table_name: (creditTable?.name as string | undefined) ?? (teamRow.name as string | undefined) ?? null,
+        table_color:
+          ((creditTable as { color?: string | null } | null)?.color as string | null) ??
+          ((teamRow as { color?: string | null }).color as string | null) ??
+          null,
         mission_submission_id: missionSubmissionId ?? null,
       })
     }
@@ -254,7 +311,7 @@ export async function executeMissionSubmission(
       const { count, error: cErr } = await supabase
         .from('mission_submissions')
         .select('id', { count: 'exact', head: true })
-        .eq('table_id', input.table_id)
+        .in('table_id', scopeTableIds)
         .eq('mission_id', input.mission_id)
         .eq('status', 'approved')
       if (cErr) throw new Error(cErr.message || 'Failed to read submission count.')

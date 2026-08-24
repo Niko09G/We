@@ -9,8 +9,9 @@ import { resolveRankEmblemUrl, type GuestEmblemsSettingsValue } from '@/lib/gues
 import { rewardUnitCompactLabel } from '@/lib/reward-unit'
 import type { DisplayTeamVisual } from '@/lib/display-team-visuals'
 import type { LeaderboardEntry } from '@/lib/leaderboard'
+import { leaderboardEntryTeamKey } from '@/lib/leaderboard'
 
-function tableInitials(name: string): string {
+function teamInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
   if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase()
   return (parts[0]?.slice(0, 2) ?? '?').toUpperCase()
@@ -74,6 +75,33 @@ function RankEmblem({
   )
 }
 
+function resolveTeamVisual(
+  entry: LeaderboardEntry,
+  teamVisuals: Record<string, DisplayTeamVisual>
+): DisplayTeamVisual | null {
+  const teamKey = leaderboardEntryTeamKey(entry)
+  if (teamVisuals[teamKey]) return teamVisuals[teamKey]!
+  for (const memberId of entry.memberTableIds ?? []) {
+    const visual = teamVisuals[memberId]
+    if (visual) return visual
+  }
+  return null
+}
+
+function resolveTeamAvatar(
+  entry: LeaderboardEntry,
+  teamAvatars: Record<string, string>,
+  visual: DisplayTeamVisual | null
+): string | null {
+  const teamKey = leaderboardEntryTeamKey(entry)
+  if (teamAvatars[teamKey]) return teamAvatars[teamKey]!
+  for (const memberId of entry.memberTableIds ?? []) {
+    const avatar = teamAvatars[memberId]
+    if (avatar) return avatar
+  }
+  return visual?.avatarUrl ?? null
+}
+
 type TeamCardProps = {
   entry: LeaderboardEntry
   rank: number
@@ -89,10 +117,13 @@ const TeamCard = forwardRef<HTMLDivElement, TeamCardProps>(function TeamCard(
 ) {
   const { config: rewardUnit } = useRewardUnit()
   const unitLabel = rewardUnitCompactLabel(rewardUnit)
+  const teamKey = leaderboardEntryTeamKey(entry)
+  const teamName = entry.teamName || entry.tableName
+  const teamColor = entry.teamColor ?? entry.tableColor
   const gradient =
     visual?.gradientCss ??
-    (entry.tableColor?.trim() && /^#?[0-9a-fA-F]{3,6}$/.test(entry.tableColor.trim())
-      ? `linear-gradient(145deg, ${entry.tableColor.trim().startsWith('#') ? entry.tableColor.trim() : `#${entry.tableColor.trim()}`}, color-mix(in srgb, ${entry.tableColor.trim().startsWith('#') ? entry.tableColor.trim() : `#${entry.tableColor.trim()}`} 55%, #000))`
+    (teamColor?.trim() && /^#?[0-9a-fA-F]{3,6}$/.test(teamColor.trim())
+      ? `linear-gradient(145deg, ${teamColor.trim().startsWith('#') ? teamColor.trim() : `#${teamColor.trim()}`}, color-mix(in srgb, ${teamColor.trim().startsWith('#') ? teamColor.trim() : `#${teamColor.trim()}`} 55%, #000))`
       : 'linear-gradient(145deg, #3f3f46, #18181b)')
 
   const heroUrl = visual?.heroImageUrl ?? null
@@ -101,7 +132,7 @@ const TeamCard = forwardRef<HTMLDivElement, TeamCardProps>(function TeamCard(
     <motion.div
       ref={ref}
       layout="position"
-      layoutId={entry.tableId}
+      layoutId={teamKey}
       transition={{ type: 'spring', stiffness: 380, damping: 32 }}
       className="relative min-h-0 flex-1 overflow-hidden"
       style={{ flex: '1 1 0' }}
@@ -110,7 +141,7 @@ const TeamCard = forwardRef<HTMLDivElement, TeamCardProps>(function TeamCard(
 
       <div className="relative flex h-full min-h-0 flex-col">
         <p className="relative z-10 shrink-0 truncate px-14 pt-3 text-center text-xl font-bold text-white drop-shadow-md md:text-2xl">
-          {entry.tableName}
+          {teamName}
         </p>
 
         <div className="pointer-events-none absolute inset-y-0 left-4 z-10 flex items-center">
@@ -151,7 +182,7 @@ const TeamCard = forwardRef<HTMLDivElement, TeamCardProps>(function TeamCard(
             />
           ) : (
             <span className="mb-4 flex h-24 w-24 items-center justify-center rounded-2xl border border-white/30 bg-white/10 text-2xl font-bold text-white/90 shadow-md">
-              {tableInitials(entry.tableName)}
+              {teamInitials(teamName)}
             </span>
           )}
         </div>
@@ -218,17 +249,19 @@ export function LeaderboardSidebar({
 
         {entries.map((entry, index) => {
           const rank = index + 1
-          const anim = rowAnim[entry.tableId]
+          const teamKey = leaderboardEntryTeamKey(entry)
+          const visual = resolveTeamVisual(entry, teamVisuals)
+          const anim = rowAnim[teamKey]
           return (
             <TeamCard
-              key={entry.tableId}
+              key={teamKey}
               ref={(el) => {
-                teamCardRefs.current[entry.tableId] = el
+                teamCardRefs.current[teamKey] = el
               }}
               entry={entry}
               rank={rank}
-              visual={teamVisuals[entry.tableId] ?? null}
-              avatarUrl={teamAvatars[entry.tableId] ?? null}
+              visual={visual}
+              avatarUrl={resolveTeamAvatar(entry, teamAvatars, visual)}
               rankEmblemUrl={resolveRankEmblemUrl(rankEmblems, rank)}
               pointsDelta={anim?.delta}
             />

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client'
+import { resolveCreditTableId } from '@/lib/table-teams'
 import {
   missionValidationTypeLabel,
   normalizeMissionValidationType,
@@ -106,9 +107,20 @@ export async function approveMissionSubmission(submissionId: string): Promise<{
   const submissionType = (sub.submission_type as string) ?? ''
   const submissionData = (sub.submission_data as Record<string, unknown> | null) ?? null
 
+  const { data: scopeTableRow, error: scopeErr } = await supabase
+    .from('tables')
+    .select('id,team_id')
+    .eq('id', tableId)
+    .maybeSingle()
+  if (scopeErr) throw new Error(scopeErr.message || 'Failed to load table for team scope.')
+  const creditTableId = resolveCreditTableId({
+    id: tableId,
+    team_id: (scopeTableRow as { team_id?: string | null } | null)?.team_id ?? null,
+  })
+
   let completionCreated = false
   const { error: insErr } = await supabase.from('completions').insert({
-    table_id: tableId,
+    table_id: creditTableId,
     mission_id: missionId,
   })
 
@@ -143,7 +155,7 @@ export async function approveMissionSubmission(submissionId: string): Promise<{
     const { data: tableRow } = await supabase
       .from('tables')
       .select('id,name,color')
-      .eq('id', tableId)
+      .eq('id', creditTableId)
       .maybeSingle()
     const addToGreetings = (missionRow as { add_to_greetings?: boolean } | null)?.add_to_greetings === true
     const missionTitle = (missionRow as { title?: string } | null)?.title ?? 'Greeting'
@@ -155,7 +167,7 @@ export async function approveMissionSubmission(submissionId: string): Promise<{
         image_url: submissionData.image_url,
         status: 'ready',
         source_type: 'mission',
-        table_id: tableId,
+        table_id: creditTableId,
         table_name: (tableRow?.name as string | undefined) ?? null,
         table_color:
           ((tableRow as { color?: string | null } | null)?.color as string | null) ?? null,

@@ -25,6 +25,7 @@ import {
   BUILDER_PROGRESS_ACTIVE_CLASS,
   BUILDER_PROGRESS_INACTIVE_CLASS,
 } from '@/app/admin/_components/AdminBuilderShellHeader'
+import { physicalTableAdminLabel, teamHasSiblingBlocks } from '@/lib/table-teams'
 
 type EditorMode = 'create' | 'edit'
 type OverlayStep = 1 | 2 | 3
@@ -280,6 +281,7 @@ export default function TablesAdminPage() {
   const [formName, setFormName] = useState('')
   const [formCapacity, setFormCapacity] = useState(10)
   const [formActive, setFormActive] = useState(true)
+  const [formTeamId, setFormTeamId] = useState('')
   const [formPresetId, setFormPresetId] = useState<ThemePreset['id']>('violet')
   const [formTheme, setFormTheme] = useState<TeamPageAdminFormValues>(() =>
     teamPageAdminFormDefaults(null, { tableColor: '#6335fb', tableName: 'New Table' })
@@ -404,7 +406,13 @@ export default function TablesAdminPage() {
   const visibleRows = useMemo(() => {
     const search = tableSearch.trim().toLowerCase()
     const filtered = rows.filter((row) => {
-      if (search && !row.name.toLowerCase().includes(search)) return false
+      if (search) {
+        const label = physicalTableAdminLabel(row, rows).toLowerCase()
+        const teamName = (row.team_name || '').toLowerCase()
+        if (!label.includes(search) && !teamName.includes(search) && !row.name.toLowerCase().includes(search)) {
+          return false
+        }
+      }
       if (tableStatusFilter === 'archived') return row.is_archived
       if (row.is_archived) return tableStatusFilter === 'all'
       if (tableStatusFilter === 'active' && !row.is_active) return false
@@ -416,6 +424,17 @@ export default function TablesAdminPage() {
     )
     return sorted
   }, [rows, tableSearch, tableStatusFilter])
+
+  const teamOptions = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const row of rows) {
+      if (!row.team_id || seen.has(row.team_id)) continue
+      seen.set(row.team_id, row.team_name || row.name)
+    }
+    return [...seen.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+  }, [rows])
   const tableStatusCounts = useMemo(() => {
     const archived = rows.filter((row) => row.is_archived).length
     const active = rows.filter((row) => !row.is_archived && row.is_active).length
@@ -471,6 +490,7 @@ export default function TablesAdminPage() {
     setFormName('')
     setFormCapacity(10)
     setFormActive(true)
+    setFormTeamId('')
     setFormPresetId('violet')
     const d = teamPageAdminFormDefaults(null, {
       tableColor: '#6335fb',
@@ -495,6 +515,7 @@ export default function TablesAdminPage() {
     setFormName(row.name)
     setFormCapacity(row.capacity || 10)
     setFormActive(row.is_active)
+    setFormTeamId(row.team_id)
     const d = teamPageAdminFormDefaults(row.page_config, {
       tableColor: row.color,
       tableName: row.name,
@@ -648,6 +669,7 @@ export default function TablesAdminPage() {
           capacity: formCapacity,
           color: formTheme.primaryColor,
           is_active: formActive,
+          team_id: formTeamId.trim() || null,
         })
         const refreshed = await listTablesForAdmin()
         const created = refreshed.find((r) => r.name.trim() === name)
@@ -663,6 +685,7 @@ export default function TablesAdminPage() {
           color: formTheme.primaryColor,
           is_active: formActive,
           page_config: pageConfig,
+          team_id: formTeamId.trim() || undefined,
         })
         await load()
         showToast('Table updated.', 'success')
@@ -894,6 +917,7 @@ export default function TablesAdminPage() {
                   })
                   const avatarUrl = resolved.avatarImageUrl.trim()
                   const statusLabel = row.is_archived ? 'Archived' : row.is_active ? 'Active' : 'Inactive'
+                  const hasSiblings = teamHasSiblingBlocks(row, rows)
                   const rowBgClass =
                     index % 2 === 0
                       ? 'bg-[#fdfdfd] hover:bg-[#fafafa]'
@@ -925,12 +949,19 @@ export default function TablesAdminPage() {
                               </span>
                             )}
                           </span>
-                          <span
-                            className={`min-w-0 truncate text-[14px] font-medium ${
-                              row.is_archived ? 'text-zinc-700' : 'text-zinc-900'
-                            }`}
-                          >
-                            {row.name}
+                          <span className="min-w-0">
+                            <span
+                              className={`block truncate text-[14px] font-medium ${
+                                row.is_archived ? 'text-zinc-700' : 'text-zinc-900'
+                              }`}
+                            >
+                              {row.name}
+                            </span>
+                            {hasSiblings && row.team_name ? (
+                              <span className="block truncate text-[12px] text-zinc-500">
+                                {row.team_name}
+                              </span>
+                            ) : null}
                           </span>
                         </div>
                         <div className="col-span-2">
@@ -1016,6 +1047,7 @@ export default function TablesAdminPage() {
               const avatarUrl = resolved.avatarImageUrl.trim()
               const isActiveStatus = row.is_active && !row.is_archived
               const statusLabel = row.is_archived ? 'Archived' : isActiveStatus ? 'Active' : 'Inactive'
+              const hasSiblings = teamHasSiblingBlocks(row, rows)
               return (
                 <div
                   key={row.id}
@@ -1100,6 +1132,11 @@ export default function TablesAdminPage() {
                     </div>
                     <div>
                       <p className="mt-24 text-center text-base font-semibold">{row.name}</p>
+                      {hasSiblings && row.team_name ? (
+                        <p className="mt-0.5 text-center text-[11px] font-medium text-white/80">
+                          {row.team_name}
+                        </p>
+                      ) : null}
                     </div>
                     <div
                       className="rounded-xl px-3 py-2 text-[11px] font-medium"
@@ -1723,6 +1760,24 @@ export default function TablesAdminPage() {
                       aria-label="Seat capacity"
                     />
                   </div>
+                  <label className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium text-zinc-700">
+                    <span className="shrink-0">Team</span>
+                    <select
+                      value={formTeamId}
+                      onChange={(e) => setFormTeamId(e.target.value)}
+                      className="min-w-0 flex-1 truncate rounded-lg border-0 border-b border-zinc-200 bg-transparent py-1 text-sm font-medium text-zinc-900 outline-none focus:border-zinc-400"
+                      aria-label="Parent team"
+                    >
+                      <option value="">
+                        {mode === 'create' ? 'New team' : 'Keep current'}
+                      </option>
+                      {teamOptions.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-zinc-700">
                     <span
                       className={`relative inline-flex h-5 w-9 rounded-full transition-colors duration-200 ease-out ${

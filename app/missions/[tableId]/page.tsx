@@ -10,6 +10,7 @@ import { MissionsTableHero } from '@/components/guest/MissionsTableHero'
 import { TeamAvatar } from '@/components/guest/TeamAvatar'
 import { getMissionsEnabled } from '@/lib/app-settings'
 import { fetchLeaderboard, fetchLeaderboardBundle, fetchRecentScoringActivity, type LeaderboardEntry, type RecentActivityItem } from '@/lib/leaderboard'
+import { leaderboardEntryIncludesTable, resolveTeamId, tableIdsInTeamScope } from '@/lib/table-teams'
 import {
   guestMissionDisplayReward,
   isAtSubmissionLimit,
@@ -181,6 +182,8 @@ export default function MissionsTablePage({
 
   const [tableName, setTableName] = useState<string>('')
   const [tableColor, setTableColor] = useState<string | null>(null)
+  const [creditTableId, setCreditTableId] = useState<string>(tableId)
+  const [teamScopeTableIds, setTeamScopeTableIds] = useState<string[]>([tableId])
   const [tablePageConfigRaw, setTablePageConfigRaw] = useState<unknown>(null)
   const [leaderboardRows, setLeaderboardRows] = useState<LeaderboardEntry[]>([])
 
@@ -223,13 +226,19 @@ export default function MissionsTablePage({
   const momentumCarouselRef = useRef<HTMLDivElement>(null)
 
   const { tablePoints, tableRank, totalTeams } = useMemo(() => {
-    const idx = leaderboardRows.findIndex((e) => e.tableId === tableId)
+    const idx = leaderboardRows.findIndex((e) => leaderboardEntryIncludesTable(e, tableId))
     return {
       tablePoints: idx >= 0 ? safeRewardPoints(leaderboardRows[idx].totalPoints) : 0,
       tableRank: idx >= 0 ? idx + 1 : null,
       totalTeams: leaderboardRows.length,
     }
   }, [leaderboardRows, tableId])
+
+  const canonicalTeamId = useMemo(() => {
+    if (creditTableId) return creditTableId
+    const entry = leaderboardRows.find((e) => leaderboardEntryIncludesTable(e, tableId))
+    return entry?.tableId ?? tableId
+  }, [creditTableId, leaderboardRows, tableId])
 
   const teamPage = useMemo(
     () => resolveTeamPageConfig(tablePageConfigRaw, { tableColor, tableName }),
@@ -249,8 +258,11 @@ export default function MissionsTablePage({
     [guestEmblems, tableRank]
   )
   const heroTeamEmblemUrl = useMemo(
-    () => guestEmblems.team_emblem_by_table_id?.[tableId] ?? null,
-    [guestEmblems, tableId]
+    () =>
+      guestEmblems.team_emblem_by_table_id?.[canonicalTeamId] ??
+      guestEmblems.team_emblem_by_table_id?.[tableId] ??
+      null,
+    [guestEmblems, canonicalTeamId, tableId]
   )
   const leaderboardMotivation = useMemo(() => {
     if (tableRank == null || leaderboardRows.length === 0) {
@@ -515,21 +527,21 @@ export default function MissionsTablePage({
       }
 
       const [cRes, pRes, slotRes, rRes] = await Promise.all([
-        supabase.from('completions').select('mission_id').eq('table_id', tableId),
+        supabase.from('completions').select('mission_id').in('table_id', teamScopeTableIds),
         supabase
           .from('mission_submissions')
           .select('mission_id')
-          .eq('table_id', tableId)
+          .in('table_id', teamScopeTableIds)
           .eq('status', 'pending'),
         supabase
           .from('mission_submissions')
           .select('mission_id')
-          .eq('table_id', tableId)
+          .in('table_id', teamScopeTableIds)
           .in('status', ['pending', 'approved']),
         supabase
           .from('mission_submissions')
           .select('mission_id, review_note, submission_data')
-          .eq('table_id', tableId)
+          .in('table_id', teamScopeTableIds)
           .eq('status', 'rejected')
           .order('created_at', { ascending: false })
           .limit(200),
@@ -579,7 +591,7 @@ export default function MissionsTablePage({
       void loadMissionFeed()
     })()
   }, [
-    tableId,
+    teamScopeTableIds,
     loadMissionFeed,
     buildMomentumEntries,
     pushMomentum,
@@ -682,7 +694,7 @@ export default function MissionsTablePage({
         const [tRes, enabled] = await Promise.all([
           supabase
             .from('tables')
-            .select('name,color,is_active,is_archived,page_config')
+            .select('name,color,is_active,is_archived,page_config,team_id')
             .eq('id', tableId)
             .maybeSingle(),
           getMissionsEnabled(),
@@ -698,6 +710,7 @@ export default function MissionsTablePage({
           is_active?: boolean
           is_archived?: boolean
           page_config?: unknown
+          team_id?: string | null
         } | null
 
         if (!tRow) {
@@ -706,19 +719,63 @@ export default function MissionsTablePage({
           return
         }
 
+        const teamId = resolveTeamId({
+          id: tableId,
+          team_id: tRow.team_id ?? null,
+        })
+        const allTablesRes = await supabase
+          .from('tables')
+          .select('id,team_id')
+          .eq('is_archived', false)
+        if (cancelled) return
+        const scopeIds = tableIdsInTeamScope(
+          teamId,
+          (allTablesRes.data ?? []) as Array<{ id: string; team_id?: string | null }>
+        )
+        setCreditTableId(teamId)
+        setTeamScopeTableIds(scopeIds)
+        let pageConfig = tRow.page_config ?? null
+        let color = (tRow.color as string | null) ?? null
+        let displayName = (tRow.name as string) ?? ''
+
+        if (teamId) {
+          const [primaryRes, teamNameRes] = await Promise.all([
+            teamId !== tableId
+              ? supabase
+                  .from('tables')
+                  .select('name,color,page_config')
+                  .eq('id', teamId)
+                  .maybeSingle()
+              : Promise.resolve({ data: null, error: null }),
+            supabase.from('teams').select('name').eq('id', teamId).maybeSingle(),
+          ])
+          if (cancelled) return
+          const primary = primaryRes.data as {
+            name?: string | null
+            color?: string | null
+            page_config?: unknown
+          } | null
+          if (primary) {
+            pageConfig = primary.page_config ?? pageConfig
+            color = (primary.color as string | null) ?? color
+          }
+          const teamName = (teamNameRes.data as { name?: string | null } | null)?.name?.trim()
+          if (teamName) displayName = teamName
+        }
+
         if ((tRow.is_archived ?? false) === true) {
-          setTablePageConfigRaw(tRow.page_config ?? null)
-          setTableName((tRow.name as string) ?? '')
-          setTableColor((tRow.color as string | null) ?? null)
+          setTablePageConfigRaw(pageConfig)
+          setTableName(displayName)
+          setTableColor(color)
           setMissionsEnabled(enabled)
           setError('This team has been archived. Choose another table from the list.')
           setLoading(false)
           return
         }
 
-        setTablePageConfigRaw(tRow.page_config ?? null)
-        setTableName((tRow.name as string) ?? '')
-        setTableColor((tRow.color as string | null) ?? null)
+        setTablePageConfigRaw(pageConfig)
+        setTableName(displayName)
+        setTableColor(color)
 
         if ((tRow.is_active ?? true) === false) {
           setError('This table is not active.')
@@ -754,28 +811,28 @@ export default function MissionsTablePage({
         }
 
         const [cRes, pRes, slotRes, aRes] = await Promise.all([
-          supabase.from('completions').select('mission_id').eq('table_id', tableId),
+          supabase.from('completions').select('mission_id').in('table_id', scopeIds),
           supabase
             .from('mission_submissions')
             .select('mission_id')
-            .eq('table_id', tableId)
+            .in('table_id', scopeIds)
             .eq('status', 'pending'),
           supabase
             .from('mission_submissions')
             .select('mission_id')
-            .eq('table_id', tableId)
+            .in('table_id', scopeIds)
             .in('status', ['pending', 'approved']),
           supabase
             .from('mission_assignments')
             .select('mission_id')
-            .eq('table_id', tableId)
+            .in('table_id', scopeIds)
             .eq('is_active', true),
         ])
 
         const rRes = await supabase
           .from('mission_submissions')
           .select('mission_id, review_note, submission_data')
-          .eq('table_id', tableId)
+          .in('table_id', scopeIds)
           .eq('status', 'rejected')
           .order('created_at', { ascending: false })
           .limit(200)
@@ -792,9 +849,9 @@ export default function MissionsTablePage({
         if (rRes.error)
           throw new Error(`mission_submissions(rejected): ${rRes.error.message}`)
 
-        const assignedMissionIds = ((aRes.data ?? []) as PendingRow[]).map(
+        const assignedMissionIds = [...new Set(((aRes.data ?? []) as PendingRow[]).map(
           (r) => r.mission_id
-        )
+        ))]
 
         if (assignedMissionIds.length === 0) {
           setMissions([])
@@ -1041,7 +1098,7 @@ export default function MissionsTablePage({
       const { data } = await supabase
         .from('mission_submissions')
         .select('submission_data')
-        .eq('table_id', tableId)
+        .in('table_id', teamScopeTableIds)
         .eq('mission_id', missionId)
         .eq('status', 'pending')
         .limit(1)
@@ -1484,7 +1541,7 @@ export default function MissionsTablePage({
             <>
               <ul className="mt-3 flex w-full flex-col gap-3">
                 {leaderboardPreview.map((row, i) => {
-                  const isYou = row.tableId === tableId
+                  const isYou = leaderboardEntryIncludesTable(row, tableId)
                   const pointsShown = safeRewardPoints(row.totalPoints)
                   return (
                     <li
@@ -1669,7 +1726,9 @@ export default function MissionsTablePage({
                   ? resolveRankEmblemUrl(guestEmblems, nextRankTarget)
                   : null
               const teamEmblemUrl =
-                guestEmblems.team_emblem_by_table_id?.[tableId] ?? null
+                guestEmblems.team_emblem_by_table_id?.[canonicalTeamId] ??
+                guestEmblems.team_emblem_by_table_id?.[tableId] ??
+                null
 
               const missionForModal: MissionForModal = {
                 id: m.id,
