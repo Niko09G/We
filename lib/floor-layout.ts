@@ -70,6 +70,44 @@ export function landmarkBorderRadius(shape: string): string {
   }
 }
 
+export const VENUE_LANDMARK_ROTATIONS = [0, 90, 180, 270] as const
+export type VenueLandmarkRotation = (typeof VENUE_LANDMARK_ROTATIONS)[number]
+
+export function normalizeLandmarkRotation(value: unknown): VenueLandmarkRotation {
+  const n = typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : 0
+  if (n === 90 || n === 180 || n === 270) return n
+  return 0
+}
+
+/** CSS transform + writing mode for rotated landmark labels. */
+export function landmarkLabelStyle(rotation: VenueLandmarkRotation): {
+  transform?: string
+  writingMode?: 'vertical-rl'
+} {
+  if (rotation === 0) return {}
+  if (rotation === 90) {
+    return { transform: 'rotate(90deg)', writingMode: 'vertical-rl' }
+  }
+  if (rotation === 180) {
+    return { transform: 'rotate(180deg)' }
+  }
+  return { transform: 'rotate(270deg)', writingMode: 'vertical-rl' }
+}
+
+/** Grid-space line endpoints for architectural overlays (percent 0–100). */
+export function landmarkLineEndpoints(rect: FloorGridRect): {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+} {
+  const x1 = (rect.grid_x / FLOOR_GRID_COLS) * 100
+  const y1 = (rect.grid_y / FLOOR_GRID_ROWS) * 100
+  const x2 = ((rect.grid_x + rect.width_units) / FLOOR_GRID_COLS) * 100
+  const y2 = ((rect.grid_y + rect.height_units) / FLOOR_GRID_ROWS) * 100
+  return { x1, y1, x2, y2 }
+}
+
 export function clampGridSpan(value: number, min = 1, max = FLOOR_GRID_COLS): number {
   if (!Number.isFinite(value)) return min
   return Math.min(max, Math.max(min, Math.trunc(value)))

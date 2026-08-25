@@ -64,6 +64,27 @@ select {
   font-size: 16px;
 }
 
+@keyframes seatMapSearchGlow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.seat-map-search-glow {
+  background: conic-gradient(
+    from 0deg,
+    #22d3ee 0deg,
+    #a855f7 120deg,
+    #fbbf24 240deg,
+    #22d3ee 360deg
+  );
+  animation: seatMapSearchGlow 5s linear infinite;
+  opacity: 0.85;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

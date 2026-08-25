@@ -7,6 +7,7 @@ import { MissionSocialFeedSection } from '@/components/guest/MissionSocialFeedSe
 import { SeatingMapPanel } from '@/components/guest/SeatingMapPanel'
 import { StickySectionNav } from '@/components/guest/StickySectionNav'
 import { MissionsTableHero } from '@/components/guest/MissionsTableHero'
+import { Leaderboard } from '@/components/Leaderboard'
 import { TeamAvatar } from '@/components/guest/TeamAvatar'
 import { getMissionsEnabled } from '@/lib/app-settings'
 import { fetchLeaderboard, fetchLeaderboardBundle, fetchRecentScoringActivity, type LeaderboardEntry, type RecentActivityItem } from '@/lib/leaderboard'
@@ -245,10 +246,6 @@ export default function MissionsTablePage({
     [tablePageConfigRaw, tableColor, tableName]
   )
 
-  const leaderboardPreview = useMemo(
-    () => leaderboardRows.slice(0, 4),
-    [leaderboardRows]
-  )
   const displayMomentumFeed = useMemo(() => {
     if (momentumFeed.length > 0) return momentumFeed
     return buildSeedMomentumFromLeaderboard(leaderboardRows)
@@ -1537,59 +1534,18 @@ export default function MissionsTablePage({
             )}
           </p>
 
-          {leaderboardPreview.length > 0 ? (
+          {leaderboardRows.length > 0 ? (
             <>
-              <ul className="mt-3 flex w-full flex-col gap-3">
-                {leaderboardPreview.map((row, i) => {
-                  const isYou = leaderboardEntryIncludesTable(row, tableId)
-                  const pointsShown = safeRewardPoints(row.totalPoints)
-                  return (
-                    <li
-                      key={row.tableId}
-                      className="flex items-center justify-between gap-3 rounded-md px-3 py-3 text-sm"
-                      style={{
-                        background:
-                          isYou
-                            ? `linear-gradient(to bottom, ${teamPage.theme.leaderboardGradient.colorTop} 0%, ${teamPage.theme.leaderboardGradient.colorBottom} 100%)`
-                            : sharedLeaderboardGradient,
-                        ...(isYou
-                          ? {
-                              boxShadow:
-                                '0 0 0 1px rgba(255,255,255,0.38), inset 0 0 0 1px rgba(255,255,255,0.22), 0 0 36px rgba(255,255,255,0.16)',
-                            }
-                          : {}),
-                      }}
-                    >
-                      <span className="flex min-w-0 items-center gap-2.5 font-bold text-white">
-                        <span className="tabular-nums text-white">{i + 1}.</span>
-                        <TeamAvatar
-                          name={row.tableName}
-                          avatarUrl={resolveTeamAvatarUrl(
-                            row.tableId,
-                            tableAvatars,
-                            guestEmblems
-                          )}
-                          tableColor={row.tableColor}
-                        />
-                        <span className="truncate">{row.tableName}</span>
-                        {isYou ? (
-                          <span className="shrink-0 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-extrabold text-white">
-                            You
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="inline-flex shrink-0 items-center gap-1 font-extrabold tabular-nums text-white">
-                        <RewardUnitIcon
-                          size={COIN_SIZE}
-                          displayVariant="onDark"
-                          tintColor={teamPage.theme.iconColor}
-                        />
-                        {pointsShown}
-                      </span>
-                    </li>
-                  )
-                })}
-              </ul>
+              <Leaderboard
+                rows={leaderboardRows}
+                currentTableId={tableId}
+                tableAvatars={tableAvatars}
+                guestEmblems={guestEmblems}
+                sharedGradient={sharedLeaderboardGradient}
+                youGradientTop={teamPage.theme.leaderboardGradient.colorTop}
+                youGradientBottom={teamPage.theme.leaderboardGradient.colorBottom}
+                iconTintColor={teamPage.theme.iconColor}
+              />
               <div className="mt-4">
                 <h3
                   className="text-xs font-semibold tracking-wide text-zinc-500"

@@ -3,10 +3,12 @@ import {
   FLOOR_DEFAULT_LANDMARK_SPAN,
   FLOOR_DEFAULT_TABLE_SPAN,
   normalizeFloorRect,
+  normalizeLandmarkRotation,
   normalizeLandmarkShape,
   resolveTableGridUnits,
   type FloorGridRect,
   type VenueLandmarkKind,
+  type VenueLandmarkRotation,
   type VenueLandmarkShape,
 } from '@/lib/floor-layout'
 import { resolveTeamId } from '@/lib/table-teams'
@@ -37,6 +39,8 @@ export type VenueLandmarkRow = {
   shape: VenueLandmarkShape
   color: string | null
   sort_order: number
+  rotation: VenueLandmarkRotation
+  is_line: boolean
 }
 
 export type FloorLayoutLoadResult = {
@@ -127,14 +131,22 @@ function parseLandmarkRow(row: Record<string, unknown>): VenueLandmarkRow {
     sort_order: finiteInt(row.sort_order) ?? 0,
     shape: normalizeLandmarkShape(row.shape),
     color: typeof colorRaw === 'string' && colorRaw.trim() ? colorRaw.trim() : null,
+    rotation: normalizeLandmarkRotation(row.rotation),
+    is_line: Boolean(row.is_line),
     ...rect,
   }
 }
 
 const LANDMARK_SELECT =
-  'id, label, kind, grid_x, grid_y, width_units, height_units, shape, color, sort_order'
+  'id, label, kind, grid_x, grid_y, width_units, height_units, shape, color, sort_order, rotation, is_line'
 
 const LANDMARK_SELECT_NO_KIND =
+  'id, label, grid_x, grid_y, width_units, height_units, shape, color, sort_order, rotation, is_line'
+
+const LANDMARK_SELECT_LEGACY =
+  'id, label, kind, grid_x, grid_y, width_units, height_units, shape, color, sort_order'
+
+const LANDMARK_SELECT_LEGACY_NO_KIND =
   'id, label, grid_x, grid_y, width_units, height_units, shape, color, sort_order'
 
 const TABLE_GRID_SELECT =
@@ -220,6 +232,24 @@ async function fetchVenueLandmarks(): Promise<VenueLandmarkRow[]> {
 
   if (
     isMissingSchemaError(primary.error.message, [
+      /rotation/i,
+      /is_line/i,
+      /column/i,
+      /schema cache/i,
+    ])
+  ) {
+    const legacy = await supabase
+      .from('venue_landmarks')
+      .select(LANDMARK_SELECT_LEGACY)
+      .order('sort_order')
+      .order('label')
+    if (!legacy.error) {
+      return (legacy.data ?? []).map((row) => parseLandmarkRow(row as Record<string, unknown>))
+    }
+  }
+
+  if (
+    isMissingSchemaError(primary.error.message, [
       /kind/i,
       /column/i,
       /schema cache/i,
@@ -232,6 +262,14 @@ async function fetchVenueLandmarks(): Promise<VenueLandmarkRow[]> {
       .order('label')
     if (!fallback.error) {
       return (fallback.data ?? []).map((row) => parseLandmarkRow(row as Record<string, unknown>))
+    }
+    const legacyNoKind = await supabase
+      .from('venue_landmarks')
+      .select(LANDMARK_SELECT_LEGACY_NO_KIND)
+      .order('sort_order')
+      .order('label')
+    if (!legacyNoKind.error) {
+      return (legacyNoKind.data ?? []).map((row) => parseLandmarkRow(row as Record<string, unknown>))
     }
   }
 
@@ -328,6 +366,33 @@ function landmarkPayload(
       input.sort_order != null && Number.isFinite(input.sort_order)
         ? Math.trunc(input.sort_order)
         : 0,
+    rotation: normalizeLandmarkRotation(input.rotation),
+    is_line: Boolean(input.is_line),
+  }
+  if (!includeKind) return base
+  return {
+    ...base,
+    kind: resolveLandmarkKind(input as Record<string, unknown>),
+  }
+}
+
+function landmarkPayloadWithoutRotationLine(
+  input: Partial<VenueLandmarkRow> & { label: string },
+  rect: FloorGridRect,
+  includeKind: boolean
+) {
+  const base = {
+    label: input.label.trim(),
+    grid_x: rect.grid_x,
+    grid_y: rect.grid_y,
+    width_units: rect.width_units,
+    height_units: rect.height_units,
+    shape: normalizeLandmarkShape(input.shape),
+    color: input.color?.trim() || null,
+    sort_order:
+      input.sort_order != null && Number.isFinite(input.sort_order)
+        ? Math.trunc(input.sort_order)
+        : 0,
   }
   if (!includeKind) return base
   return {
@@ -352,6 +417,19 @@ async function upsertLandmarkRow(
 
   let result = await run(withKind, LANDMARK_SELECT)
   if (
+    result.error &&
+    isMissingSchemaError(result.error.message, [/rotation/i, /is_line/i, /column/i, /schema cache/i])
+  ) {
+    const legacyWithKind = landmarkPayloadWithoutRotationLine(input, rect, true)
+    const legacyWithoutKind = landmarkPayloadWithoutRotationLine(input, rect, false)
+    result = await run(legacyWithKind, LANDMARK_SELECT_LEGACY)
+    if (
+      result.error &&
+      isMissingSchemaError(result.error.message, [/kind/i, /column/i, /schema cache/i])
+    ) {
+      result = await run(legacyWithoutKind, LANDMARK_SELECT_LEGACY_NO_KIND)
+    }
+  } else if (
     result.error &&
     isMissingSchemaError(result.error.message, [/kind/i, /column/i, /schema cache/i])
   ) {

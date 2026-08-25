@@ -17,11 +17,15 @@ import {
   FLOOR_TABLE_LAYOUT_DEFAULTS,
   VENUE_LANDMARK_KINDS,
   VENUE_LANDMARK_COLOR_PRESETS,
+  VENUE_LANDMARK_ROTATIONS,
   VENUE_LANDMARK_SHAPES,
   clampGridCoord,
   clampGridSpan,
   landmarkBorderRadius,
+  landmarkLabelStyle,
+  landmarkLineEndpoints,
   normalizeFloorRect,
+  normalizeLandmarkRotation,
   normalizeLandmarkShape,
   resolveTableGridUnits,
   tableGridUnitsForCapacity,
@@ -358,6 +362,8 @@ export default function AdminFloorLayoutPage() {
       shape: 'rectangle',
       color: VENUE_LANDMARK_COLOR_PRESETS[1] ?? '#f4f4f5',
       sort_order,
+      rotation: 0,
+      is_line: false,
       ...rect,
     }
     setDraft((prev) => ({ ...prev, landmarks: [...prev.landmarks, row] }))
@@ -432,6 +438,8 @@ export default function AdminFloorLayoutPage() {
             typeof lm.sort_order === 'number' && Number.isFinite(lm.sort_order)
               ? Math.trunc(lm.sort_order)
               : 0,
+          rotation: normalizeLandmarkRotation(lm.rotation),
+          is_line: Boolean(lm.is_line),
         })
         savedLandmarks.push(savedLm)
       }
@@ -527,6 +535,44 @@ export default function AdminFloorLayoutPage() {
             >
               {draft.landmarks.map((lm) => {
                 const isSel = selected?.type === 'landmark' && selected.id === lm.id
+                if (lm.is_line) {
+                  const { x1, y1, x2, y2 } = landmarkLineEndpoints(lm)
+                  return (
+                    <svg
+                      key={lm.id}
+                      data-floor-item
+                      data-floor-type="landmark"
+                      data-floor-id={lm.id}
+                      className={`absolute inset-0 z-[8] h-full w-full cursor-grab overflow-visible active:cursor-grabbing ${
+                        isSel ? 'z-20' : ''
+                      }`}
+                      viewBox="0 0 100 100"
+                      preserveAspectRatio="none"
+                    >
+                      <line
+                        x1={x1}
+                        y1={y1}
+                        x2={x2}
+                        y2={y2}
+                        stroke={lm.color ?? '#a1a1aa'}
+                        strokeWidth={isSel ? 0.55 : 0.4}
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <line
+                        x1={x1}
+                        y1={y1}
+                        x2={x2}
+                        y2={y2}
+                        stroke="transparent"
+                        strokeWidth={2.5}
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    </svg>
+                  )
+                }
+                const labelStyle = landmarkLabelStyle(normalizeLandmarkRotation(lm.rotation))
                 return (
                   <div
                     key={lm.id}
@@ -547,7 +593,10 @@ export default function AdminFloorLayoutPage() {
                       borderRadius: landmarkBorderRadius(lm.shape),
                     }}
                   >
-                    <span className="flex h-full w-full items-center justify-center line-clamp-2 leading-tight">
+                    <span
+                      className="flex h-full w-full items-center justify-center line-clamp-2 leading-tight"
+                      style={labelStyle}
+                    >
                       {lm.label}
                     </span>
                   </div>
@@ -664,7 +713,8 @@ export default function AdminFloorLayoutPage() {
                     onChange={(e) =>
                       updateSelectedLandmark({ shape: normalizeLandmarkShape(e.target.value) })
                     }
-                    className="mt-0.5 w-full rounded-lg border border-zinc-200 px-2 py-1.5 text-sm"
+                    disabled={selectedLandmark.is_line}
+                    className="mt-0.5 w-full rounded-lg border border-zinc-200 px-2 py-1.5 text-sm disabled:opacity-50"
                   >
                     {VENUE_LANDMARK_SHAPES.map((s) => (
                       <option key={s.id} value={s.id}>
@@ -673,6 +723,37 @@ export default function AdminFloorLayoutPage() {
                     ))}
                   </select>
                 </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedLandmark.is_line}
+                    onChange={(e) => updateSelectedLandmark({ is_line: e.target.checked })}
+                    className="h-4 w-4 rounded border-zinc-300"
+                  />
+                  <span className="text-[11px] font-medium text-zinc-600">
+                    Architectural line (width/height = end offset)
+                  </span>
+                </label>
+                {!selectedLandmark.is_line ? (
+                  <label className="block">
+                    <span className="text-[11px] font-medium text-zinc-500">Label rotation</span>
+                    <select
+                      value={selectedLandmark.rotation}
+                      onChange={(e) =>
+                        updateSelectedLandmark({
+                          rotation: normalizeLandmarkRotation(Number(e.target.value)),
+                        })
+                      }
+                      className="mt-0.5 w-full rounded-lg border border-zinc-200 px-2 py-1.5 text-sm"
+                    >
+                      {VENUE_LANDMARK_ROTATIONS.map((deg) => (
+                        <option key={deg} value={deg}>
+                          {deg}°
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 <div>
                   <span className="text-[11px] font-medium text-zinc-500">Background color</span>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">

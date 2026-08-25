@@ -335,6 +335,7 @@ function AdminSeatBubble({
   showCoupleBadge,
   onSeatClick,
   isInteracting,
+  isLarge,
 }: {
   seatNum: number
   seatPx: number
@@ -352,6 +353,7 @@ function AdminSeatBubble({
     | ((seatNum: number, guest: AttendeeRow | null, anchor: DOMRectReadOnly) => void)
     | null
   isInteracting: boolean
+  isLarge: boolean
 }) {
   const title = guest
     ? `Seat ${seatNum} · ${guest.full_name}${party ? ` · ${party.title}` : ''}${showCoupleBadge ? ' · couple' : ''}`
@@ -360,6 +362,14 @@ function AdminSeatBubble({
       : `Seat ${seatNum} · empty`
 
   const ringClass = isActiveGroup ? 'ring-2 ring-[#5b38f2]/25' : ''
+  const bubblePx = isLarge ? seatPx : 32
+  const seatNodeStyle: CSSProperties = {
+    width: bubblePx,
+    height: bubblePx,
+    flexShrink: 0,
+    aspectRatio: '1',
+    ...GPU_LAYER_STYLE,
+  }
 
   const seatClass = isLocked
     ? 'border-zinc-500/50 bg-zinc-200/50'
@@ -408,14 +418,14 @@ function AdminSeatBubble({
             : undefined
         }
         data-seat-control
-        className={`flex items-center justify-center rounded-full border ${seatClass} ${ringClass} ${
+        className={`flex shrink-0 items-center justify-center rounded-full border ${seatClass} ${ringClass} ${
           onSeatClick
             ? isInteracting
               ? 'cursor-pointer'
               : 'cursor-pointer transition-transform hover:scale-[1.04]'
             : ''
         }`}
-        style={{ width: '100%', maxWidth: seatPx, aspectRatio: '1', ...GPU_LAYER_STYLE }}
+        style={seatNodeStyle}
       >
         {guest ? (
           guest.photo_url ? (
@@ -424,17 +434,30 @@ function AdminSeatBubble({
               src={guest.photo_url}
               alt=""
               className="h-full w-full rounded-full object-cover"
-              style={GPU_LAYER_STYLE}
+              style={{ ...GPU_LAYER_STYLE, width: bubblePx, height: bubblePx, flexShrink: 0, aspectRatio: '1' }}
             />
           ) : (
-            <span className="text-[10px] font-semibold text-zinc-900">
+            <span
+              className="flex items-center justify-center text-[10px] font-semibold text-zinc-900"
+              style={seatNodeStyle}
+            >
               {initialsFromName(guest.full_name)}
             </span>
           )
         ) : inPreview ? (
-          <span className="text-[10px] font-semibold text-zinc-700/80">{ghostInitial}</span>
+          <span
+            className="flex items-center justify-center text-[10px] font-semibold text-zinc-700/80"
+            style={seatNodeStyle}
+          >
+            {ghostInitial}
+          </span>
         ) : (
-          <span className="text-[10px] font-semibold text-zinc-400">{seatNum}</span>
+          <span
+            className="flex items-center justify-center text-[10px] font-semibold text-zinc-400"
+            style={seatNodeStyle}
+          >
+            {seatNum}
+          </span>
         )}
         {isLocked ? (
           <span
@@ -502,6 +525,7 @@ function EndCapSeat({
       showCoupleBadge={shared.remoteCoupleBadgeSeats.has(seatNum)}
       onSeatClick={shared.onSeatClick}
       isInteracting={shared.isInteracting}
+      isLarge={shared.isLarge}
     />
   )
 }
@@ -995,6 +1019,7 @@ function SideRow({
                   showCoupleBadge={remoteCoupleBadgeSeats.has(seatNum)}
                   onSeatClick={onSeatClick}
                   isInteracting={isInteracting}
+                  isLarge={isLarge}
                 />
               </div>
             )

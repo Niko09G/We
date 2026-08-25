@@ -18,15 +18,14 @@ import {
 } from '@/lib/seat-map-layout'
 import { teamPageAdminFormDefaults } from '@/lib/team-page-config'
 import { loadGuestFloorLayout } from '@/lib/admin-floor-layout'
+import { SeatMapLandmarksLayer, SeatMapSearchInput, type SeatMapLandmark } from '@/components/SeatMap'
 import {
   FLOOR_GRID_COLS,
   FLOOR_GRID_ROWS,
   gridRectToPercentBounds,
-  landmarkBorderRadius,
   normalizeFloorRect,
   resolveTableGridUnits,
   tableGridUnitsForCapacity,
-  type VenueLandmarkShape,
 } from '@/lib/floor-layout'
 import {
   groupTablesByTeamId,
@@ -58,16 +57,7 @@ type SeatFinderTable = {
   height_units: number
 }
 
-type MapLandmark = {
-  id: string
-  name: string
-  shape: VenueLandmarkShape
-  color: string | null
-  left: number
-  top: number
-  width: number
-  height: number
-}
+type MapLandmark = SeatMapLandmark
 
 type GuestWithTable = SeatFinderGuest & {
   table_name: string
@@ -586,6 +576,12 @@ export function SeatingMapPanel({
                 name: lm.label,
                 shape: lm.shape,
                 color: lm.color,
+                rotation: lm.rotation,
+                is_line: lm.is_line,
+                grid_x: lm.grid_x,
+                grid_y: lm.grid_y,
+                width_units: lm.width_units,
+                height_units: lm.height_units,
                 ...bounds,
               }
             })
@@ -969,8 +965,9 @@ export function SeatingMapPanel({
       className={`relative shrink-0 ${showSectionHeading ? 'mt-4' : layout === 'embedded' ? 'mt-0' : 'mt-4'}`}
       style={accentCssVar}
     >
-      <input
-        ref={inputRef}
+      <SeatMapSearchInput
+        inputRef={inputRef}
+        accentCssVar={accentCssVar}
         value={search}
         onChange={(e) => {
           setSearch(e.target.value)
@@ -982,12 +979,6 @@ export function SeatingMapPanel({
             selectGuest(matching[0]!)
           }
         }}
-        placeholder="Search name"
-        className={`relative z-10 w-full rounded-full border border-zinc-200 bg-zinc-50/80 px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition-colors duration-200 focus:bg-white ${
-          accentCssVar
-            ? 'focus:border-[var(--viewer-accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--viewer-accent)_28%,transparent)]'
-            : 'focus:border-violet-300 focus:ring-2 focus:ring-violet-200/60'
-        }`}
       />
       {search.trim().length > 0 && !searchResultsDismissed ? (
         <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-auto rounded-2xl border border-zinc-200 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
@@ -1101,24 +1092,10 @@ export function SeatingMapPanel({
                 : 'none',
             }}
           >
-            {landmarks.map((lm) => (
-              <div
-                key={lm.id}
-                className="absolute z-[5] box-border overflow-hidden border border-zinc-200/90 px-1.5 py-1 text-center text-[10px] font-medium tracking-wide text-zinc-600 shadow-sm"
-                style={{
-                  left: `${lm.left}%`,
-                  top: `${lm.top}%`,
-                  width: `${lm.width}%`,
-                  height: `${lm.height}%`,
-                  backgroundColor: lm.color ?? '#ffffff',
-                  borderRadius: landmarkBorderRadius(lm.shape),
-                }}
-              >
-                <span className="flex h-full w-full items-center justify-center leading-tight">
-                  {lm.name}
-                </span>
-              </div>
-            ))}
+            <SeatMapLandmarksLayer
+              landmarks={landmarks}
+              accentColor={viewerAccentColor ?? undefined}
+            />
             {tablesUsed.map((table) => {
               const isSelectedTable = selectedGuest?.table_id === table.id
               const isSiblingTable = Boolean(
