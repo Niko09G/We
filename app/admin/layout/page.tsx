@@ -25,6 +25,7 @@ import {
   landmarkLabelStyle,
   landmarkLineEndpoints,
   normalizeFloorRect,
+  normalizeLandmarkLineRect,
   normalizeLandmarkRotation,
   normalizeLandmarkShape,
   resolveTableGridUnits,
@@ -55,8 +56,11 @@ function patchTableRect(t: FloorLayoutTable, rect: FloorGridRect): FloorLayoutTa
   return { ...t, ...rect }
 }
 
-function patchLandmarkRect(l: VenueLandmarkRow, rect: FloorGridRect): VenueLandmarkRow {
-  return { ...l, ...rect }
+function patchLandmarkRect(l: VenueLandmarkRow, rect: Partial<FloorGridRect>): VenueLandmarkRow {
+  const normalized = l.is_line
+    ? normalizeLandmarkLineRect({ ...l, ...rect })
+    : normalizeFloorRect({ ...l, ...rect }, FLOOR_DEFAULT_LANDMARK_SPAN)
+  return { ...l, ...normalized }
 }
 
 /** Auto-place tables without coordinates using team lanes (matches guest map fallback). */
@@ -123,7 +127,11 @@ function GridNumberInput({
         min={min}
         max={max}
         value={value}
-        onChange={(e) => onChange(Math.trunc(Number(e.target.value) || min))}
+        onChange={(e) => {
+          const parsed = Math.trunc(Number(e.target.value))
+          const fallback = min > 0 ? min : 0
+          onChange(Number.isFinite(parsed) ? parsed : fallback)
+        }}
         className="mt-0.5 w-full rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-900"
       />
     </label>
@@ -138,11 +146,20 @@ export default function AdminFloorLayoutPage() {
   const [error, setError] = useState<string | null>(null)
   const [banner, setBanner] = useState<string | null>(null)
   const [selected, setSelected] = useState<DragTarget | null>(null)
-  const [dragging, setDragging] = useState<{
-    target: DragTarget
-    offsetCol: number
-    offsetRow: number
-  } | null>(null)
+  const [dragging, setDragging] = useState<
+    | {
+        mode: 'move'
+        target: DragTarget
+        offsetCol: number
+        offsetRow: number
+      }
+    | {
+        mode: 'line-end'
+        landmarkId: string
+        endpoint: 'start' | 'end'
+      }
+    | null
+  >(null)
 
   const canvasRef = useRef<HTMLDivElement | null>(null)
 
@@ -238,18 +255,67 @@ export default function AdminFloorLayoutPage() {
 
         const landmark = prev.landmarks.find((l) => l.id === target.id)
         if (!landmark) return prev
-        const rect = normalizeFloorRect(
-          {
-            grid_x: col - offsetCol,
-            grid_y: row - offsetRow,
-            width_units: landmark.width_units,
-            height_units: landmark.height_units,
-          },
-          FLOOR_DEFAULT_LANDMARK_SPAN
-        )
+        const rect = landmark.is_line
+          ? normalizeLandmarkLineRect({
+              grid_x: col - offsetCol,
+              grid_y: row - offsetRow,
+              width_units: landmark.width_units,
+              height_units: landmark.height_units,
+            })
+          : normalizeFloorRect(
+              {
+                grid_x: col - offsetCol,
+                grid_y: row - offsetRow,
+                width_units: landmark.width_units,
+                height_units: landmark.height_units,
+              },
+              FLOOR_DEFAULT_LANDMARK_SPAN
+            )
         return {
           ...prev,
-          landmarks: prev.landmarks.map((l) => (l.id === target.id ? patchLandmarkRect(l, rect) : l)),
+          landmarks: prev.landmarks.map((l) =>
+            l.id === target.id ? patchLandmarkRect(l, rect) : l
+          ),
+        }
+      })
+    },
+    []
+  )
+
+  const moveLineEndpoint = useCallback(
+    (landmarkId: string, endpoint: 'start' | 'end', col: number, row: number) => {
+      setDraft((prev) => {
+        const landmark = prev.landmarks.find((l) => l.id === landmarkId)
+        if (!landmark?.is_line) return prev
+
+        if (endpoint === 'end') {
+          return {
+            ...prev,
+            landmarks: prev.landmarks.map((l) =>
+              l.id === landmarkId
+                ? patchLandmarkRect(l, {
+                    width_units: col - l.grid_x,
+                    height_units: row - l.grid_y,
+                  })
+                : l
+            ),
+          }
+        }
+
+        const endCol = landmark.grid_x + landmark.width_units
+        const endRow = landmark.grid_y + landmark.height_units
+        return {
+          ...prev,
+          landmarks: prev.landmarks.map((l) =>
+            l.id === landmarkId
+              ? patchLandmarkRect(l, {
+                  grid_x: col,
+                  grid_y: row,
+                  width_units: endCol - col,
+                  height_units: endRow - row,
+                })
+              : l
+          ),
         }
       })
     },
@@ -287,14 +353,38 @@ export default function AdminFloorLayoutPage() {
       }
     }
 
-    setDragging({ target, offsetCol, offsetRow })
+    setDragging({ mode: 'move', target, offsetCol, offsetRow })
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
   }
 
   const onCanvasPointerMove = (e: React.PointerEvent) => {
     if (!dragging) return
     const { col, row } = cellFromPointer(e.clientX, e.clientY)
+    if (dragging.mode === 'line-end') {
+      moveLineEndpoint(dragging.landmarkId, dragging.endpoint, col, row)
+      return
+    }
     moveTarget(dragging.target, col, row, dragging.offsetCol, dragging.offsetRow)
+  }
+
+  const onLineHandlePointerDown = (
+    e: React.PointerEvent,
+    landmarkId: string,
+    endpoint: 'start' | 'end'
+  ) => {
+    e.stopPropagation()
+    setSelected({ type: 'landmark', id: landmarkId })
+    setDragging({ mode: 'line-end', landmarkId, endpoint })
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  const onLineHandlePointerMove = (
+    e: React.PointerEvent,
+    landmarkId: string
+  ) => {
+    if (dragging?.mode !== 'line-end' || dragging.landmarkId !== landmarkId) return
+    const { col, row } = cellFromPointer(e.clientX, e.clientY)
+    moveLineEndpoint(dragging.landmarkId, dragging.endpoint, col, row)
   }
 
   const endDrag = (e: React.PointerEvent) => {
@@ -306,6 +396,17 @@ export default function AdminFloorLayoutPage() {
       }
     }
     setDragging(null)
+  }
+
+  const releaseDragFromHandle = (e: React.PointerEvent) => {
+    if (dragging?.mode === 'line-end') {
+      try {
+        ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+      } catch {
+        /* ignore */
+      }
+      setDragging(null)
+    }
   }
 
   const updateSelectedTable = (patch: Partial<FloorGridRect>) => {
@@ -329,10 +430,9 @@ export default function AdminFloorLayoutPage() {
 
   const updateSelectedLandmark = (patch: Partial<VenueLandmarkRow>) => {
     if (!selectedLandmark) return
-    const rect = normalizeFloorRect(
-      { ...selectedLandmark, ...patch },
-      FLOOR_DEFAULT_LANDMARK_SPAN
-    )
+    const rect = selectedLandmark.is_line
+      ? normalizeLandmarkLineRect({ ...selectedLandmark, ...patch })
+      : normalizeFloorRect({ ...selectedLandmark, ...patch }, FLOOR_DEFAULT_LANDMARK_SPAN)
     setDraft((prev) => ({
       ...prev,
       landmarks: prev.landmarks.map((l) =>
@@ -537,6 +637,7 @@ export default function AdminFloorLayoutPage() {
                 const isSel = selected?.type === 'landmark' && selected.id === lm.id
                 if (lm.is_line) {
                   const { x1, y1, x2, y2 } = landmarkLineEndpoints(lm)
+                  const stroke = lm.color ?? '#3b82f6'
                   return (
                     <svg
                       key={lm.id}
@@ -554,8 +655,9 @@ export default function AdminFloorLayoutPage() {
                         y1={y1}
                         x2={x2}
                         y2={y2}
-                        stroke={lm.color ?? '#a1a1aa'}
-                        strokeWidth={isSel ? 0.55 : 0.4}
+                        stroke={stroke}
+                        strokeWidth={isSel ? 4 : 3}
+                        strokeDasharray="6 6"
                         strokeLinecap="round"
                         vectorEffect="non-scaling-stroke"
                       />
@@ -565,10 +667,42 @@ export default function AdminFloorLayoutPage() {
                         x2={x2}
                         y2={y2}
                         stroke="transparent"
-                        strokeWidth={2.5}
+                        strokeWidth={12}
                         strokeLinecap="round"
                         vectorEffect="non-scaling-stroke"
                       />
+                      {isSel ? (
+                        <>
+                          <circle
+                            cx={x1}
+                            cy={y1}
+                            r={1.2}
+                            fill="#ffffff"
+                            stroke="#3b82f6"
+                            strokeWidth={0.35}
+                            vectorEffect="non-scaling-stroke"
+                            className="cursor-crosshair"
+                            onPointerDown={(ev) => onLineHandlePointerDown(ev, lm.id, 'start')}
+                            onPointerMove={(ev) => onLineHandlePointerMove(ev, lm.id)}
+                            onPointerUp={releaseDragFromHandle}
+                            onPointerCancel={releaseDragFromHandle}
+                          />
+                          <circle
+                            cx={x2}
+                            cy={y2}
+                            r={1.2}
+                            fill="#ffffff"
+                            stroke="#3b82f6"
+                            strokeWidth={0.35}
+                            vectorEffect="non-scaling-stroke"
+                            className="cursor-crosshair"
+                            onPointerDown={(ev) => onLineHandlePointerDown(ev, lm.id, 'end')}
+                            onPointerMove={(ev) => onLineHandlePointerMove(ev, lm.id)}
+                            onPointerUp={releaseDragFromHandle}
+                            onPointerCancel={releaseDragFromHandle}
+                          />
+                        </>
+                      ) : null}
                     </svg>
                   )
                 }
@@ -727,11 +861,29 @@ export default function AdminFloorLayoutPage() {
                   <input
                     type="checkbox"
                     checked={selectedLandmark.is_line}
-                    onChange={(e) => updateSelectedLandmark({ is_line: e.target.checked })}
+                    onChange={(e) => {
+                      const is_line = e.target.checked
+                      updateSelectedLandmark({
+                        is_line,
+                        ...(is_line
+                          ? {
+                              color: selectedLandmark.color ?? '#3b82f6',
+                              width_units:
+                                selectedLandmark.width_units === 0
+                                  ? 4
+                                  : selectedLandmark.width_units,
+                              height_units:
+                                selectedLandmark.height_units === 0
+                                  ? 4
+                                  : selectedLandmark.height_units,
+                            }
+                          : {}),
+                      })
+                    }}
                     className="h-4 w-4 rounded border-zinc-300"
                   />
                   <span className="text-[11px] font-medium text-zinc-600">
-                    Architectural line (width/height = end offset)
+                    Boundary line (drag endpoints for any angle)
                   </span>
                 </label>
                 {!selectedLandmark.is_line ? (
@@ -803,24 +955,28 @@ export default function AdminFloorLayoutPage() {
                     }
                   />
                   <GridNumberInput
-                    label="Width"
+                    label={selectedLandmark.is_line ? 'End ΔX' : 'Width'}
                     value={selectedLandmark.width_units}
-                    min={1}
+                    min={selectedLandmark.is_line ? -FLOOR_GRID_COLS : 1}
                     max={FLOOR_GRID_COLS}
                     onChange={(v) =>
                       updateSelectedLandmark({
-                        width_units: clampGridSpan(v, 1, FLOOR_GRID_COLS),
+                        width_units: selectedLandmark.is_line
+                          ? v
+                          : clampGridSpan(v, 1, FLOOR_GRID_COLS),
                       })
                     }
                   />
                   <GridNumberInput
-                    label="Height"
+                    label={selectedLandmark.is_line ? 'End ΔY' : 'Height'}
                     value={selectedLandmark.height_units}
-                    min={1}
+                    min={selectedLandmark.is_line ? -FLOOR_GRID_ROWS : 1}
                     max={FLOOR_GRID_ROWS}
                     onChange={(v) =>
                       updateSelectedLandmark({
-                        height_units: clampGridSpan(v, 1, FLOOR_GRID_ROWS),
+                        height_units: selectedLandmark.is_line
+                          ? v
+                          : clampGridSpan(v, 1, FLOOR_GRID_ROWS),
                       })
                     }
                   />

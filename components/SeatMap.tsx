@@ -45,23 +45,26 @@ export function SeatMapSearchInput({
   ...inputProps
 }: SeatMapSearchInputProps) {
   return (
-    <div className={`relative ${className}`} style={accentCssVar}>
+    <div
+      className={`relative rounded-full p-[2px] ${className}`}
+      style={accentCssVar}
+    >
       <div
-        className="pointer-events-none absolute -inset-[2px] overflow-hidden rounded-full"
+        className="seat-map-search-border pointer-events-none absolute inset-0 rounded-full"
         aria-hidden
-      >
-        <div className="seat-map-search-glow absolute inset-[-50%] rounded-full" />
-      </div>
-      <input
-        ref={inputRef}
-        placeholder="Search name"
-        className={`relative z-10 w-full rounded-full border border-zinc-200/90 bg-zinc-50/90 px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition-colors duration-200 focus:border-transparent focus:bg-white ${
-          accentCssVar
-            ? 'focus:ring-2 focus:ring-[color-mix(in_srgb,var(--viewer-accent)_28%,transparent)]'
-            : 'focus:ring-2 focus:ring-violet-200/60'
-        }`}
-        {...inputProps}
       />
+      <div className="relative rounded-full bg-white">
+        <input
+          ref={inputRef}
+          placeholder="Search name"
+          className={`relative z-10 w-full rounded-full border-0 bg-zinc-50/90 px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition-colors duration-200 focus:bg-white ${
+            accentCssVar
+              ? 'focus:ring-2 focus:ring-[color-mix(in_srgb,var(--viewer-accent)_28%,transparent)]'
+              : 'focus:ring-2 focus:ring-violet-200/60'
+          }`}
+          {...inputProps}
+        />
+      </div>
     </div>
   )
 }
@@ -125,7 +128,8 @@ export function SeatMapLandmarksLayer({ landmarks, accentColor }: SeatMapLandmar
                 x2={x2}
                 y2={y2}
                 stroke={stroke}
-                strokeWidth={0.35}
+                strokeWidth={4}
+                strokeDasharray="6 6"
                 strokeLinecap="round"
                 vectorEffect="non-scaling-stroke"
                 opacity={0.92}

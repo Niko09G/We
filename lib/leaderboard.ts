@@ -7,6 +7,7 @@ import {
   pickPrimaryTableForTeam,
   resolveTeamId,
 } from '@/lib/table-teams'
+import { resolveTeamPageConfig } from '@/lib/team-page-config'
 
 export type TableRow = {
   id: string
@@ -69,6 +70,10 @@ export type LeaderboardEntry = {
   tableName: string
   /** @deprecated Use `teamColor`. */
   tableColor: string | null
+  /** Optional team media (page config / teams row). */
+  avatar_url?: string | null
+  logo_url?: string | null
+  image?: string | null
 }
 
 export function leaderboardEntryTeamKey(entry: LeaderboardEntry): string {
@@ -95,7 +100,7 @@ export async function fetchLeaderboardBundleWithClient(
   const [tablesRes, missionsRes, completionsRes, approvedSubsRes] = await Promise.all([
     client
       .from('tables')
-      .select('id,name,color,team_id,teams(id,name)')
+      .select('id,name,color,team_id,page_config,teams(id,name)')
       .eq('is_archived', false)
       .order('name'),
     client
@@ -118,7 +123,14 @@ export async function fetchLeaderboardBundleWithClient(
     throw new Error(approvedSubsRes.error.message || 'Failed to load approved submissions.')
 
   type TableWithTeamRow = TableRow & {
+    page_config?: unknown
     teams?: { id: string; name: string } | { id: string; name: string }[] | null
+  }
+
+  const tablePageConfig = new Map<string, unknown>()
+  for (const raw of tablesRes.data ?? []) {
+    const row = raw as TableWithTeamRow
+    tablePageConfig.set(row.id as string, row.page_config ?? null)
   }
 
   const tables = (tablesRes.data ?? []).map((t) => {
@@ -216,6 +228,12 @@ export async function fetchLeaderboardBundleWithClient(
     const totalPoints = oneTimePoints + repeatablePoints
     const remainingCount = Math.max(0, totalMissions - completedCount)
     const teamName = teamNameById.get(teamId) || primary.name
+    const resolvedPage = resolveTeamPageConfig(tablePageConfig.get(primary.id) ?? null, {
+      tableColor: primary.color,
+      tableName: primary.name,
+    })
+    const avatar_url = resolvedPage.hero.avatarImage.url?.trim() || null
+    const logo_url = resolvedPage.hero.heroImage.url?.trim() || null
     return {
       teamId,
       teamName,
@@ -227,6 +245,9 @@ export async function fetchLeaderboardBundleWithClient(
       tableId: teamId,
       tableName: teamName,
       tableColor: primary.color,
+      avatar_url,
+      logo_url,
+      image: avatar_url ?? logo_url,
     }
   })
 

@@ -1,22 +1,73 @@
 'use client'
 
+import { useEffect, useMemo, useState } from 'react'
 import { TeamAvatar } from '@/components/guest/TeamAvatar'
 import { RewardUnitIcon } from '@/components/reward/RewardUnitIcon'
 import type { LeaderboardEntry } from '@/lib/leaderboard'
 import { leaderboardEntryIncludesTable } from '@/lib/table-teams'
 import type { GuestEmblemsSettingsValue } from '@/lib/guest-emblem-config'
 import { COIN_SIZE, safeRewardPoints } from '@/lib/mission-ui'
+import { supabase } from '@/lib/supabase/client'
+
+function firstNonEmpty(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (trimmed) return trimmed
+  }
+  return null
+}
 
 function resolveTeamAvatarUrl(
-  tableId: string,
+  row: LeaderboardEntry,
   tableAvatars: Record<string, string>,
-  guestEmblems: GuestEmblemsSettingsValue
+  guestEmblems: GuestEmblemsSettingsValue,
+  guestAvatarsByTableId: Record<string, string>
 ): string | null {
-  return (
-    tableAvatars[tableId]?.trim() ||
-    guestEmblems.team_emblem_by_table_id?.[tableId]?.trim() ||
-    null
+  const teamKey = row.teamId || row.tableId
+  const memberIds = row.memberTableIds ?? []
+
+  const fromTeam = firstNonEmpty(row.avatar_url, row.logo_url, row.image)
+  if (fromTeam) return fromTeam
+
+  const fromTableAvatars = firstNonEmpty(
+    tableAvatars[teamKey],
+    ...memberIds.map((id) => tableAvatars[id])
   )
+  if (fromTableAvatars) return fromTableAvatars
+
+  const emblemMap = guestEmblems.team_emblem_by_table_id
+  const fromEmblems = firstNonEmpty(
+    emblemMap?.[teamKey],
+    ...memberIds.map((id) => emblemMap?.[id])
+  )
+  if (fromEmblems) return fromEmblems
+
+  return firstNonEmpty(...memberIds.map((id) => guestAvatarsByTableId[id]))
+}
+
+async function fetchGuestAvatarsByTableId(
+  tableIds: string[]
+): Promise<Record<string, string>> {
+  if (tableIds.length === 0) return {}
+
+  const { data, error } = await supabase
+    .from('attendees')
+    .select('table_id, seat_number, photo_url')
+    .in('table_id', tableIds)
+    .not('seat_number', 'is', null)
+    .eq('is_archived', false)
+    .order('seat_number', { ascending: true })
+
+  if (error || !data) return {}
+
+  const out: Record<string, string> = {}
+  for (const row of data) {
+    const tableId = row.table_id as string | null
+    const photo = (row.photo_url as string | null)?.trim()
+    if (!tableId || !photo || out[tableId]) continue
+    out[tableId] = photo
+  }
+  return out
 }
 
 export type LeaderboardProps = {
@@ -43,6 +94,36 @@ export function Leaderboard({
   youGradientBottom,
   iconTintColor,
 }: LeaderboardProps) {
+  const [guestAvatarsByTableId, setGuestAvatarsByTableId] = useState<
+    Record<string, string>
+  >({})
+
+  const guestAvatarTableIdsKey = useMemo(() => {
+    if (!rows.length) return ''
+    const ids = new Set<string>()
+    for (const row of rows) {
+      for (const memberId of row.memberTableIds ?? []) {
+        ids.add(memberId)
+      }
+    }
+    return [...ids].sort().join(',')
+  }, [rows])
+
+  useEffect(() => {
+    if (!guestAvatarTableIdsKey) {
+      setGuestAvatarsByTableId({})
+      return
+    }
+    let cancelled = false
+    const tableIds = guestAvatarTableIdsKey.split(',')
+    void fetchGuestAvatarsByTableId(tableIds).then((next) => {
+      if (!cancelled) setGuestAvatarsByTableId(next)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [guestAvatarTableIdsKey])
+
   if (rows.length === 0) return null
 
   return (
@@ -70,7 +151,12 @@ export function Leaderboard({
               <span className="tabular-nums text-white">{i + 1}.</span>
               <TeamAvatar
                 name={row.teamName || row.tableName}
-                avatarUrl={resolveTeamAvatarUrl(row.tableId, tableAvatars, guestEmblems)}
+                avatarUrl={resolveTeamAvatarUrl(
+                  row,
+                  tableAvatars,
+                  guestEmblems,
+                  guestAvatarsByTableId
+                )}
                 tableColor={row.teamColor ?? row.tableColor}
               />
               <span className="truncate">{row.teamName || row.tableName}</span>

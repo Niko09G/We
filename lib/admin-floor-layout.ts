@@ -3,6 +3,7 @@ import {
   FLOOR_DEFAULT_LANDMARK_SPAN,
   FLOOR_DEFAULT_TABLE_SPAN,
   normalizeFloorRect,
+  normalizeLandmarkLineRect,
   normalizeLandmarkRotation,
   normalizeLandmarkShape,
   resolveTableGridUnits,
@@ -114,15 +115,23 @@ function resolveLandmarkKind(row: Record<string, unknown>): string {
 }
 
 function parseLandmarkRow(row: Record<string, unknown>): VenueLandmarkRow {
-  const rect = normalizeFloorRect(
-    {
-      grid_x: finiteInt(row.grid_x),
-      grid_y: finiteInt(row.grid_y),
-      width_units: finiteInt(row.width_units),
-      height_units: finiteInt(row.height_units),
-    },
-    FLOOR_DEFAULT_LANDMARK_SPAN
-  )
+  const isLine = Boolean(row.is_line)
+  const rect = isLine
+    ? normalizeLandmarkLineRect({
+        grid_x: finiteInt(row.grid_x),
+        grid_y: finiteInt(row.grid_y),
+        width_units: finiteInt(row.width_units),
+        height_units: finiteInt(row.height_units),
+      })
+    : normalizeFloorRect(
+        {
+          grid_x: finiteInt(row.grid_x),
+          grid_y: finiteInt(row.grid_y),
+          width_units: finiteInt(row.width_units),
+          height_units: finiteInt(row.height_units),
+        },
+        FLOOR_DEFAULT_LANDMARK_SPAN
+      )
   const colorRaw = row.color
   return {
     id: row.id as string,
@@ -444,7 +453,9 @@ async function upsertLandmarkRow(
 export async function upsertVenueLandmark(
   input: Partial<VenueLandmarkRow> & { label: string }
 ): Promise<VenueLandmarkRow> {
-  const rect = normalizeFloorRect(input, FLOOR_DEFAULT_LANDMARK_SPAN)
+  const rect = Boolean(input.is_line)
+    ? normalizeLandmarkLineRect(input)
+    : normalizeFloorRect(input, FLOOR_DEFAULT_LANDMARK_SPAN)
   if (!input.label.trim()) throw new Error('Landmark label is required.')
   return upsertLandmarkRow(input, rect)
 }

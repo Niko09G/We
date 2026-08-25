@@ -997,12 +997,16 @@ export default function MissionsTablePage({
   useEffect(() => {
     if (!leaderboardTableIdsKey) return
     let cancelled = false
-    const ids = leaderboardTableIdsKey.split(',')
+    const tableIds = [
+      ...new Set(
+        leaderboardRows.flatMap((entry) => entry.memberTableIds ?? [entry.teamId])
+      ),
+    ]
     void (async () => {
       const { data, error } = await supabase
         .from('tables')
         .select('id, name, color, page_config')
-        .in('id', ids)
+        .in('id', tableIds)
       if (cancelled || error || !data) return
       const next: Record<string, string> = {}
       for (const row of data) {
@@ -1018,7 +1022,7 @@ export default function MissionsTablePage({
     return () => {
       cancelled = true
     }
-  }, [leaderboardTableIdsKey])
+  }, [leaderboardTableIdsKey, leaderboardRows])
 
   const statusFor = useMemo(() => {
     const completed = completedMissionIds

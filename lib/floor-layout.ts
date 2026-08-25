@@ -79,19 +79,37 @@ export function normalizeLandmarkRotation(value: unknown): VenueLandmarkRotation
   return 0
 }
 
-/** CSS transform + writing mode for rotated landmark labels. */
+/** CSS writing mode for sideways landmark labels (avoids rotated bounding boxes). */
 export function landmarkLabelStyle(rotation: VenueLandmarkRotation): {
+  writingMode?: 'vertical-rl' | 'vertical-lr'
+  textOrientation?: 'mixed'
   transform?: string
-  writingMode?: 'vertical-rl'
 } {
   if (rotation === 0) return {}
   if (rotation === 90) {
-    return { transform: 'rotate(90deg)', writingMode: 'vertical-rl' }
+    return { writingMode: 'vertical-rl', textOrientation: 'mixed' }
   }
   if (rotation === 180) {
     return { transform: 'rotate(180deg)' }
   }
-  return { transform: 'rotate(270deg)', writingMode: 'vertical-rl' }
+  return { writingMode: 'vertical-lr', textOrientation: 'mixed' }
+}
+
+function clampLineDelta(value: number | undefined, maxAbs: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback
+  return Math.min(maxAbs, Math.max(-maxAbs, Math.trunc(value!)))
+}
+
+/** Line landmarks: grid_x/grid_y = start; width/height = signed end offset (any angle). */
+export function normalizeLandmarkLineRect(rect: Partial<FloorGridRect>): FloorGridRect {
+  const grid_x = clampGridCoord(rect.grid_x ?? 0, 1, FLOOR_GRID_COLS)
+  const grid_y = clampGridCoord(rect.grid_y ?? 0, 1, FLOOR_GRID_ROWS)
+  return {
+    grid_x,
+    grid_y,
+    width_units: clampLineDelta(rect.width_units, FLOOR_GRID_COLS, 4),
+    height_units: clampLineDelta(rect.height_units, FLOOR_GRID_ROWS, 4),
+  }
 }
 
 /** Grid-space line endpoints for architectural overlays (percent 0–100). */
