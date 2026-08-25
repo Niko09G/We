@@ -44,6 +44,16 @@ export default function MissionsEntryPage() {
   const [tables, setTables] = useState<GuestTable[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showBackToTop, setShowBackToTop] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => {
+      setShowBackToTop(window.scrollY > 240)
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -192,6 +202,19 @@ export default function MissionsEntryPage() {
             <div className="mt-1 text-xs text-red-800/90">{error}</div>
           </div>
         )}
+      </div>
+
+      <div className="mx-auto mt-8 flex w-full max-w-md justify-center px-4 pb-8">
+        <button
+          type="button"
+          aria-label="Back to top"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className={`rounded-full border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-50 active:scale-95 ${
+            showBackToTop ? 'opacity-100' : 'opacity-70'
+          }`}
+        >
+          Back to top
+        </button>
       </div>
     </main>
   )

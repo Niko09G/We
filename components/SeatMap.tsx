@@ -1,6 +1,13 @@
 'use client'
 
-import type { CSSProperties, InputHTMLAttributes, Ref } from 'react'
+import type {
+  CSSProperties,
+  InputHTMLAttributes,
+  MutableRefObject,
+  PointerEvent as ReactPointerEvent,
+  Ref,
+  WheelEvent as ReactWheelEvent,
+} from 'react'
 import {
   FLOOR_GRID_COLS,
   FLOOR_GRID_ROWS,
@@ -24,6 +31,129 @@ export const SEAT_MAP_ZOOM_MAX = 1.28
 export const SEAT_MAP_PAN_PADDING = 0
 
 export type SeatMapPan = { x: number; y: number }
+
+/** Allow horizontal map pan while letting vertical swipes scroll the page. */
+export const SEAT_MAP_VIEWPORT_TOUCH_ACTION = 'pan-x'
+
+export type SeatMapPointerDragState = {
+  sx: number
+  sy: number
+  px: number
+  py: number
+}
+
+export type SeatMapPointerHandlers = {
+  onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void
+  onPointerMove: (e: ReactPointerEvent<HTMLElement>) => void
+  onPointerUp: (e: ReactPointerEvent<HTMLElement>) => void
+  onPointerCancel: (e: ReactPointerEvent<HTMLElement>) => void
+  onWheel: (e: ReactWheelEvent<HTMLElement>) => void
+}
+
+type CreateSeatMapPointerHandlersArgs = {
+  pan: SeatMapPan
+  zoom: number
+  dragging: boolean
+  setDragging: (v: boolean) => void
+  setPan: (pan: SeatMapPan) => void
+  dragRef: MutableRefObject<SeatMapPointerDragState | null>
+  dragMovedRef: MutableRefObject<boolean>
+  pendingDragRef: MutableRefObject<SeatMapPointerDragState | null>
+  applyBoundedTransform: (
+    pan: SeatMapPan,
+    zoom: number
+  ) => { pan: SeatMapPan; zoom: number }
+  setTransitionTransform: (v: boolean) => void
+  onNeutralBackdropTap?: (e: ReactPointerEvent<HTMLElement>) => void
+}
+
+/**
+ * Pan the map horizontally only; vertical movement passes through to page scroll.
+ */
+export function createSeatMapPointerHandlers({
+  pan,
+  zoom,
+  dragging,
+  setDragging,
+  setPan,
+  dragRef,
+  dragMovedRef,
+  pendingDragRef,
+  applyBoundedTransform,
+  setTransitionTransform,
+  onNeutralBackdropTap,
+}: CreateSeatMapPointerHandlersArgs): SeatMapPointerHandlers {
+  const endDrag = (e: ReactPointerEvent<HTMLElement>) => {
+    if (dragging && !dragMovedRef.current && onNeutralBackdropTap) {
+      onNeutralBackdropTap(e)
+    }
+    if (dragging) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      } catch {
+        /* ignore */
+      }
+    }
+    setDragging(false)
+    dragRef.current = null
+    pendingDragRef.current = null
+  }
+
+  return {
+    onPointerDown: (e) => {
+      if (e.button !== 0) return
+      const t = e.target as HTMLElement
+      if (t.closest('button')) return
+      dragMovedRef.current = false
+      setTransitionTransform(false)
+      pendingDragRef.current = {
+        sx: e.clientX,
+        sy: e.clientY,
+        px: pan.x,
+        py: pan.y,
+      }
+    },
+    onPointerMove: (e) => {
+      const pending = pendingDragRef.current
+      if (!dragging && !pending) return
+
+      if (!dragging && pending) {
+        const dx = e.clientX - pending.sx
+        const dy = e.clientY - pending.sy
+        if (Math.hypot(dx, dy) <= 4) return
+        if (Math.abs(dy) > Math.abs(dx)) {
+          pendingDragRef.current = null
+          return
+        }
+        setDragging(true)
+        dragRef.current = pending
+        pendingDragRef.current = null
+        e.currentTarget.setPointerCapture(e.pointerId)
+      }
+
+      const d = dragRef.current
+      if (!d) return
+      const dx = e.clientX - d.sx
+      if (Math.abs(dx) > 4) dragMovedRef.current = true
+      const bounded = applyBoundedTransform(
+        { x: d.px + dx, y: d.py },
+        zoom
+      )
+      setPan(bounded.pan)
+    },
+    onPointerUp: endDrag,
+    onPointerCancel: endDrag,
+    onWheel: (e) => {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return
+      e.preventDefault()
+      const bounded = applyBoundedTransform(
+        { x: pan.x - e.deltaX, y: pan.y },
+        zoom
+      )
+      setPan(bounded.pan)
+    },
+  }
+}
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n))

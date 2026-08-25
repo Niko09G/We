@@ -18,7 +18,7 @@ import {
 } from '@/lib/seat-map-layout'
 import { teamPageAdminFormDefaults } from '@/lib/team-page-config'
 import { loadGuestFloorLayout } from '@/lib/admin-floor-layout'
-import { SeatMapLandmarksLayer, SeatMapSearchInput, type SeatMapLandmark, SEAT_MAP_WORLD_WIDTH, SEAT_MAP_WORLD_HEIGHT, SEAT_MAP_ZOOM_MIN, SEAT_MAP_ZOOM_STEP, SEAT_MAP_ZOOM_DEFAULT, SEAT_MAP_ZOOM_MAX, clampSeatMapTransform } from '@/components/SeatMap'
+import { SeatMapLandmarksLayer, SeatMapSearchInput, type SeatMapLandmark, SEAT_MAP_WORLD_WIDTH, SEAT_MAP_WORLD_HEIGHT, SEAT_MAP_ZOOM_MIN, SEAT_MAP_ZOOM_STEP, SEAT_MAP_ZOOM_DEFAULT, SEAT_MAP_ZOOM_MAX, clampSeatMapTransform, createSeatMapPointerHandlers, SEAT_MAP_VIEWPORT_TOUCH_ACTION } from '@/components/SeatMap'
 import {
   FLOOR_GRID_COLS,
   FLOOR_GRID_ROWS,
@@ -446,6 +446,7 @@ export function SeatingMapPanel({
   const inputRef = useRef<HTMLInputElement | null>(null)
   const tableRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const dragRef = useRef<DragRef | null>(null)
+  const pendingDragRef = useRef<DragRef | null>(null)
   const dragMovedRef = useRef(false)
   const selectedIdRef = useRef<string | null>(null)
   const panZoomRef = useRef({ x: 0, y: 0, zoom: ZOOM_DEFAULT })
@@ -855,27 +856,6 @@ export function SeatingMapPanel({
     }
   }, [loading])
 
-  /** While dragging the map, block page scroll on touch devices. */
-  useEffect(() => {
-    if (!dragging) return
-    const blockScroll = (e: TouchEvent) => {
-      e.preventDefault()
-    }
-    document.body.addEventListener('touchmove', blockScroll, { passive: false })
-    return () => document.body.removeEventListener('touchmove', blockScroll)
-  }, [dragging])
-
-  /** Wheel over map stays on the map (no competing page scroll). */
-  useEffect(() => {
-    const el = viewportRef.current
-    if (!el) return
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault()
-    }
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [loading])
-
   const selectGuest = (g: GuestWithTable) => {
     setSelectedId(g.id)
     setSearch(g.full_name)
@@ -925,38 +905,19 @@ export function SeatingMapPanel({
     setPan(bounded.pan)
   }
 
-  const onPointerDownViewport = (e: React.PointerEvent) => {
-    if (e.button !== 0) return
-    const t = e.target as HTMLElement
-    if (t.closest('button')) return
-    setDragging(true)
-    dragMovedRef.current = false
-    setTransitionTransform(false)
-    dragRef.current = {
-      sx: e.clientX,
-      sy: e.clientY,
-      px: pan.x,
-      py: pan.y,
-    }
-    e.currentTarget.setPointerCapture(e.pointerId)
-  }
-
-  const onPointerMoveViewport = (e: React.PointerEvent) => {
-    if (!dragging || !dragRef.current) return
-    const d = dragRef.current
-    if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 4) {
-      dragMovedRef.current = true
-    }
-    const nextPan = {
-      x: d.px + (e.clientX - d.sx),
-      y: d.py + (e.clientY - d.sy),
-    }
-    const bounded = applyBoundedTransform(viewportRef.current, nextPan, zoom)
-    setPan(bounded.pan)
-  }
-
-  const endDrag = (e: React.PointerEvent) => {
-    if (dragging && !dragMovedRef.current) {
+  const viewportPointerHandlers = createSeatMapPointerHandlers({
+    pan,
+    zoom,
+    dragging,
+    setDragging,
+    setPan: (nextPan) => setPan(nextPan),
+    dragRef,
+    dragMovedRef,
+    pendingDragRef,
+    applyBoundedTransform: (nextPan, nextZoom) =>
+      applyBoundedTransform(viewportRef.current, nextPan, nextZoom),
+    setTransitionTransform,
+    onNeutralBackdropTap: (e) => {
       const t = e.target as HTMLElement
       const onNeutralBackdrop =
         !t.closest('button') &&
@@ -965,17 +926,8 @@ export function SeatingMapPanel({
       if (onNeutralBackdrop && selectedIdRef.current) {
         clearSelectionAndResetView()
       }
-    }
-    if (dragging) {
-      try {
-        e.currentTarget.releasePointerCapture(e.pointerId)
-      } catch {
-        /* ignore */
-      }
-    }
-    setDragging(false)
-    dragRef.current = null
-  }
+    },
+  })
 
   const outerClass =
     layout === 'page'
@@ -1113,12 +1065,13 @@ export function SeatingMapPanel({
           ref={viewportRef}
           role="application"
           aria-label="Seating map — drag to pan"
-          className="relative h-full w-full cursor-grab touch-none select-none active:cursor-grabbing"
-          style={{ touchAction: 'none' }}
-          onPointerDown={onPointerDownViewport}
-          onPointerMove={onPointerMoveViewport}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
+          className="relative h-full w-full cursor-grab select-none active:cursor-grabbing [touch-action:pan-x]"
+          style={{ touchAction: SEAT_MAP_VIEWPORT_TOUCH_ACTION }}
+          onPointerDown={viewportPointerHandlers.onPointerDown}
+          onPointerMove={viewportPointerHandlers.onPointerMove}
+          onPointerUp={viewportPointerHandlers.onPointerUp}
+          onPointerCancel={viewportPointerHandlers.onPointerCancel}
+          onWheel={viewportPointerHandlers.onWheel}
         >
           <div
             data-seat-map-world

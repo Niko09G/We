@@ -5,7 +5,6 @@ import type { GuestMissionFeedItem } from '@/lib/guest-mission-feed'
 
 const TILE_GAP = 'gap-2'
 const RAIL_GAP = 'gap-4'
-const LONG_ADVICE_CHARS = 100
 
 type FeedSlot =
   | {
@@ -23,13 +22,23 @@ type PanelKind = 'A' | 'B' | 'C'
 const PANEL_CYCLE: PanelKind[] = ['A', 'B', 'C']
 const CELLS_PER_PANEL = 3
 
-type CellShape = 'square' | 'wide' | 'tall' | 'medium'
+type CellShape = 'square' | 'wide'
 
 const PANEL_SHAPES: Record<PanelKind, readonly [CellShape, CellShape, CellShape]> = {
   A: ['square', 'square', 'wide'],
-  B: ['tall', 'medium', 'square'],
-  C: ['wide', 'medium', 'square'],
+  B: ['wide', 'square', 'square'],
+  C: ['wide', 'square', 'square'],
 }
+
+const ADVICE_FONT_STEPS = [
+  { className: 'text-4xl', px: 36 },
+  { className: 'text-3xl', px: 30 },
+  { className: 'text-2xl', px: 24 },
+  { className: 'text-xl', px: 20 },
+  { className: 'text-lg', px: 18 },
+  { className: 'text-base', px: 16 },
+  { className: 'text-sm', px: 14 },
+] as const
 
 function buildEditorialSlots(items: GuestMissionFeedItem[]): FeedSlot[] {
   const greetings = items.filter(
@@ -96,12 +105,6 @@ function splitIntoPanels(cells: (FeedSlot | null)[]): PanelData[] {
   return panels
 }
 
-function isLongAdvice(slot: FeedSlot | null): boolean {
-  return (
-    slot?.kind === 'advice' && slot.item.advice.length >= LONG_ADVICE_CHARS
-  )
-}
-
 function teamGradientFromColor(tableColor: string | null): string {
   const c = tableColor?.trim()
   if (c && /^#?[0-9a-fA-F]{3,6}$/.test(c)) {
@@ -111,12 +114,11 @@ function teamGradientFromColor(tableColor: string | null): string {
   return 'linear-gradient(to right, rgb(23, 163, 214), rgb(56, 105, 233), rgb(95, 50, 243))'
 }
 
-function adviceShapeForSlot(shape: CellShape, advice: string): CellShape {
-  if (shape === 'tall' && advice.length >= LONG_ADVICE_CHARS) return 'wide'
-  return shape
+function adviceShapeForSlot(_shape: CellShape): CellShape {
+  return 'wide'
 }
 
-function AdviceCardText({ text, shape }: { text: string; shape: CellShape }) {
+function AdviceCardText({ text }: { text: string }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const textRef = useRef<HTMLParagraphElement>(null)
 
@@ -130,31 +132,27 @@ function AdviceCardText({ text, shape }: { text: string; shape: CellShape }) {
       const maxW = container.clientWidth
       if (maxH < 8 || maxW < 8) return
 
-      const len = Math.max(1, text.length)
-      const area = maxH * maxW
-      const density = len / area
-      let size =
-        shape === 'wide'
-          ? 15 - density * 4200
-          : shape === 'medium'
-            ? 13.5 - density * 3800
-            : 12.5 - density * 3400
-      size = Math.max(9, Math.min(shape === 'wide' ? 16 : 14, size))
-      paragraph.style.fontSize = `${size}px`
-      paragraph.style.lineHeight = '1.28'
+      const startIdx = text.length < 80 ? 0 : 1
+      for (let i = startIdx; i < ADVICE_FONT_STEPS.length; i++) {
+        const step = ADVICE_FONT_STEPS[i]!
+        paragraph.className = `font-semibold leading-snug tracking-tight text-white ${step.className}`
+        paragraph.style.fontSize = `${step.px}px`
+        paragraph.style.lineHeight = '1.22'
+        if (paragraph.scrollHeight <= maxH && paragraph.scrollWidth <= maxW) break
+      }
     }
 
     fit()
     const ro = new ResizeObserver(fit)
     ro.observe(container)
     return () => ro.disconnect()
-  }, [text, shape])
+  }, [text])
 
   return (
-    <div ref={containerRef} className="relative z-10 flex min-h-0 flex-1 items-center">
+    <div ref={containerRef} className="relative z-10 flex min-h-0 flex-1 items-center overflow-hidden">
       <p
         ref={textRef}
-        className="font-semibold leading-snug tracking-tight text-white"
+        className="font-semibold leading-snug tracking-tight text-white text-4xl"
         style={{ wordBreak: 'break-word' }}
       >
         {text}
@@ -178,7 +176,7 @@ function AdviceTeamAvatar({
     : '#52525b'
 
   return (
-    <span className="inline-flex h-7 w-7 shrink-0 overflow-hidden rounded-full border-2 border-white/40 bg-white/15">
+    <span className="inline-flex h-8 w-8 shrink-0 overflow-hidden rounded-full border-2 border-white/40 bg-white/15">
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={url} alt="" className="h-full w-full object-cover" />
@@ -200,7 +198,7 @@ function AdviceCard({
   shape: CellShape
   avatarUrl: string | null
 }) {
-  const effectiveShape = adviceShapeForSlot(shape, item.advice)
+  const effectiveShape = adviceShapeForSlot(shape)
 
   return (
     <button
@@ -209,16 +207,16 @@ function AdviceCard({
       className="group relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-2xl text-left ring-1 ring-white/15 transition active:scale-[0.98] motion-safe:hover:brightness-105"
       style={{ background: teamGradientFromColor(item.tableColor) }}
     >
-      <div className="relative flex min-h-0 flex-1 flex-col px-3 pb-2 pt-3">
+      <div className="relative flex min-h-0 flex-1 flex-col px-3 pb-12 pt-3">
         <div
           className="pointer-events-none absolute left-3 top-1 z-0 select-none font-serif text-[52px] leading-none text-white/15"
           aria-hidden
         >
           &quot;
         </div>
-        <AdviceCardText text={item.advice} shape={effectiveShape} />
+        <AdviceCardText text={item.advice} />
       </div>
-      <div className="flex shrink-0 justify-center px-3 pb-2.5 pt-0">
+      <div className="absolute bottom-4 left-4 z-10">
         <AdviceTeamAvatar avatarUrl={avatarUrl} tableColor={item.tableColor} />
       </div>
     </button>
@@ -276,7 +274,7 @@ function renderCell(
 ) {
   if (!cell) return <PlaceholderCell />
   if (cell.kind === 'advice') {
-    const effectiveShape = adviceShapeForSlot(shape, cell.item.advice)
+    const effectiveShape = adviceShapeForSlot(shape)
     return (
       <AdviceCard
         item={cell.item}
@@ -300,47 +298,28 @@ function PanelCollage({
 }) {
   const shapes = PANEL_SHAPES[panel.kind]
   const [a, b, c] = panel.cells
-  const shell = `grid snap-start h-full min-h-0 shrink-0 ${TILE_GAP} w-[min(18.25rem,78vw)]`
+  const shell = `grid snap-start h-full min-h-0 shrink-0 ${TILE_GAP} w-[min(18.25rem,78vw)] grid-cols-2 grid-rows-2 [grid-template-rows:minmax(0,1fr)_minmax(0,1fr)]`
 
   const cell = (slot: FeedSlot | null, i: 0 | 1 | 2) =>
     renderCell(slot, shapes[i]!, onOpen, resolveAvatar)
 
   if (panel.kind === 'A') {
     return (
-      <div
-        className={`${shell} grid-cols-2 grid-rows-2 [grid-template-rows:minmax(0,1fr)_minmax(0,1fr)]`}
-      >
+      <div className={shell}>
         <div className="min-h-0 min-w-0 [grid-column:1] [grid-row:1]">{cell(a, 0)}</div>
         <div className="min-h-0 min-w-0 [grid-column:2] [grid-row:1]">{cell(b, 1)}</div>
-        <div className="min-h-0 min-w-0 col-span-2 [grid-column:1/3] [grid-row:2]">{cell(c, 2)}</div>
-      </div>
-    )
-  }
-
-  if (panel.kind === 'B') {
-    if (isLongAdvice(a)) {
-      return (
-        <div className={`${shell} grid-cols-2 grid-rows-2`}>
-          <div className="min-h-0 min-w-0 col-span-2 row-start-1 [grid-column:1/3]">{cell(a, 0)}</div>
-          <div className="min-h-0 min-w-0 row-start-2 [grid-column:1] [grid-row:2]">{cell(b, 1)}</div>
-          <div className="min-h-0 min-w-0 row-start-2 [grid-column:2] [grid-row:2]">{cell(c, 2)}</div>
+        <div className="col-span-2 row-start-2 min-h-0 min-w-0 [aspect-ratio:2/1]">
+          {cell(c, 2)}
         </div>
-      )
-    }
-    return (
-      <div className={`${shell} grid-cols-[minmax(0,0.4fr)_minmax(0,1fr)] grid-rows-2`}>
-        <div className="min-h-0 min-w-0 row-span-2 [grid-column:1] [grid-row:1/3]">{cell(a, 0)}</div>
-        <div className="min-h-0 min-w-0 [grid-column:2] [grid-row:1]">{cell(b, 1)}</div>
-        <div className="min-h-0 min-w-0 [grid-column:2] [grid-row:2]">{cell(c, 2)}</div>
       </div>
     )
   }
 
   return (
-    <div className={`${shell} grid-cols-2 grid-rows-2`}>
-      <div className="min-h-0 min-w-0 col-span-2 row-start-1 [grid-column:1/3]">{cell(a, 0)}</div>
-      <div className="min-h-0 min-w-0 row-start-2 [grid-column:1] [grid-row:2]">{cell(b, 1)}</div>
-      <div className="min-h-0 min-w-0 row-start-2 [grid-column:2] [grid-row:2]">{cell(c, 2)}</div>
+    <div className={shell}>
+      <div className="col-span-2 row-start-1 min-h-0 min-w-0 [aspect-ratio:2/1]">{cell(a, 0)}</div>
+      <div className="row-start-2 min-h-0 min-w-0 [grid-column:1] [grid-row:2]">{cell(b, 1)}</div>
+      <div className="row-start-2 min-h-0 min-w-0 [grid-column:2] [grid-row:2]">{cell(c, 2)}</div>
     </div>
   )
 }
@@ -397,12 +376,12 @@ export function LiveFeedGrid({
             >
               <div className="rounded-2xl bg-zinc-200/80" />
               <div className="rounded-2xl bg-zinc-200/80" />
-              <div className="col-span-2 rounded-2xl bg-zinc-200/80" />
+              <div className="col-span-2 aspect-[2/1] rounded-2xl bg-zinc-200/80" />
             </div>
             <div
-              className={`grid h-full min-h-0 w-[min(17.5rem,86vw)] shrink-0 grid-cols-2 grid-rows-2 ${TILE_GAP} [grid-template-columns:0.4fr_1fr]`}
+              className={`grid h-full min-h-0 w-[min(17.5rem,86vw)] shrink-0 grid-cols-2 grid-rows-2 ${TILE_GAP}`}
             >
-              <div className="row-span-2 rounded-2xl bg-zinc-200/80" />
+              <div className="col-span-2 aspect-[2/1] rounded-2xl bg-zinc-200/80" />
               <div className="rounded-2xl bg-zinc-200/80" />
               <div className="rounded-2xl bg-zinc-200/80" />
             </div>
