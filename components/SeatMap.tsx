@@ -46,14 +46,10 @@ export function SeatMapSearchInput({
 }: SeatMapSearchInputProps) {
   return (
     <div
-      className={`relative overflow-hidden rounded-full p-[2px] ${className}`}
+      className={`seat-map-search-shell relative rounded-full ${className}`}
       style={accentCssVar}
     >
-      <div
-        className="seat-map-search-border pointer-events-none absolute inset-[-200%]"
-        aria-hidden
-      />
-      <div className="relative rounded-full bg-[#ffffff]">
+      <div className="relative z-[1] rounded-full bg-[#ffffff]">
         <input
           ref={inputRef}
           placeholder="Search name"

@@ -98,9 +98,10 @@ const WORLD_H = 720
 
 const FOCUS_ZOOM = 1.08
 const ZOOM_MIN = 0.35
+const ZOOM_STEP = 0.08
+const ZOOM_DEFAULT = ZOOM_MIN + ZOOM_STEP
 const ZOOM_MAX = 1.28
 const TRANSFORM_MS = 280
-const OVERVIEW_PAD = 16
 
 /** Vertical gradients per layout slot (team identity). `blue` slot = Kaypoh Auntie’s. */
 const TABLE_GRADIENT_BY_SLOT: Record<MapSlotKey, string> = {
@@ -133,18 +134,6 @@ function MapTableGlyph({ color }: { color: string }) {
       <path
         fill={color}
         d="M3 5.5h18v3.5H3V5.5zM5.5 9h3.5v11H5.5V9zm9.5 0h3.5v11H15V9z"
-      />
-    </svg>
-  )
-}
-
-function MapSeatGlyph({ color }: { color: string }) {
-  return (
-    <svg className="shrink-0" width={17} height={17} viewBox="0 0 24 24" aria-hidden>
-      {/* Filled chair: back + seat block — reads clearly at 17px */}
-      <path
-        fill={color}
-        d="M8 5h8a2 2 0 012 2v2H6V7a2 2 0 012-2zm-2 7h12v7a1 1 0 01-1 1H7a1 1 0 01-1-1v-7z"
       />
     </svg>
   )
@@ -439,7 +428,7 @@ export function SeatingMapPanel({
   const [search, setSearch] = useState('')
   const [searchResultsDismissed, setSearchResultsDismissed] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [zoom, setZoom] = useState(ZOOM_MIN)
+  const [zoom, setZoom] = useState(ZOOM_DEFAULT)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [transitionTransform, setTransitionTransform] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -448,13 +437,19 @@ export function SeatingMapPanel({
   const inputRef = useRef<HTMLInputElement | null>(null)
   const tableRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const dragRef = useRef<DragRef | null>(null)
-  const panZoomRef = useRef({ x: 0, y: 0, zoom: ZOOM_MIN })
+  const dragMovedRef = useRef(false)
+  const selectedIdRef = useRef<string | null>(null)
+  const panZoomRef = useRef({ x: 0, y: 0, zoom: ZOOM_DEFAULT })
   const mapFrameRef = useRef<HTMLDivElement | null>(null)
   const pinchRef = useRef<{ d0: number; z0: number; wx: number; wy: number } | null>(null)
 
   useEffect(() => {
     panZoomRef.current = { x: pan.x, y: pan.y, zoom }
   }, [pan.x, pan.y, zoom])
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId
+  }, [selectedId])
 
   useEffect(() => {
     async function load() {
@@ -753,20 +748,23 @@ export function SeatingMapPanel({
     }
   }, [])
 
-  /** Zoomed-out overview: fit the entire floor plan in the viewport. */
+  /** Default map view: one zoom step above minimum, centered on the floor plan. */
   const applyOverviewCamera = useCallback(() => {
     const vp = viewportRef.current
     if (!vp) return
-    const fitZoom = Math.min(
-      (vp.clientWidth - OVERVIEW_PAD * 2) / WORLD_W,
-      (vp.clientHeight - OVERVIEW_PAD * 2) / WORLD_H
-    )
-    const z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, fitZoom))
+    const z = ZOOM_DEFAULT
     const panX = (vp.clientWidth - WORLD_W * z) / 2
     const panY = (vp.clientHeight - WORLD_H * z) / 2
     setZoom(z)
     setPan({ x: panX, y: panY })
   }, [])
+
+  const clearSelectionAndResetView = useCallback(() => {
+    setSelectedId(null)
+    setTransitionTransform(true)
+    applyOverviewCamera()
+    window.setTimeout(() => setTransitionTransform(false), TRANSFORM_MS + 40)
+  }, [applyOverviewCamera])
 
   useLayoutEffect(() => {
     if (loading) return
@@ -905,6 +903,7 @@ export function SeatingMapPanel({
     const t = e.target as HTMLElement
     if (t.closest('button')) return
     setDragging(true)
+    dragMovedRef.current = false
     setTransitionTransform(false)
     dragRef.current = {
       sx: e.clientX,
@@ -918,6 +917,9 @@ export function SeatingMapPanel({
   const onPointerMoveViewport = (e: React.PointerEvent) => {
     if (!dragging || !dragRef.current) return
     const d = dragRef.current
+    if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 4) {
+      dragMovedRef.current = true
+    }
     setPan({
       x: d.px + (e.clientX - d.sx),
       y: d.py + (e.clientY - d.sy),
@@ -925,6 +927,16 @@ export function SeatingMapPanel({
   }
 
   const endDrag = (e: React.PointerEvent) => {
+    if (dragging && !dragMovedRef.current) {
+      const t = e.target as HTMLElement
+      const onNeutralBackdrop =
+        !t.closest('button') &&
+        !t.closest('[data-seat-map-table]') &&
+        Boolean(t.closest('[data-seat-map-world]'))
+      if (onNeutralBackdrop && selectedIdRef.current) {
+        clearSelectionAndResetView()
+      }
+    }
     if (dragging) {
       try {
         e.currentTarget.releasePointerCapture(e.pointerId)
@@ -1053,7 +1065,7 @@ export function SeatingMapPanel({
           <button
             type="button"
             aria-label="Zoom in"
-            onClick={() => setZoomAnchored(zoom + 0.08)}
+            onClick={() => setZoomAnchored(zoom + ZOOM_STEP)}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-950 bg-zinc-900 text-lg font-semibold leading-none text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)] transition active:scale-95"
           >
             +
@@ -1061,7 +1073,7 @@ export function SeatingMapPanel({
           <button
             type="button"
             aria-label="Zoom out"
-            onClick={() => setZoomAnchored(zoom - 0.08)}
+            onClick={() => setZoomAnchored(zoom - ZOOM_STEP)}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-950 bg-zinc-900 text-lg font-semibold leading-none text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)] transition active:scale-95"
           >
             −
@@ -1109,6 +1121,7 @@ export function SeatingMapPanel({
               return (
                 <div
                   key={table.id}
+                  data-seat-map-table
                   ref={(el) => {
                     tableRefs.current[table.id] = el
                   }}
@@ -1185,13 +1198,26 @@ export function SeatingMapPanel({
 
         {selectedGuest ? (
           <aside
-            className="pointer-events-auto absolute bottom-3 left-3 right-3 z-30 mx-auto max-w-md rounded-2xl border border-white/80 bg-white/95 px-4 py-3.5 backdrop-blur-sm transition-[box-shadow,opacity] duration-300"
+            className="pointer-events-auto absolute bottom-3 left-3 right-3 z-30 mx-auto max-w-md rounded-2xl border border-white/80 bg-white/95 px-4 py-3.5 pr-12 backdrop-blur-sm transition-[box-shadow,opacity] duration-300"
             style={{
               boxShadow:
                 selectedGuestVisual?.resultGlow ??
                 '0 10px 28px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.06)',
             }}
           >
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={clearSelectionAndResetView}
+              className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-800"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden>
+                <path
+                  fill="currentColor"
+                  d="M18.3 5.71a1 1 0 00-1.41 0L12 10.59 7.11 5.7A1 1 0 005.7 7.11L10.59 12 5.7 16.89a1 1 0 101.41 1.41L12 13.41l4.89 4.89a1 1 0 001.41-1.41L13.41 12l4.89-4.89a1 1 0 000-1.4z"
+                />
+              </svg>
+            </button>
             <div className="flex items-center gap-4 text-black">
               <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full border border-zinc-200 bg-white">
                 {selectedGuest.photo_url ? (
@@ -1209,16 +1235,10 @@ export function SeatingMapPanel({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-base font-semibold text-black">{selectedGuest.full_name}</p>
-                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm font-medium text-black">
-                  <span className="flex min-w-0 max-w-full flex-1 basis-0 items-center gap-2">
-                    <MapTableGlyph color={selectedGuestVisual?.accent ?? '#71717a'} />
-                    <span className="min-w-0 break-words leading-snug text-black [overflow-wrap:anywhere]">
-                      {selectedGuest.table_name}
-                    </span>
-                  </span>
-                  <span className="inline-flex shrink-0 items-center gap-2 pr-1">
-                    <MapSeatGlyph color={selectedGuestVisual?.accent ?? '#71717a'} />
-                    <span className="whitespace-nowrap pr-1 text-black">Seat {selectedGuest.seat_number}</span>
+                <div className="mt-1 flex min-w-0 items-center gap-2 text-sm font-medium text-black">
+                  <MapTableGlyph color={selectedGuestVisual?.accent ?? '#71717a'} />
+                  <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-black">
+                    {selectedGuest.table_name}
                   </span>
                 </div>
               </div>

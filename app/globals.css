@@ -64,24 +64,49 @@ select {
   font-size: 16px;
 }
 
-@keyframes seatMapSearchGlow {
-  from {
-    transform: rotate(0deg);
-  }
+@property --seat-map-beam-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes seatMapSearchBeamSpin {
   to {
-    transform: rotate(360deg);
+    --seat-map-beam-angle: 360deg;
   }
 }
 
-.seat-map-search-border {
+/* Pill-capsule border: static #6255fc base + rotating conic light beam on the ring only. */
+.seat-map-search-shell {
+  padding: 2px;
+  background: #6255fc;
+}
+
+.seat-map-search-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
   background: conic-gradient(
-    from 0deg,
-    #22d3ee 0deg,
-    #a855f7 120deg,
-    #fbbf24 240deg,
-    #22d3ee 360deg
+    from var(--seat-map-beam-angle),
+    transparent 0deg,
+    transparent 250deg,
+    rgba(255, 255, 255, 0.92) 292deg,
+    #c4b5fd 312deg,
+    #67e8f9 332deg,
+    transparent 360deg
   );
-  animation: seatMapSearchGlow 5s linear infinite;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: seatMapSearchBeamSpin 4.5s linear infinite;
+  pointer-events: none;
 }
 
 @keyframes fadeIn {
