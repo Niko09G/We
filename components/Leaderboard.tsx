@@ -127,7 +127,7 @@ export function Leaderboard({
   if (rows.length === 0) return null
 
   return (
-    <ul className="mt-3 flex w-full flex-col gap-3">
+    <ul className="mt-3 flex w-full flex-col gap-2">
       {rows.map((row, i) => {
         const isYou = leaderboardEntryIncludesTable(row, currentTableId)
         const pointsShown = safeRewardPoints(row.totalPoints)

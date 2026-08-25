@@ -11,6 +11,83 @@ import {
   type VenueLandmarkShape,
 } from '@/lib/floor-layout'
 
+/** Guest map world size — matches admin floor plan canvas (4:3). */
+export const SEAT_MAP_WORLD_WIDTH = 960
+export const SEAT_MAP_WORLD_HEIGHT = 720
+
+/** Pan/zoom limits aligned with the guest seating map viewport. */
+export const SEAT_MAP_ZOOM_MIN = 0.35
+export const SEAT_MAP_ZOOM_STEP = 0.08
+export const SEAT_MAP_ZOOM_DEFAULT = SEAT_MAP_ZOOM_MIN + SEAT_MAP_ZOOM_STEP
+export const SEAT_MAP_ZOOM_MAX = 1.28
+/** Inset padding when clamping pan so the canvas edge cannot scroll past the viewport. */
+export const SEAT_MAP_PAN_PADDING = 0
+
+export type SeatMapPan = { x: number; y: number }
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n))
+}
+
+/** Clamp zoom to configured min/max (same as layout builder guest preview). */
+export function clampSeatMapZoom(zoom: number): number {
+  return clamp(zoom, SEAT_MAP_ZOOM_MIN, SEAT_MAP_ZOOM_MAX)
+}
+
+/**
+ * Keep pan within the map canvas — equivalent to limitToBounds on a transform component.
+ * When the scaled world is smaller than the viewport, pan locks to center.
+ */
+export function clampSeatMapPan(
+  pan: SeatMapPan,
+  viewportWidth: number,
+  viewportHeight: number,
+  zoom: number,
+  padding = SEAT_MAP_PAN_PADDING
+): SeatMapPan {
+  const scaledW = SEAT_MAP_WORLD_WIDTH * zoom
+  const scaledH = SEAT_MAP_WORLD_HEIGHT * zoom
+
+  let minX: number
+  let maxX: number
+  if (scaledW <= viewportWidth) {
+    const cx = (viewportWidth - scaledW) / 2
+    minX = maxX = cx
+  } else {
+    minX = viewportWidth - scaledW - padding
+    maxX = padding
+  }
+
+  let minY: number
+  let maxY: number
+  if (scaledH <= viewportHeight) {
+    const cy = (viewportHeight - scaledH) / 2
+    minY = maxY = cy
+  } else {
+    minY = viewportHeight - scaledH - padding
+    maxY = padding
+  }
+
+  return {
+    x: clamp(pan.x, minX, maxX),
+    y: clamp(pan.y, minY, maxY),
+  }
+}
+
+export function clampSeatMapTransform(
+  pan: SeatMapPan,
+  zoom: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  padding = SEAT_MAP_PAN_PADDING
+): { pan: SeatMapPan; zoom: number } {
+  const z = clampSeatMapZoom(zoom)
+  return {
+    zoom: z,
+    pan: clampSeatMapPan(pan, viewportWidth, viewportHeight, z, padding),
+  }
+}
+
 export type SeatMapLandmark = {
   id: string
   name: string

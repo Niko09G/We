@@ -52,6 +52,7 @@ export type GuestMissionFeedItem =
       kind: 'advice'
       id: string
       missionId: string
+      tableId: string
       createdAt: string
       advice: string
       tableName: string
@@ -147,6 +148,7 @@ function parseAdviceRows(
       kind: 'advice',
       id: row.id,
       missionId: row.mission_id,
+      tableId: row.table_id,
       createdAt: row.created_at,
       advice: text,
       tableName: meta?.name ?? 'Table',

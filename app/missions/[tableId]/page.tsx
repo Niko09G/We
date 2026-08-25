@@ -8,7 +8,6 @@ import { SeatingMapPanel } from '@/components/guest/SeatingMapPanel'
 import { StickySectionNav } from '@/components/guest/StickySectionNav'
 import { MissionsTableHero } from '@/components/guest/MissionsTableHero'
 import { Leaderboard } from '@/components/Leaderboard'
-import { TeamAvatar } from '@/components/guest/TeamAvatar'
 import { getMissionsEnabled } from '@/lib/app-settings'
 import { fetchLeaderboard, fetchLeaderboardBundle, fetchRecentScoringActivity, type LeaderboardEntry, type RecentActivityItem } from '@/lib/leaderboard'
 import { leaderboardEntryIncludesTable, resolveTeamId, tableIdsInTeamScope } from '@/lib/table-teams'
@@ -100,7 +99,17 @@ type MomentumEntry = {
   eventType: MomentumEventType
   coinChange: number
   message: string
+  activityTitle?: string | null
   createdAt: number
+}
+
+function teamMomentumGradient(tableColor: string | null): string {
+  const c = tableColor?.trim()
+  if (c && /^#?[0-9a-fA-F]{3,6}$/.test(c)) {
+    const hex = c.startsWith('#') ? c : `#${c}`
+    return `linear-gradient(to bottom, ${hex}, color-mix(in srgb, ${hex} 68%, #000))`
+  }
+  return 'linear-gradient(to right, rgb(23, 163, 214), rgb(56, 105, 233), rgb(95, 50, 243))'
 }
 
 function scoringActivityToMomentum(item: RecentActivityItem): MomentumEntry {
@@ -112,6 +121,7 @@ function scoringActivityToMomentum(item: RecentActivityItem): MomentumEntry {
     tableColor: item.tableColor,
     eventType: pts >= 18 ? 'on_fire' : pts >= 8 ? 'move' : 'neutral',
     coinChange: pts,
+    activityTitle: item.missionTitle,
     message:
       pts > 0
         ? `${item.tableName} earned ${pts} on “${item.missionTitle}”`
@@ -1382,6 +1392,8 @@ export default function MissionsTablePage({
               loading={missionFeedLoading}
               sectionTitleColor={teamPage.typography.textColorPrimary}
               ctaColor={teamPage.theme.primaryColor}
+              tableAvatars={tableAvatars}
+              guestEmblems={guestEmblems}
             />
           ) : null}
         </section>
@@ -1415,29 +1427,6 @@ export default function MissionsTablePage({
             <div className="mt-1 text-xs text-rose-800/90">{error}</div>
           </div>
         ) : null}
-
-        <section id="seat-finder" className="scroll-mt-8">
-          <h2
-            className="text-left text-2xl font-semibold leading-snug text-zinc-900"
-            style={{ color: teamPage.typography.textColorPrimary }}
-          >
-            Find your people
-          </h2>
-          <p
-            className="mt-1 text-base text-zinc-500"
-            style={{ color: teamPage.typography.textColorSecondary }}
-          >
-            Search your name or explore the tables
-          </p>
-          <div className="mt-3 min-h-0">
-            <SeatingMapPanel
-              layout="embedded"
-              showSectionHeading={false}
-              className="w-full"
-              viewerAccentColor={teamPage.theme.primaryColor}
-            />
-          </div>
-        </section>
 
         <section id="leaderboard" className="scroll-mt-8">
           <h2
@@ -1551,53 +1540,67 @@ export default function MissionsTablePage({
                 iconTintColor={teamPage.theme.iconColor}
               />
               <div className="mt-4">
-                <h3
-                  className="text-xs font-semibold tracking-wide text-zinc-500"
-                  style={{ color: teamPage.typography.textColorSecondary }}
-                >
-                  Momentum feed
-                </h3>
                 <>
                   <div
                     ref={momentumCarouselRef}
-                    className="mt-2 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+                    className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
                   >
-                    {displayMomentumFeed.map((item, idx) => (
+                    {displayMomentumFeed.map((item, idx) => {
+                      const avatarUrl = resolveTeamAvatarUrl(
+                        item.tableId,
+                        tableAvatars,
+                        guestEmblems
+                      )
+                      return (
                       <div
                         key={item.id}
                         data-momentum-card
-                        className={`w-[min(300px,82vw)] shrink-0 snap-start rounded-lg border border-zinc-200/80 bg-white/85 px-3 py-3 min-h-[96px] ${
+                        className={`w-[min(300px,82vw)] shrink-0 snap-start rounded-xl px-3 py-3 min-h-[96px] ${
                           momentumEnterIds.has(item.id)
                             ? 'motion-safe:animate-[fadeIn_0.45s_ease-out]'
                             : ''
                         } ${
                           idx >= 5 ? 'opacity-70' : idx >= 3 ? 'opacity-85' : 'opacity-100'
                         }`}
+                        style={{ background: teamMomentumGradient(item.tableColor) }}
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <span className="inline-flex min-w-0 items-center gap-2">
-                            <TeamAvatar
-                              name={item.tableName}
-                              avatarUrl={resolveTeamAvatarUrl(
-                                item.tableId,
-                                tableAvatars,
-                                guestEmblems
-                              )}
-                              tableColor={item.tableColor}
-                            />
-                            <span className="line-clamp-2 text-sm font-medium leading-snug text-zinc-700">
-                              {item.message}
-                            </span>
+                          <span className="inline-flex min-w-0 items-center gap-2.5">
+                            {avatarUrl ? (
+                              <span className="inline-flex h-9 w-9 shrink-0 overflow-hidden rounded-full border-2 border-white/35">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={avatarUrl}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                />
+                              </span>
+                            ) : null}
+                            {item.activityTitle ? (
+                              <span className="text-sm font-medium leading-snug text-white">
+                                <span className="font-bold">{item.tableName}</span>
+                                {' completed '}
+                                {item.activityTitle}
+                              </span>
+                            ) : (
+                              <span className="text-sm font-medium leading-snug text-white">
+                                {item.message}
+                              </span>
+                            )}
                           </span>
                           {item.coinChange > 0 ? (
-                            <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold tabular-nums text-sm text-zinc-700">
+                            <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold tabular-nums text-sm text-white">
                               +{item.coinChange}
-                              <RewardUnitIcon size={COIN_SIZE} className="align-middle" />
+                              <RewardUnitIcon
+                                size={COIN_SIZE}
+                                displayVariant="onDark"
+                                tintColor="#ffffff"
+                              />
                             </span>
                           ) : null}
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
                   {displayMomentumFeed.length > 1 ? (
                     <div className="mt-2 flex items-center justify-center gap-2">
@@ -1647,6 +1650,29 @@ export default function MissionsTablePage({
               </p>
             </div>
           )}
+        </section>
+
+        <section id="seat-finder" className="scroll-mt-8">
+          <h2
+            className="text-left text-2xl font-semibold leading-snug text-zinc-900"
+            style={{ color: teamPage.typography.textColorPrimary }}
+          >
+            Find your people
+          </h2>
+          <p
+            className="mt-1 text-base text-zinc-500"
+            style={{ color: teamPage.typography.textColorSecondary }}
+          >
+            Search your name or explore the tables
+          </p>
+          <div className="mt-3 min-h-0">
+            <SeatingMapPanel
+              layout="embedded"
+              showSectionHeading={false}
+              className="w-full"
+              viewerAccentColor={teamPage.theme.primaryColor}
+            />
+          </div>
         </section>
 
         {selectedMissionId

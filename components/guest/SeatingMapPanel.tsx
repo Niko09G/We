@@ -18,7 +18,7 @@ import {
 } from '@/lib/seat-map-layout'
 import { teamPageAdminFormDefaults } from '@/lib/team-page-config'
 import { loadGuestFloorLayout } from '@/lib/admin-floor-layout'
-import { SeatMapLandmarksLayer, SeatMapSearchInput, type SeatMapLandmark } from '@/components/SeatMap'
+import { SeatMapLandmarksLayer, SeatMapSearchInput, type SeatMapLandmark, SEAT_MAP_WORLD_WIDTH, SEAT_MAP_WORLD_HEIGHT, SEAT_MAP_ZOOM_MIN, SEAT_MAP_ZOOM_STEP, SEAT_MAP_ZOOM_DEFAULT, SEAT_MAP_ZOOM_MAX, clampSeatMapTransform } from '@/components/SeatMap'
 import {
   FLOOR_GRID_COLS,
   FLOOR_GRID_ROWS,
@@ -93,15 +93,24 @@ const TEAM_LANE_Y = [18, 35, 52, 69] as const
 const MAP_CENTER_X = 50
 const PAIR_XS = [28, 72] as const
 
-const WORLD_W = 960
-const WORLD_H = 720
+const WORLD_W = SEAT_MAP_WORLD_WIDTH
+const WORLD_H = SEAT_MAP_WORLD_HEIGHT
 
 const FOCUS_ZOOM = 1.08
-const ZOOM_MIN = 0.35
-const ZOOM_STEP = 0.08
-const ZOOM_DEFAULT = ZOOM_MIN + ZOOM_STEP
-const ZOOM_MAX = 1.28
+const ZOOM_MIN = SEAT_MAP_ZOOM_MIN
+const ZOOM_STEP = SEAT_MAP_ZOOM_STEP
+const ZOOM_DEFAULT = SEAT_MAP_ZOOM_DEFAULT
+const ZOOM_MAX = SEAT_MAP_ZOOM_MAX
 const TRANSFORM_MS = 280
+
+function applyBoundedTransform(
+  viewport: HTMLDivElement | null,
+  pan: { x: number; y: number },
+  zoom: number
+): { pan: { x: number; y: number }; zoom: number } {
+  if (!viewport) return { pan, zoom }
+  return clampSeatMapTransform(pan, zoom, viewport.clientWidth, viewport.clientHeight)
+}
 
 /** Vertical gradients per layout slot (team identity). `blue` slot = Kaypoh Auntie’s. */
 const TABLE_GRADIENT_BY_SLOT: Record<MapSlotKey, string> = {
@@ -753,10 +762,16 @@ export function SeatingMapPanel({
     const vp = viewportRef.current
     if (!vp) return
     const z = ZOOM_DEFAULT
-    const panX = (vp.clientWidth - WORLD_W * z) / 2
-    const panY = (vp.clientHeight - WORLD_H * z) / 2
+    const { pan: bounded } = applyBoundedTransform(
+      vp,
+      {
+        x: (vp.clientWidth - WORLD_W * z) / 2,
+        y: (vp.clientHeight - WORLD_H * z) / 2,
+      },
+      z
+    )
     setZoom(z)
-    setPan({ x: panX, y: panY })
+    setPan(bounded)
   }, [])
 
   const clearSelectionAndResetView = useCallback(() => {
@@ -817,8 +832,10 @@ export function SeatingMapPanel({
       const mx = (t0.clientX + t1.clientX) / 2
       const my = (t0.clientY + t1.clientY) / 2
       const zn = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, p.z0 * (d / p.d0)))
-      setZoom(zn)
-      setPan({ x: mx - p.wx * zn, y: my - p.wy * zn })
+      const nextPan = { x: mx - p.wx * zn, y: my - p.wy * zn }
+      const bounded = applyBoundedTransform(el, nextPan, zn)
+      setZoom(bounded.zoom)
+      setPan(bounded.pan)
     }
 
     const endPinch = (e: TouchEvent) => {
@@ -880,8 +897,13 @@ export function SeatingMapPanel({
 
     setTransitionTransform(true)
     const z = FOCUS_ZOOM
-    setZoom(z)
-    setPan(centerPanForWorldPoint(wx, wy, z))
+    const bounded = applyBoundedTransform(
+      viewportRef.current,
+      centerPanForWorldPoint(wx, wy, z),
+      z
+    )
+    setZoom(bounded.zoom)
+    setPan(bounded.pan)
     const t = window.setTimeout(() => setTransitionTransform(false), TRANSFORM_MS + 40)
     return () => window.clearTimeout(t)
   }, [selectedGuest, tablesUsed, centerPanForWorldPoint])
@@ -894,8 +916,13 @@ export function SeatingMapPanel({
     const Vcy = el.clientHeight / 2
     const worldX = (Vcx - pan.x) / zoom
     const worldY = (Vcy - pan.y) / zoom
-    setZoom(z)
-    setPan({ x: Vcx - worldX * z, y: Vcy - worldY * z })
+    const bounded = applyBoundedTransform(
+      el,
+      { x: Vcx - worldX * z, y: Vcy - worldY * z },
+      z
+    )
+    setZoom(bounded.zoom)
+    setPan(bounded.pan)
   }
 
   const onPointerDownViewport = (e: React.PointerEvent) => {
@@ -920,10 +947,12 @@ export function SeatingMapPanel({
     if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 4) {
       dragMovedRef.current = true
     }
-    setPan({
+    const nextPan = {
       x: d.px + (e.clientX - d.sx),
       y: d.py + (e.clientY - d.sy),
-    })
+    }
+    const bounded = applyBoundedTransform(viewportRef.current, nextPan, zoom)
+    setPan(bounded.pan)
   }
 
   const endDrag = (e: React.PointerEvent) => {

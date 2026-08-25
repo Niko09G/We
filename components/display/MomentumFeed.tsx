@@ -17,47 +17,29 @@ export type MomentumFeedItem = RecentActivityItem & {
   enteredAt: number
 }
 
-function tableInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase()
-  return (parts[0]?.slice(0, 2) ?? '?').toUpperCase()
-}
-
-function TeamChipAvatar({
-  name,
-  avatarUrl,
-  tableColor,
-  visual,
-}: {
-  name: string
-  avatarUrl: string | null
-  tableColor: string | null
-  visual: DisplayTeamVisual | null
-}) {
+function TeamChipAvatar({ avatarUrl }: { avatarUrl: string | null }) {
   const url = avatarUrl?.trim()
-  const bg =
-    visual?.gradientCss ??
-    (tableColor?.trim() && /^#?[0-9a-fA-F]{3,6}$/.test(tableColor.trim())
-      ? tableColor.trim().startsWith('#')
-        ? tableColor.trim()
-        : `#${tableColor.trim()}`
-      : '#52525b')
+  if (!url) return null
 
   return (
-    <span
-      className="inline-flex h-14 w-14 shrink-0 overflow-hidden rounded-full border-2 border-white/30"
-      style={{ background: bg }}
-    >
-      {url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" className="h-full w-full object-cover" />
-      ) : (
-        <span className="flex h-full w-full items-center justify-center text-sm font-bold text-white">
-          {tableInitials(name)}
-        </span>
-      )}
+    <span className="inline-flex h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 border-white/35 bg-white/15">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={url} alt="" className="h-full w-full object-cover" />
     </span>
   )
+}
+
+function teamGradientCss(
+  visual: DisplayTeamVisual | null,
+  tableColor: string | null
+): string {
+  if (visual?.gradientCss) return visual.gradientCss
+  const c = tableColor?.trim()
+  if (c && /^#?[0-9a-fA-F]{3,6}$/.test(c)) {
+    const hex = c.startsWith('#') ? c : `#${c}`
+    return `linear-gradient(to bottom, ${hex}, color-mix(in srgb, ${hex} 70%, #000))`
+  }
+  return 'linear-gradient(to right, rgb(23, 163, 214), rgb(56, 105, 233), rgb(95, 50, 243))'
 }
 
 export function MomentumFeed({
@@ -88,6 +70,7 @@ export function MomentumFeed({
         {visible.map((item) => {
           const visual = teamVisuals[item.tableId]
           const avatar = teamAvatars[item.tableId] ?? visual?.avatarUrl ?? null
+          const gradient = teamGradientCss(visual ?? null, item.tableColor)
           return (
             <motion.div
               key={item.feedKey}
@@ -96,23 +79,20 @@ export function MomentumFeed({
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 56, scale: 0.92 }}
               transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-              className="pointer-events-auto w-full rounded-full border border-white/15 bg-black/35 px-4 py-3 shadow-xl backdrop-blur-md"
+              className="pointer-events-auto w-full rounded-2xl px-4 py-3 shadow-xl"
+              style={{ background: gradient }}
             >
               <div className="flex items-center gap-3">
-                <TeamChipAvatar
-                  name={item.tableName}
-                  avatarUrl={avatar}
-                  tableColor={item.tableColor}
-                  visual={visual ?? null}
-                />
+                <TeamChipAvatar avatarUrl={avatar} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-lg font-bold text-white md:text-xl">
-                    Completed {item.missionTitle}
+                  <p className="text-base font-medium leading-snug text-white md:text-lg">
+                    <span className="font-bold">{item.tableName}</span>
+                    {' completed '}
+                    <span>{item.missionTitle}</span>
                   </p>
-                  <p className="truncate text-base text-white/80">{item.tableName}</p>
                 </div>
                 <span
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-3 py-1.5 text-lg font-bold tabular-nums text-amber-200"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/20 px-3 py-1.5 text-lg font-bold tabular-nums text-white"
                 >
                   +{item.points}
                   <RewardUnitIcon size={18} displayVariant="onDark" />
