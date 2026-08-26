@@ -74,6 +74,7 @@ export type EditorPartyRow = {
   dietary_restrictions: DietaryRestriction[]
   needs_baby_chair: boolean
   needs_kids_menu: boolean
+  no_meal: boolean
 }
 
 function newRowKey() {
@@ -127,6 +128,7 @@ function logisticsPatchFromRow(r: EditorPartyRow) {
     dietary_restrictions: normalizeDietaryRestrictions(r.dietary_restrictions),
     needs_baby_chair: r.needs_baby_chair,
     needs_kids_menu: r.needs_kids_menu,
+    no_meal: r.no_meal,
   }
 }
 
@@ -306,6 +308,7 @@ function emptyRow(): EditorPartyRow {
     dietary_restrictions: [],
     needs_baby_chair: false,
     needs_kids_menu: false,
+    no_meal: false,
   }
 }
 
@@ -370,6 +373,7 @@ export function AttendeeEditorOverlay({
         dietary_restrictions: normalizeDietaryRestrictions(m.dietary_restrictions),
         needs_baby_chair: Boolean(m.needs_baby_chair),
         needs_kids_menu: Boolean(m.needs_kids_menu),
+        no_meal: Boolean(m.no_meal),
       }))
     })
   }, [mode, party])
@@ -415,6 +419,7 @@ export function AttendeeEditorOverlay({
         dietary_restrictions: [],
         needs_baby_chair: false,
         needs_kids_menu: false,
+        no_meal: false,
       },
     ])
     queueMicrotask(() => nameRefs.current[k]?.focus())
@@ -749,6 +754,19 @@ export function AttendeeEditorOverlay({
                               r.key === row.key
                                 ? { ...r, needs_kids_menu: !r.needs_kids_menu }
                                 : r
+                            )
+                          )
+                        }
+                      />
+                    </div>
+                    <div className={FOCUS_RING}>
+                      <LogisticsToggle
+                        active={row.no_meal}
+                        label="No Meal 🚫"
+                        onClick={() =>
+                          setRows((prev) =>
+                            prev.map((r) =>
+                              r.key === row.key ? { ...r, no_meal: !r.no_meal } : r
                             )
                           )
                         }

@@ -23,12 +23,13 @@ export type AttendeeRow = {
   dietary_restrictions: string[]
   needs_baby_chair: boolean
   needs_kids_menu: boolean
+  no_meal: boolean
   created_at: string
   updated_at: string
 }
 
 const SELECT =
-  'id,full_name,email,phone,rsvp_status,table_id,seat_number,group_id,is_placeholder,party_role,photo_url,checked_in_at,gift_amount_cents,dietary_restrictions,needs_baby_chair,needs_kids_menu,created_at,updated_at'
+  'id,full_name,email,phone,rsvp_status,table_id,seat_number,group_id,is_placeholder,party_role,photo_url,checked_in_at,gift_amount_cents,dietary_restrictions,needs_baby_chair,needs_kids_menu,no_meal,created_at,updated_at'
 
 const BUCKET = 'attendees'
 const AVATAR_PREFIX = 'avatars'
@@ -44,6 +45,7 @@ export function normalizeAttendeeRow(row: AttendeeRow): AttendeeRow {
     dietary_restrictions: normalizeDietaryRestrictions(r.dietary_restrictions),
     needs_baby_chair: Boolean(r.needs_baby_chair),
     needs_kids_menu: Boolean(r.needs_kids_menu),
+    no_meal: Boolean(r.no_meal),
   }
 }
 
@@ -76,6 +78,7 @@ export type AttendeeUpdateInput = {
   dietary_restrictions?: string[]
   needs_baby_chair?: boolean
   needs_kids_menu?: boolean
+  no_meal?: boolean
 }
 
 export async function updateAttendee(
@@ -132,6 +135,9 @@ export async function updateAttendee(
   if (patch.needs_kids_menu !== undefined) {
     row.needs_kids_menu = Boolean(patch.needs_kids_menu)
   }
+  if (patch.no_meal !== undefined) {
+    row.no_meal = Boolean(patch.no_meal)
+  }
 
   if (Object.keys(row).length === 0) return
 
@@ -156,6 +162,7 @@ export async function createAttendee(input: {
   dietary_restrictions?: string[]
   needs_baby_chair?: boolean
   needs_kids_menu?: boolean
+  no_meal?: boolean
 }): Promise<AttendeeRow> {
   const full_name = input.full_name.trim()
   if (!full_name) throw new Error('Full name is required.')
@@ -192,6 +199,7 @@ export async function createAttendee(input: {
       dietary_restrictions: normalizeDietaryRestrictions(input.dietary_restrictions),
       needs_baby_chair: Boolean(input.needs_baby_chair),
       needs_kids_menu: Boolean(input.needs_kids_menu),
+      no_meal: Boolean(input.no_meal),
     })
     .select(SELECT)
     .single()

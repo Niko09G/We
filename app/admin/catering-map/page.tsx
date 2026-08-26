@@ -65,6 +65,7 @@ export default function AdminCateringMapPage() {
           dietary_restrictions: r.dietary_restrictions,
           needs_baby_chair: r.needs_baby_chair,
           needs_kids_menu: r.needs_kids_menu,
+          no_meal: r.no_meal,
         }))
 
       setGuests(seatedGuests)
@@ -127,7 +128,7 @@ export default function AdminCateringMapPage() {
       <header className="shrink-0">
         <h1 className="admin-page-title text-zinc-900">Catering map</h1>
         <p className="admin-gap-page-title-intro admin-intro">
-          Internal floor view for allergies, baby chairs, and kids menus across seated guests.
+          Internal floor view for allergies, baby chairs, kids menus, and no-meal guests across seated guests.
         </p>
       </header>
 

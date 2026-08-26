@@ -42,6 +42,7 @@ export type SeatMapGuestLogistics = {
   dietary_restrictions?: string[] | null
   needs_baby_chair?: boolean
   needs_kids_menu?: boolean
+  no_meal?: boolean
 }
 
 type SeatLogisticsBadgesProps = SeatMapGuestLogistics & {
@@ -50,12 +51,13 @@ type SeatLogisticsBadgesProps = SeatMapGuestLogistics & {
   scale?: number
 }
 
-/** Mini overlays for allergies, baby chair, and kids menu on seat avatars. */
+/** Mini overlays for allergies, baby chair, kids menu, and no meal on seat avatars. */
 export function SeatLogisticsBadges({
   showLogistics,
   dietary_restrictions,
   needs_baby_chair,
   needs_kids_menu,
+  no_meal,
   scale = 1,
 }: SeatLogisticsBadgesProps) {
   if (!showLogistics) return null
@@ -64,7 +66,8 @@ export function SeatLogisticsBadges({
   const hasAllergies = allergies.length > 0
   const babyChair = Boolean(needs_baby_chair)
   const kidsMenu = Boolean(needs_kids_menu)
-  if (!hasAllergies && !babyChair && !kidsMenu) return null
+  const skipMeal = Boolean(no_meal)
+  if (!hasAllergies && !babyChair && !kidsMenu && !skipMeal) return null
 
   const dot = Math.max(7, Math.round(8 * scale))
   const icon = Math.max(10, Math.round(11 * scale))
@@ -79,6 +82,16 @@ export function SeatLogisticsBadges({
           title={allergyTitle}
           aria-label={allergyTitle}
         />
+      ) : null}
+      {skipMeal ? (
+        <span
+          className="pointer-events-none absolute right-0 top-0 z-[2] flex items-center justify-center rounded-full border border-white bg-zinc-100 text-zinc-700 shadow-sm"
+          style={{ width: icon, height: icon, fontSize: Math.max(7, Math.round(7 * scale)) }}
+          title="No meal"
+          aria-label="No meal"
+        >
+          🚫
+        </span>
       ) : null}
       {babyChair ? (
         <span
@@ -108,7 +121,8 @@ export function seatMapGuestHasLogistics(guest: SeatMapGuestLogistics): boolean 
   return (
     guestHasDietaryRestrictions(guest.dietary_restrictions) ||
     Boolean(guest.needs_baby_chair) ||
-    Boolean(guest.needs_kids_menu)
+    Boolean(guest.needs_kids_menu) ||
+    Boolean(guest.no_meal)
   )
 }
 
@@ -116,67 +130,316 @@ export type SeatMapLogisticsFilters = {
   allergies: boolean
   babyChair: boolean
   kidsMenu: boolean
+  noMeal: boolean
 }
 
 export const SEAT_MAP_LOGISTICS_FILTERS_DEFAULT: SeatMapLogisticsFilters = {
   allergies: true,
   babyChair: true,
   kidsMenu: true,
+  noMeal: true,
 }
 
-type SeatLogisticsCalloutsProps = SeatMapGuestLogistics & {
+function guestLogisticsCalloutFlags(
+  guest: SeatMapGuestLogistics,
+  filters: SeatMapLogisticsFilters
+) {
+  const allergies = normalizeDietaryRestrictions(guest.dietary_restrictions)
+  return {
+    showAllergies: filters.allergies && allergies.length > 0,
+    showBabyChair: filters.babyChair && Boolean(guest.needs_baby_chair),
+    showKidsMenu: filters.kidsMenu && Boolean(guest.needs_kids_menu),
+    showNoMeal: filters.noMeal && Boolean(guest.no_meal),
+    allergies,
+  }
+}
+
+export function guestHasVisibleLogisticsCallout(
+  guest: SeatMapGuestLogistics,
+  filters: SeatMapLogisticsFilters
+): boolean {
+  const flags = guestLogisticsCalloutFlags(guest, filters)
+  return (
+    flags.showAllergies ||
+    flags.showBabyChair ||
+    flags.showKidsMenu ||
+    flags.showNoMeal
+  )
+}
+
+type SeatLogisticsCalloutContentProps = SeatMapGuestLogistics & {
   filters: SeatMapLogisticsFilters
 }
 
-/** Floating speech bubbles for catering / logistics map overlays. */
-export function SeatLogisticsCallouts({
+/** Inner content for a catering logistics speech bubble. */
+export function SeatLogisticsCalloutContent({
   filters,
   dietary_restrictions,
   needs_baby_chair,
   needs_kids_menu,
-}: SeatLogisticsCalloutsProps) {
-  const allergies = normalizeDietaryRestrictions(dietary_restrictions)
-  const showAllergies = filters.allergies && allergies.length > 0
-  const showBabyChair = filters.babyChair && Boolean(needs_baby_chair)
-  const showKidsMenu = filters.kidsMenu && Boolean(needs_kids_menu)
-  if (!showAllergies && !showBabyChair && !showKidsMenu) return null
+  no_meal,
+}: SeatLogisticsCalloutContentProps) {
+  const flags = guestLogisticsCalloutFlags(
+    { dietary_restrictions, needs_baby_chair, needs_kids_menu, no_meal },
+    filters
+  )
+  if (
+    !flags.showAllergies &&
+    !flags.showBabyChair &&
+    !flags.showKidsMenu &&
+    !flags.showNoMeal
+  ) {
+    return null
+  }
 
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      {flags.showAllergies ? (
+        <div className="flex max-w-full flex-wrap items-center justify-center gap-0.5">
+          {flags.allergies.map((item) => (
+            <span
+              key={item}
+              className={`inline-flex max-w-full truncate rounded-full border px-1.5 py-px text-[9px] font-semibold ${dietaryBadgeClass(item)}`}
+            >
+              {item}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {flags.showBabyChair ? (
+        <span className="whitespace-nowrap text-[9px] font-semibold text-zinc-800">
+          🪑 Baby Chair
+        </span>
+      ) : null}
+      {flags.showKidsMenu ? (
+        <span className="whitespace-nowrap text-[9px] font-semibold text-zinc-800">
+          🧒 Kids Menu
+        </span>
+      ) : null}
+      {flags.showNoMeal ? (
+        <span className="whitespace-nowrap text-[9px] font-semibold text-zinc-800">
+          🚫 No Meal
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+export type SeatLogisticsCalloutAnchor = {
+  guestId: string
+  anchorX: number
+  anchorY: number
+  logistics: SeatMapGuestLogistics
+}
+
+export type SeatLogisticsCalloutLayout = {
+  guestId: string
+  anchorX: number
+  anchorY: number
+  boxX: number
+  boxY: number
+  boxW: number
+  boxH: number
+  lineX1: number
+  lineY1: number
+  lineX2: number
+  lineY2: number
+  logistics: SeatMapGuestLogistics
+}
+
+type CalloutSide = 'top' | 'bottom' | 'left' | 'right'
+
+const CALLOUT_BOX_W = 76
+const CALLOUT_BOX_H = 30
+const CALLOUT_GAP = 5
+const CALLOUT_OUTWARD = 34
+
+function boxesOverlap(
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number }
+): boolean {
+  return !(
+    a.x + a.w + CALLOUT_GAP <= b.x ||
+    b.x + b.w + CALLOUT_GAP <= a.x ||
+    a.y + a.h + CALLOUT_GAP <= b.y ||
+    b.y + b.h + CALLOUT_GAP <= a.y
+  )
+}
+
+function detectCalloutSide(
+  anchorX: number,
+  anchorY: number,
+  tableW: number,
+  tableH: number
+): CalloutSide {
+  const cx = tableW / 2
+  const cy = tableH / 2
+  const dx = anchorX - cx
+  const dy = anchorY - cy
+  if (Math.abs(dy) >= Math.abs(dx)) return dy < 0 ? 'top' : 'bottom'
+  return dx < 0 ? 'left' : 'right'
+}
+
+function initialCalloutBox(
+  anchorX: number,
+  anchorY: number,
+  side: CalloutSide
+): { x: number; y: number; w: number; h: number } {
+  const w = CALLOUT_BOX_W
+  const h = CALLOUT_BOX_H
+  switch (side) {
+    case 'top':
+      return { x: anchorX - w / 2, y: anchorY - CALLOUT_OUTWARD - h, w, h }
+    case 'bottom':
+      return { x: anchorX - w / 2, y: anchorY + CALLOUT_OUTWARD, w, h }
+    case 'left':
+      return { x: anchorX - CALLOUT_OUTWARD - w, y: anchorY - h / 2, w, h }
+    case 'right':
+      return { x: anchorX + CALLOUT_OUTWARD, y: anchorY - h / 2, w, h }
+  }
+}
+
+function leaderLineToBox(
+  anchorX: number,
+  anchorY: number,
+  box: { x: number; y: number; w: number; h: number }
+): { x1: number; y1: number; x2: number; y2: number } {
+  const cx = box.x + box.w / 2
+  const cy = box.y + box.h / 2
+  const dx = cx - anchorX
+  const dy = cy - anchorY
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    const x2 = dx < 0 ? box.x + box.w : box.x
+    return { x1: anchorX, y1: anchorY, x2, y2: cy }
+  }
+  const y2 = dy < 0 ? box.y + box.h : box.y
+  return { x1: anchorX, y1: anchorY, x2: cx, y2 }
+}
+
+function resolveCalloutOverlaps(
+  boxes: { x: number; y: number; w: number; h: number; side: CalloutSide }[]
+): void {
+  for (let pass = 0; pass < 24; pass += 1) {
+    let moved = false
+    for (let i = 0; i < boxes.length; i += 1) {
+      for (let j = i + 1; j < boxes.length; j += 1) {
+        const a = boxes[i]!
+        const b = boxes[j]!
+        if (!boxesOverlap(a, b)) continue
+        const overlapX =
+          Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) + CALLOUT_GAP
+        const overlapY =
+          Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) + CALLOUT_GAP
+        if (a.side === b.side && (a.side === 'top' || a.side === 'bottom')) {
+          b.x += overlapX * (b.x >= a.x ? 1 : -1)
+        } else if (a.side === b.side && (a.side === 'left' || a.side === 'right')) {
+          b.y += overlapY * (b.y >= a.y ? 1 : -1)
+        } else if (overlapX < overlapY) {
+          b.x += overlapX * (b.x >= a.x ? 1 : -1)
+        } else {
+          b.y += overlapY * (b.y >= a.y ? 1 : -1)
+        }
+        moved = true
+      }
+    }
+    if (!moved) break
+  }
+}
+
+/** Place non-overlapping callout boxes around a table with leader-line endpoints. */
+export function layoutSeatLogisticsCallouts(
+  anchors: SeatLogisticsCalloutAnchor[],
+  tableW: number,
+  tableH: number
+): SeatLogisticsCalloutLayout[] {
+  if (anchors.length === 0 || tableW <= 0 || tableH <= 0) return []
+
+  const draft = anchors.map((anchor) => {
+    const side = detectCalloutSide(anchor.anchorX, anchor.anchorY, tableW, tableH)
+    return {
+      ...anchor,
+      side,
+      ...initialCalloutBox(anchor.anchorX, anchor.anchorY, side),
+    }
+  })
+
+  resolveCalloutOverlaps(draft)
+
+  return draft.map((item) => {
+    const line = leaderLineToBox(item.anchorX, item.anchorY, item)
+    return {
+      guestId: item.guestId,
+      anchorX: item.anchorX,
+      anchorY: item.anchorY,
+      boxX: item.x,
+      boxY: item.y,
+      boxW: item.w,
+      boxH: item.h,
+      lineX1: line.x1,
+      lineY1: line.y1,
+      lineX2: line.x2,
+      lineY2: line.y2,
+      logistics: item.logistics,
+    }
+  })
+}
+
+type SeatMapTableLogisticsOverlayProps = {
+  layout: SeatLogisticsCalloutLayout[]
+  filters: SeatMapLogisticsFilters
+}
+
+/** Leader-line callout overlay for one table on the catering map. */
+export function SeatMapTableLogisticsOverlay({
+  layout,
+  filters,
+}: SeatMapTableLogisticsOverlayProps) {
+  if (layout.length === 0) return null
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-[8] overflow-visible">
+      <svg
+        className="absolute inset-0 h-full w-full overflow-visible"
+        aria-hidden
+      >
+        {layout.map((item) => (
+          <line
+            key={`line-${item.guestId}`}
+            x1={item.lineX1}
+            y1={item.lineY1}
+            x2={item.lineX2}
+            y2={item.lineY2}
+            stroke="#94a3b8"
+            strokeDasharray="3 3"
+            strokeWidth={1}
+          />
+        ))}
+      </svg>
+      {layout.map((item) => (
+        <div
+          key={`box-${item.guestId}`}
+          className="absolute rounded-lg border border-zinc-200/90 bg-white px-1.5 py-1 shadow-[0_4px_14px_rgba(0,0,0,0.12)]"
+          style={{
+            left: item.boxX,
+            top: item.boxY,
+            width: item.boxW,
+            minHeight: item.boxH,
+          }}
+        >
+          <SeatLogisticsCalloutContent filters={filters} {...item.logistics} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** @deprecated Per-seat callouts overlap; use SeatMapTableLogisticsOverlay instead. */
+export function SeatLogisticsCallouts(props: SeatLogisticsCalloutContentProps) {
+  if (!guestHasVisibleLogisticsCallout(props, props.filters)) return null
   return (
     <div className="pointer-events-none absolute bottom-full left-1/2 z-[8] mb-1 w-max max-w-[min(128px,30vw)] -translate-x-1/2">
       <div className="relative rounded-lg border border-zinc-200/90 bg-white px-1.5 py-1 shadow-[0_4px_14px_rgba(0,0,0,0.12)]">
-        <div className="flex flex-col items-center gap-0.5">
-          {showAllergies ? (
-            <div className="flex max-w-full flex-wrap items-center justify-center gap-0.5">
-              {allergies.map((item) => (
-                <span
-                  key={item}
-                  className={`inline-flex max-w-full truncate rounded-full border px-1.5 py-px text-[9px] font-semibold ${dietaryBadgeClass(item)}`}
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
-          ) : null}
-          {showBabyChair ? (
-            <span className="whitespace-nowrap text-[9px] font-semibold text-zinc-800">
-              🪑 Baby Chair
-            </span>
-          ) : null}
-          {showKidsMenu ? (
-            <span className="whitespace-nowrap text-[9px] font-semibold text-zinc-800">
-              🧒 Kids Menu
-            </span>
-          ) : null}
-        </div>
-        <div
-          className="absolute left-1/2 top-full -translate-x-1/2 border-x-[5px] border-t-[6px] border-x-transparent border-t-white"
-          aria-hidden
-        />
-        <div
-          className="absolute left-1/2 top-full mt-px -translate-x-1/2 border-x-[6px] border-t-[7px] border-x-transparent border-t-zinc-200/90"
-          style={{ zIndex: -1 }}
-          aria-hidden
-        />
+        <SeatLogisticsCalloutContent {...props} />
       </div>
     </div>
   )

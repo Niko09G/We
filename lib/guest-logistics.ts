@@ -6,6 +6,7 @@ export type GuestLogisticsFields = {
   dietary_restrictions: string[]
   needs_baby_chair: boolean
   needs_kids_menu: boolean
+  no_meal: boolean
 }
 
 const DIETARY_SET = new Set<string>(DIETARY_RESTRICTION_OPTIONS)

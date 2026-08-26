@@ -36,8 +36,10 @@ import {
 } from '@/lib/table-teams'
 import {
   SeatLogisticsBadges,
-  SeatLogisticsCallouts,
   SeatMapLandmarksLayer,
+  SeatMapTableLogisticsOverlay,
+  guestHasVisibleLogisticsCallout,
+  layoutSeatLogisticsCallouts,
   SEAT_MAP_ZOOM_MIN,
   SEAT_MAP_ZOOM_STEP,
   SEAT_MAP_ZOOM_MAX,
@@ -49,6 +51,7 @@ import {
   type SeatMapGuestLogistics,
   type SeatMapLandmark,
   type SeatMapLogisticsFilters,
+  type SeatLogisticsCalloutLayout,
 } from '@/components/SeatMap'
 
 export type SeatMapGuest = SeatMapGuestLogistics & {
@@ -175,8 +178,11 @@ function SeatMapTableGuests({
   logisticsFilters: SeatMapLogisticsFilters
   tableLabel: React.ReactNode
 }) {
+  const tableRootRef = useRef<HTMLDivElement>(null)
+  const seatAnchorRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const middleRef = useRef<HTMLDivElement>(null)
   const [middleW, setMiddleW] = useState(0)
+  const [calloutLayout, setCalloutLayout] = useState<SeatLogisticsCalloutLayout[]>([])
   const safeCapacity = Math.min(MAX_SEAT_MAP_CAPACITY, Math.max(1, Math.trunc(capacity)))
 
   useLayoutEffect(() => {
@@ -213,6 +219,49 @@ function SeatMapTableGuests({
     seatPx: leftEndSeat != null || rightEndSeat != null ? endCapSeatPx : 0,
   })
 
+  const measureCalloutLayout = useCallback(() => {
+    if (!logisticsCallouts) {
+      setCalloutLayout([])
+      return
+    }
+    const root = tableRootRef.current
+    if (!root) return
+    const rootRect = root.getBoundingClientRect()
+    if (rootRect.width <= 0 || rootRect.height <= 0) return
+
+    const anchors = guests
+      .filter((guest) => guestHasVisibleLogisticsCallout(guest, logisticsFilters))
+      .flatMap((guest) => {
+        const el = seatAnchorRefs.current.get(guest.id)
+        if (!el) return []
+        const rect = el.getBoundingClientRect()
+        return [
+          {
+            guestId: guest.id,
+            anchorX: rect.left + rect.width / 2 - rootRect.left,
+            anchorY: rect.top + rect.height / 2 - rootRect.top,
+            logistics: guest,
+          },
+        ]
+      })
+
+    setCalloutLayout(
+      layoutSeatLogisticsCallouts(anchors, rootRect.width, rootRect.height)
+    )
+  }, [guests, logisticsCallouts, logisticsFilters])
+
+  useLayoutEffect(() => {
+    measureCalloutLayout()
+  }, [measureCalloutLayout, middleW, safeCapacity, topCount, bottomCount])
+
+  useLayoutEffect(() => {
+    const root = tableRootRef.current
+    if (!root || !logisticsCallouts) return
+    const ro = new ResizeObserver(() => measureCalloutLayout())
+    ro.observe(root)
+    return () => ro.disconnect()
+  }, [logisticsCallouts, measureCalloutLayout])
+
   const renderSeat = (seatNum: number, size: number) => {
     const guest = bySeat.get(seatNum)
     if (!guest) {
@@ -231,6 +280,10 @@ function SeatMapTableGuests({
     return (
       <div
         key={guest.id}
+        ref={(el) => {
+          if (el) seatAnchorRefs.current.set(guest.id, el)
+          else seatAnchorRefs.current.delete(guest.id)
+        }}
         className="relative shrink-0"
         style={{ width: size, height: size, flexShrink: 0 }}
         title={`${guest.full_name} · Seat ${guest.seat_number}`}
@@ -261,16 +314,9 @@ function SeatMapTableGuests({
           dietary_restrictions={guest.dietary_restrictions}
           needs_baby_chair={guest.needs_baby_chair}
           needs_kids_menu={guest.needs_kids_menu}
+          no_meal={guest.no_meal}
           scale={badgeScale}
         />
-        {logisticsCallouts ? (
-          <SeatLogisticsCallouts
-            filters={logisticsFilters}
-            dietary_restrictions={guest.dietary_restrictions}
-            needs_baby_chair={guest.needs_baby_chair}
-            needs_kids_menu={guest.needs_kids_menu}
-          />
-        ) : null}
       </div>
     )
   }
@@ -297,7 +343,8 @@ function SeatMapTableGuests({
 
   return (
     <div
-      className="w-full min-w-0 overflow-visible px-1"
+      ref={tableRootRef}
+      className="relative w-full min-w-0 overflow-visible px-1"
       style={{
         paddingTop: layoutMetrics.edgePaddingTop,
         paddingBottom: layoutMetrics.edgePaddingBottom,
@@ -337,6 +384,9 @@ function SeatMapTableGuests({
           {rightEndSeat != null ? renderSeat(rightEndSeat, endCapSeatPx) : null}
         </div>
       </div>
+      {logisticsCallouts ? (
+        <SeatMapTableLogisticsOverlay layout={calloutLayout} filters={logisticsFilters} />
+      ) : null}
     </div>
   )
 }
@@ -416,6 +466,11 @@ function SeatMapControls({
             active={logisticsFilters.kidsMenu}
             label="Kids Menu"
             onClick={() => onToggleLogisticsFilter('kidsMenu')}
+          />
+          <MapFilterToggle
+            active={logisticsFilters.noMeal}
+            label="No Meal"
+            onClick={() => onToggleLogisticsFilter('noMeal')}
           />
         </div>
       ) : null}
