@@ -18,7 +18,7 @@ import {
 } from '@/lib/seat-map-layout'
 import { teamPageAdminFormDefaults } from '@/lib/team-page-config'
 import { loadGuestFloorLayout } from '@/lib/admin-floor-layout'
-import { SeatMapLandmarksLayer, SeatMapSearchInput, type SeatMapLandmark, SEAT_MAP_WORLD_WIDTH, SEAT_MAP_WORLD_HEIGHT, SEAT_MAP_ZOOM_MIN, SEAT_MAP_ZOOM_STEP, SEAT_MAP_ZOOM_DEFAULT, SEAT_MAP_ZOOM_MAX, clampSeatMapTransform, createSeatMapPointerHandlers, SEAT_MAP_VIEWPORT_TOUCH_ACTION } from '@/components/SeatMap'
+import { SeatMapLandmarksLayer, SeatMapSearchInput, SeatLogisticsBadges, type SeatMapLandmark, SEAT_MAP_WORLD_WIDTH, SEAT_MAP_WORLD_HEIGHT, SEAT_MAP_ZOOM_MIN, SEAT_MAP_ZOOM_STEP, SEAT_MAP_ZOOM_DEFAULT, SEAT_MAP_ZOOM_MAX, clampSeatMapTransform, createSeatMapPointerHandlers, SEAT_MAP_VIEWPORT_TOUCH_ACTION } from '@/components/SeatMap'
 import {
   FLOOR_GRID_COLS,
   FLOOR_GRID_ROWS,
@@ -39,6 +39,9 @@ type SeatFinderGuest = {
   photo_url: string | null
   table_id: string
   seat_number: number
+  dietary_restrictions?: string[] | null
+  needs_baby_chair?: boolean
+  needs_kids_menu?: boolean
 }
 
 type SeatFinderTable = {
@@ -226,6 +229,7 @@ function GuestTableSeatMap({
   onSelectGuest,
   tableLabel,
   suppressPointerEvents = false,
+  showLogistics = false,
 }: {
   capacity: number
   guests: GuestWithTable[]
@@ -235,6 +239,7 @@ function GuestTableSeatMap({
   tableLabel: React.ReactNode
   /** During pan/zoom transitions, disable hit targets on scaled seats/rings. */
   suppressPointerEvents?: boolean
+  showLogistics?: boolean
 }) {
   const middleRef = useRef<HTMLDivElement>(null)
   const [middleW, setMiddleW] = useState(0)
@@ -290,6 +295,8 @@ function GuestTableSeatMap({
       )
     }
 
+    const badgeScale = size / 28
+
     return (
       <div
         key={guest.id}
@@ -337,6 +344,13 @@ function GuestTableSeatMap({
             </span>
           )}
         </button>
+        <SeatLogisticsBadges
+          showLogistics={showLogistics}
+          dietary_restrictions={guest.dietary_restrictions}
+          needs_baby_chair={guest.needs_baby_chair}
+          needs_kids_menu={guest.needs_kids_menu}
+          scale={badgeScale}
+        />
       </div>
     )
   }
@@ -1158,6 +1172,7 @@ export function SeatingMapPanel({
                         selectedGuestId={selectedGuest?.id ?? null}
                         onSelectGuest={selectGuest}
                         suppressPointerEvents={dragging || transitionTransform}
+                        showLogistics={false}
                         tableLabel={
                           <span
                             className={`block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-center text-[10px] font-semibold tracking-wide ${

@@ -19,6 +19,7 @@ type NavItem = {
     | 'tables'
     | 'floorplan'
     | 'seating'
+    | 'catering'
     | 'attendees'
     | 'submissions'
     | 'greetings'
@@ -117,6 +118,25 @@ const NAV_ITEMS: NavItem[] = [
     icon: ({ active }) => <NavIcon active={active} d={<><path d="M5 19v-5a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v5" /><path d="M9 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm6 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" /></>} />,
   },
   {
+    href: '/admin/catering-map',
+    label: 'Catering map',
+    key: 'catering',
+    section: 'event',
+    icon: ({ active }) => (
+      <NavIcon
+        active={active}
+        d={
+          <>
+            <path d="M4 10h16v8H4z" />
+            <path d="M8 6h8v4H8z" />
+            <circle cx="9" cy="14" r="1" fill="currentColor" stroke="none" />
+            <circle cx="15" cy="14" r="1" fill="currentColor" stroke="none" />
+          </>
+        }
+      />
+    ),
+  },
+  {
     href: '/admin/attendees',
     label: 'Attendees',
     key: 'attendees',
@@ -197,6 +217,7 @@ export default function AdminSidebar() {
     if (pathname.startsWith('/admin/tables')) return 'tables'
     if (pathname.startsWith('/admin/layout')) return 'floorplan'
     if (pathname.startsWith('/admin/seating')) return 'seating'
+    if (pathname.startsWith('/admin/catering-map')) return 'catering'
     if (pathname.startsWith('/admin/attendees')) return 'attendees'
     if (pathname.startsWith('/admin/submissions')) return 'submissions'
     if (pathname.startsWith('/admin/greetings')) return 'greetings'

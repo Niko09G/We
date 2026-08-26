@@ -17,6 +17,10 @@ import {
   type VenueLandmarkRotation,
   type VenueLandmarkShape,
 } from '@/lib/floor-layout'
+import {
+  guestHasDietaryRestrictions,
+  normalizeDietaryRestrictions,
+} from '@/lib/guest-logistics'
 
 /** Guest map world size — matches admin floor plan canvas (4:3). */
 export const SEAT_MAP_WORLD_WIDTH = 960
@@ -27,6 +31,84 @@ export const SEAT_MAP_ZOOM_MIN = 0.35
 export const SEAT_MAP_ZOOM_STEP = 0.08
 export const SEAT_MAP_ZOOM_DEFAULT = SEAT_MAP_ZOOM_MIN + SEAT_MAP_ZOOM_STEP
 export const SEAT_MAP_ZOOM_MAX = 1.28
+/** Slightly higher default zoom for internal catering / logistics scanning. */
+export const SEAT_MAP_ZOOM_CATERING =
+  SEAT_MAP_ZOOM_DEFAULT + SEAT_MAP_ZOOM_STEP * 2
+
+export type SeatMapGuestLogistics = {
+  dietary_restrictions?: string[] | null
+  needs_baby_chair?: boolean
+  needs_kids_menu?: boolean
+}
+
+type SeatLogisticsBadgesProps = SeatMapGuestLogistics & {
+  showLogistics: boolean
+  /** Scale badge size relative to seat bubble (1 = default). */
+  scale?: number
+}
+
+/** Mini overlays for allergies, baby chair, and kids menu on seat avatars. */
+export function SeatLogisticsBadges({
+  showLogistics,
+  dietary_restrictions,
+  needs_baby_chair,
+  needs_kids_menu,
+  scale = 1,
+}: SeatLogisticsBadgesProps) {
+  if (!showLogistics) return null
+
+  const allergies = normalizeDietaryRestrictions(dietary_restrictions)
+  const hasAllergies = allergies.length > 0
+  const babyChair = Boolean(needs_baby_chair)
+  const kidsMenu = Boolean(needs_kids_menu)
+  if (!hasAllergies && !babyChair && !kidsMenu) return null
+
+  const dot = Math.max(7, Math.round(8 * scale))
+  const icon = Math.max(10, Math.round(11 * scale))
+  const allergyTitle = hasAllergies ? `Allergies: ${allergies.join(', ')}` : undefined
+
+  return (
+    <>
+      {hasAllergies ? (
+        <span
+          className="pointer-events-none absolute left-0 top-0 z-[2] rounded-full border border-white bg-red-500 shadow-sm"
+          style={{ width: dot, height: dot }}
+          title={allergyTitle}
+          aria-label={allergyTitle}
+        />
+      ) : null}
+      {babyChair ? (
+        <span
+          className="pointer-events-none absolute bottom-0 left-0 z-[2] flex items-center justify-center rounded-full border border-white bg-amber-100 text-amber-900 shadow-sm"
+          style={{ width: icon, height: icon, fontSize: Math.max(7, Math.round(7 * scale)) }}
+          title="Baby chair"
+          aria-label="Baby chair"
+        >
+          🪑
+        </span>
+      ) : null}
+      {kidsMenu ? (
+        <span
+          className="pointer-events-none absolute bottom-0 right-0 z-[2] flex items-center justify-center rounded-full border border-white bg-sky-100 text-sky-900 shadow-sm"
+          style={{ width: icon, height: icon, fontSize: Math.max(7, Math.round(7 * scale)) }}
+          title="Kids menu"
+          aria-label="Kids menu"
+        >
+          🧒
+        </span>
+      ) : null}
+    </>
+  )
+}
+
+export function seatMapGuestHasLogistics(guest: SeatMapGuestLogistics): boolean {
+  return (
+    guestHasDietaryRestrictions(guest.dietary_restrictions) ||
+    Boolean(guest.needs_baby_chair) ||
+    Boolean(guest.needs_kids_menu)
+  )
+}
+
 /** Inset padding when clamping pan so the canvas edge cannot scroll past the viewport. */
 export const SEAT_MAP_PAN_PADDING = 0
 
@@ -370,3 +452,6 @@ export function SeatMapLandmarksLayer({ landmarks, accentColor }: SeatMapLandmar
     </>
   )
 }
+
+export { SeatMap } from '@/components/SeatMapView'
+export type { SeatMapGuest, SeatMapProps } from '@/components/SeatMapView'

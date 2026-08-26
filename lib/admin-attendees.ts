@@ -4,6 +4,7 @@ import {
   normalizeAttendeeEmail,
   normalizeAttendeeName,
 } from '@/lib/attendees-csv'
+import { normalizeDietaryRestrictions } from '@/lib/guest-logistics'
 
 export type AttendeeRow = {
   id: string
@@ -19,12 +20,15 @@ export type AttendeeRow = {
   photo_url: string | null
   checked_in_at: string | null
   gift_amount_cents: number | null
+  dietary_restrictions: string[]
+  needs_baby_chair: boolean
+  needs_kids_menu: boolean
   created_at: string
   updated_at: string
 }
 
 const SELECT =
-  'id,full_name,email,phone,rsvp_status,table_id,seat_number,group_id,is_placeholder,party_role,photo_url,checked_in_at,gift_amount_cents,created_at,updated_at'
+  'id,full_name,email,phone,rsvp_status,table_id,seat_number,group_id,is_placeholder,party_role,photo_url,checked_in_at,gift_amount_cents,dietary_restrictions,needs_baby_chair,needs_kids_menu,created_at,updated_at'
 
 const BUCKET = 'attendees'
 const AVATAR_PREFIX = 'avatars'
@@ -37,6 +41,9 @@ export function normalizeAttendeeRow(row: AttendeeRow): AttendeeRow {
     group_id: r.group_id ?? null,
     is_placeholder: Boolean(r.is_placeholder),
     party_role: r.party_role ?? null,
+    dietary_restrictions: normalizeDietaryRestrictions(r.dietary_restrictions),
+    needs_baby_chair: Boolean(r.needs_baby_chair),
+    needs_kids_menu: Boolean(r.needs_kids_menu),
   }
 }
 
@@ -66,6 +73,9 @@ export type AttendeeUpdateInput = {
   checked_in_at?: string | null
   /** Whole cents; null clears */
   gift_amount_cents?: number | null
+  dietary_restrictions?: string[]
+  needs_baby_chair?: boolean
+  needs_kids_menu?: boolean
 }
 
 export async function updateAttendee(
@@ -113,6 +123,15 @@ export async function updateAttendee(
     row.gift_amount_cents =
       g === null || g === undefined || Number.isNaN(g) ? null : Math.trunc(g)
   }
+  if (patch.dietary_restrictions !== undefined) {
+    row.dietary_restrictions = normalizeDietaryRestrictions(patch.dietary_restrictions)
+  }
+  if (patch.needs_baby_chair !== undefined) {
+    row.needs_baby_chair = Boolean(patch.needs_baby_chair)
+  }
+  if (patch.needs_kids_menu !== undefined) {
+    row.needs_kids_menu = Boolean(patch.needs_kids_menu)
+  }
 
   if (Object.keys(row).length === 0) return
 
@@ -134,6 +153,9 @@ export async function createAttendee(input: {
   group_id?: string | null
   is_placeholder?: boolean
   party_role?: string | null
+  dietary_restrictions?: string[]
+  needs_baby_chair?: boolean
+  needs_kids_menu?: boolean
 }): Promise<AttendeeRow> {
   const full_name = input.full_name.trim()
   if (!full_name) throw new Error('Full name is required.')
@@ -167,6 +189,9 @@ export async function createAttendee(input: {
       group_id,
       is_placeholder: input.is_placeholder ?? false,
       party_role,
+      dietary_restrictions: normalizeDietaryRestrictions(input.dietary_restrictions),
+      needs_baby_chair: Boolean(input.needs_baby_chair),
+      needs_kids_menu: Boolean(input.needs_kids_menu),
     })
     .select(SELECT)
     .single()

@@ -26,6 +26,13 @@ import {
   AdminSelectDropdown,
   type AdminSelectOption,
 } from '@/app/admin/_components/AdminSelectDropdown'
+import { AdminDropdown } from '@/app/admin/_components/AdminDropdown'
+import {
+  DIETARY_RESTRICTION_OPTIONS,
+  dietaryBadgeClass,
+  normalizeDietaryRestrictions,
+  type DietaryRestriction,
+} from '@/lib/guest-logistics'
 
 export type AttendeePartyBlock = {
   key: string
@@ -35,7 +42,7 @@ export type AttendeePartyBlock = {
 }
 
 const BUILDER_SHELL =
-  'admin-font relative z-10 flex h-[90vh] max-h-[900px] min-h-0 w-full max-w-[1080px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm'
+  'admin-font relative z-10 flex h-[90vh] max-h-[900px] min-h-0 w-full max-w-[1180px] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm'
 
 const MENU_ITEM =
   'flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-[14px] font-medium text-[#171717] hover:bg-zinc-50'
@@ -64,6 +71,9 @@ export type EditorPartyRow = {
   /** Local preview (blob URL); revoke when replaced */
   photoObjectUrl: string | null
   photoFile: File | null
+  dietary_restrictions: DietaryRestriction[]
+  needs_baby_chair: boolean
+  needs_kids_menu: boolean
 }
 
 function newRowKey() {
@@ -110,6 +120,126 @@ function normRsvp(v: RsvpValue): string | null {
   if (v === 'yes') return 'yes'
   if (v === 'no') return 'no'
   return 'pending'
+}
+
+function logisticsPatchFromRow(r: EditorPartyRow) {
+  return {
+    dietary_restrictions: normalizeDietaryRestrictions(r.dietary_restrictions),
+    needs_baby_chair: r.needs_baby_chair,
+    needs_kids_menu: r.needs_kids_menu,
+  }
+}
+
+function LogisticsToggle({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-pressed={active}
+      className={`inline-flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-full border px-2.5 text-[11px] font-semibold transition-colors ${
+        active
+          ? 'border-[#5b38f2]/35 bg-[#5b38f2]/10 text-[#3f2bb8]'
+          : 'border-[#ebebeb] bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-700'
+      }`}
+    >
+      <span
+        className={`flex h-4 w-4 items-center justify-center rounded-full border text-[9px] ${
+          active ? 'border-[#5b38f2] bg-[#5b38f2] text-white' : 'border-zinc-300 bg-white text-transparent'
+        }`}
+        aria-hidden
+      >
+        ✓
+      </span>
+      <span className="whitespace-nowrap">{label}</span>
+    </button>
+  )
+}
+
+function DietaryRestrictionsPicker({
+  value,
+  onChange,
+}: {
+  value: DietaryRestriction[]
+  onChange: (next: DietaryRestriction[]) => void
+}) {
+  const toggle = (option: DietaryRestriction) => {
+    onChange(
+      value.includes(option)
+        ? value.filter((v) => v !== option)
+        : [...value, option]
+    )
+  }
+
+  return (
+    <AdminDropdown
+      closeOnMenuItemClick={false}
+      className="min-w-0"
+      buttonClassName="flex h-9 w-full min-w-[7.5rem] max-w-[11rem] cursor-pointer items-center gap-1 rounded-full border border-[#ebebeb] bg-white px-2 py-1 text-left text-[11px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300"
+      menuClassName="min-w-[9rem]"
+      trigger={
+        <>
+          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+            {value.length === 0 ? (
+              <span className="truncate text-zinc-400">Dietary</span>
+            ) : (
+              value.map((item) => (
+                <span
+                  key={item}
+                  className={`inline-flex max-w-full truncate rounded-full border px-1.5 py-px text-[10px] font-semibold ${dietaryBadgeClass(item)}`}
+                >
+                  {item}
+                </span>
+              ))
+            )}
+          </span>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            className="h-3.5 w-3.5 shrink-0 text-zinc-400"
+            aria-hidden
+          >
+            <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </>
+      }
+    >
+      {DIETARY_RESTRICTION_OPTIONS.map((option) => {
+        const selected = value.includes(option)
+        return (
+          <button
+            key={option}
+            type="button"
+            onClick={() => toggle(option)}
+            className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[13px] font-medium text-[#171717] hover:bg-zinc-50"
+          >
+            <span
+              className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${dietaryBadgeClass(option)}`}
+            >
+              {option}
+            </span>
+            {selected ? (
+              <span className="text-[#5b38f2]" aria-hidden>
+                ✓
+              </span>
+            ) : (
+              <span className="h-4 w-4" aria-hidden />
+            )}
+          </button>
+        )
+      })}
+    </AdminDropdown>
+  )
 }
 
 const RsvpIconYes = () => (
@@ -188,6 +318,9 @@ function emptyRow(): EditorPartyRow {
     photo_url: null,
     photoObjectUrl: null,
     photoFile: null,
+    dietary_restrictions: [],
+    needs_baby_chair: false,
+    needs_kids_menu: false,
   }
 }
 
@@ -249,6 +382,9 @@ export function AttendeeEditorOverlay({
         photo_url: m.photo_url ?? null,
         photoObjectUrl: null,
         photoFile: null,
+        dietary_restrictions: normalizeDietaryRestrictions(m.dietary_restrictions),
+        needs_baby_chair: Boolean(m.needs_baby_chair),
+        needs_kids_menu: Boolean(m.needs_kids_menu),
       }))
     })
   }, [mode, party])
@@ -291,6 +427,9 @@ export function AttendeeEditorOverlay({
         photo_url: null,
         photoObjectUrl: null,
         photoFile: null,
+        dietary_restrictions: [],
+        needs_baby_chair: false,
+        needs_kids_menu: false,
       },
     ])
     queueMicrotask(() => nameRefs.current[k]?.focus())
@@ -378,6 +517,7 @@ export function AttendeeEditorOverlay({
             party_role: roleFromRelationship(r.relationship, 0),
             group_id: null,
             is_placeholder: false,
+            ...logisticsPatchFromRow(r),
           })
           await syncPhotoForAttendee(created.id, r.full_name, r.photoFile, null)
         } else {
@@ -391,6 +531,7 @@ export function AttendeeEditorOverlay({
               group_id: g.id,
               party_role: roleFromRelationship(r.relationship, i),
               is_placeholder: false,
+              ...logisticsPatchFromRow(r),
             })
             const prevUrl = r.photo_url
             await syncPhotoForAttendee(created.id, r.full_name, r.photoFile, prevUrl)
@@ -406,6 +547,7 @@ export function AttendeeEditorOverlay({
               full_name: r.full_name.trim(),
               rsvp_status: normRsvp(r.rsvp_status),
               party_role: roleFromRelationship(r.relationship, 0),
+              ...logisticsPatchFromRow(r),
             })
             await syncPhotoForAttendee(m.id, r.full_name, r.photoFile, m.photo_url ?? null)
           } else {
@@ -416,6 +558,7 @@ export function AttendeeEditorOverlay({
               full_name: valid[0]!.full_name.trim(),
               rsvp_status: normRsvp(valid[0]!.rsvp_status),
               party_role: 'lead',
+              ...logisticsPatchFromRow(valid[0]!),
             })
             await syncPhotoForAttendee(
               m.id,
@@ -430,6 +573,7 @@ export function AttendeeEditorOverlay({
                   full_name: r.full_name.trim(),
                   rsvp_status: normRsvp(r.rsvp_status),
                   party_role: roleFromRelationship(r.relationship, i),
+                  ...logisticsPatchFromRow(r),
                 })
                 await syncPhotoForAttendee(r.attendeeId, r.full_name, r.photoFile, r.photo_url)
               } else {
@@ -439,6 +583,7 @@ export function AttendeeEditorOverlay({
                   group_id: g.id,
                   party_role: roleFromRelationship(r.relationship, i),
                   is_placeholder: false,
+                  ...logisticsPatchFromRow(r),
                 })
                 await syncPhotoForAttendee(created.id, r.full_name, r.photoFile, null)
               }
@@ -455,6 +600,7 @@ export function AttendeeEditorOverlay({
                 full_name: r.full_name.trim(),
                 rsvp_status: normRsvp(r.rsvp_status),
                 party_role: roleFromRelationship(r.relationship, i),
+                ...logisticsPatchFromRow(r),
               })
               const prevPhoto = party.members.find((x) => x.id === r.attendeeId)?.photo_url ?? null
               await syncPhotoForAttendee(r.attendeeId, r.full_name, r.photoFile, prevPhoto)
@@ -465,6 +611,7 @@ export function AttendeeEditorOverlay({
                 group_id: gid,
                 party_role: roleFromRelationship(r.relationship, i),
                 is_placeholder: false,
+                ...logisticsPatchFromRow(r),
               })
               await syncPhotoForAttendee(created.id, r.full_name, r.photoFile, null)
             }
@@ -513,12 +660,13 @@ export function AttendeeEditorOverlay({
                 <div
                   key={row.key}
                   data-attendee-row
-                  className={`motion-safe:transition-[padding,opacity] motion-safe:duration-200 motion-safe:ease-out flex flex-col items-center gap-3 py-4 sm:flex-row sm:gap-3 ${i > 0 ? 'sm:pl-3' : ''} ${
+                  className={`motion-safe:transition-[padding,opacity] motion-safe:duration-200 motion-safe:ease-out flex flex-col gap-2 py-4 ${i > 0 ? 'sm:pl-3' : ''} ${
                     enterAnimKey === row.key
                       ? 'motion-safe:animate-[attendeePartyRowEnter_0.18s_ease-out_both]'
                       : ''
                   }`}
                 >
+                  <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-2">
                   <input
                     ref={(el) => {
                       fileInputs.current[row.key] = el
@@ -557,7 +705,7 @@ export function AttendeeEditorOverlay({
                     </button>
                   </div>
 
-                  <div className={`min-w-0 flex-1 ${FOCUS_RING}`}>
+                  <div className={`min-w-0 shrink-0 sm:max-w-[11rem] sm:flex-[0_1_11rem] ${FOCUS_RING}`}>
                     <input
                       ref={(el) => {
                         nameRefs.current[row.key] = el
@@ -574,6 +722,48 @@ export function AttendeeEditorOverlay({
                       placeholder="Full name"
                       autoFocus={i === 0 && mode === 'create'}
                       className="h-9 w-full rounded-full border-0 bg-white px-3 !text-[15px] font-medium text-zinc-900 outline-none placeholder:text-zinc-400 focus-visible:outline-none"
+                    />
+                  </div>
+
+                  <div className={`min-w-0 shrink-0 sm:max-w-[11rem] sm:flex-[0_1_11rem] ${FOCUS_RING}`}>
+                    <DietaryRestrictionsPicker
+                      value={row.dietary_restrictions}
+                      onChange={(next) =>
+                        setRows((prev) =>
+                          prev.map((r) =>
+                            r.key === row.key ? { ...r, dietary_restrictions: next } : r
+                          )
+                        )
+                      }
+                    />
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                    <LogisticsToggle
+                      active={row.needs_baby_chair}
+                      label="Baby Chair 🪑"
+                      onClick={() =>
+                        setRows((prev) =>
+                          prev.map((r) =>
+                            r.key === row.key
+                              ? { ...r, needs_baby_chair: !r.needs_baby_chair }
+                              : r
+                          )
+                        )
+                      }
+                    />
+                    <LogisticsToggle
+                      active={row.needs_kids_menu}
+                      label="Kids Menu 🧒"
+                      onClick={() =>
+                        setRows((prev) =>
+                          prev.map((r) =>
+                            r.key === row.key
+                              ? { ...r, needs_kids_menu: !r.needs_kids_menu }
+                              : r
+                          )
+                        )
+                      }
                     />
                   </div>
 
@@ -633,6 +823,7 @@ export function AttendeeEditorOverlay({
                   ) : (
                     <span className="w-14 shrink-0 sm:w-[4.5rem]" aria-hidden />
                   )}
+                  </div>
                 </div>
               )
             })}
