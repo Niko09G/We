@@ -145,21 +145,13 @@ function LogisticsToggle({
       onClick={onClick}
       title={label}
       aria-pressed={active}
-      className={`inline-flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-full border px-2.5 text-[11px] font-semibold transition-colors ${
+      className={`${DROPDOWN_BTN} border-0 shadow-none ${
         active
           ? 'border-[#5b38f2]/35 bg-[#5b38f2]/10 text-[#3f2bb8]'
-          : 'border-[#ebebeb] bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-700'
+          : 'text-zinc-600'
       }`}
     >
-      <span
-        className={`flex h-4 w-4 items-center justify-center rounded-full border text-[9px] ${
-          active ? 'border-[#5b38f2] bg-[#5b38f2] text-white' : 'border-zinc-300 bg-white text-transparent'
-        }`}
-        aria-hidden
-      >
-        ✓
-      </span>
-      <span className="whitespace-nowrap">{label}</span>
+      <span className="truncate">{label}</span>
     </button>
   )
 }
@@ -183,22 +175,15 @@ function DietaryRestrictionsPicker({
     <AdminDropdown
       closeOnMenuItemClick={false}
       className="min-w-0"
-      buttonClassName="flex h-9 w-full min-w-[7.5rem] max-w-[11rem] cursor-pointer items-center gap-1 rounded-full border border-[#ebebeb] bg-white px-2 py-1 text-left text-[11px] font-medium text-[#171717] outline-none transition-colors hover:border-zinc-300"
+      buttonClassName={`${DROPDOWN_BTN} w-full max-w-[11rem] border-0 shadow-none`}
       menuClassName="min-w-[9rem]"
       trigger={
         <>
-          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+          <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
             {value.length === 0 ? (
               <span className="truncate text-zinc-400">Dietary</span>
             ) : (
-              value.map((item) => (
-                <span
-                  key={item}
-                  className={`inline-flex max-w-full truncate rounded-full border px-1.5 py-px text-[10px] font-semibold ${dietaryBadgeClass(item)}`}
-                >
-                  {item}
-                </span>
-              ))
+              <span className="truncate">{value.join(', ')}</span>
             )}
           </span>
           <svg
@@ -739,32 +724,36 @@ export function AttendeeEditorOverlay({
                   </div>
 
                   <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                    <LogisticsToggle
-                      active={row.needs_baby_chair}
-                      label="Baby Chair 🪑"
-                      onClick={() =>
-                        setRows((prev) =>
-                          prev.map((r) =>
-                            r.key === row.key
-                              ? { ...r, needs_baby_chair: !r.needs_baby_chair }
-                              : r
+                    <div className={FOCUS_RING}>
+                      <LogisticsToggle
+                        active={row.needs_baby_chair}
+                        label="Baby Chair 🪑"
+                        onClick={() =>
+                          setRows((prev) =>
+                            prev.map((r) =>
+                              r.key === row.key
+                                ? { ...r, needs_baby_chair: !r.needs_baby_chair }
+                                : r
+                            )
                           )
-                        )
-                      }
-                    />
-                    <LogisticsToggle
-                      active={row.needs_kids_menu}
-                      label="Kids Menu 🧒"
-                      onClick={() =>
-                        setRows((prev) =>
-                          prev.map((r) =>
-                            r.key === row.key
-                              ? { ...r, needs_kids_menu: !r.needs_kids_menu }
-                              : r
+                        }
+                      />
+                    </div>
+                    <div className={FOCUS_RING}>
+                      <LogisticsToggle
+                        active={row.needs_kids_menu}
+                        label="Kids Menu 🧒"
+                        onClick={() =>
+                          setRows((prev) =>
+                            prev.map((r) =>
+                              r.key === row.key
+                                ? { ...r, needs_kids_menu: !r.needs_kids_menu }
+                                : r
+                            )
                           )
-                        )
-                      }
-                    />
+                        }
+                      />
+                    </div>
                   </div>
 
                   <div className={`shrink-0 ${FOCUS_RING}`}>

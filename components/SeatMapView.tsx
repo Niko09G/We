@@ -2,11 +2,13 @@
 
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from 'react'
+import { createPortal } from 'react-dom'
 import {
   computeFourSideCounts,
   guestTableSeatMapMetrics,
@@ -24,24 +26,29 @@ import {
   tableGridUnitsForCapacity,
 } from '@/lib/floor-layout'
 import {
+  SEAT_MAP_WORLD_WIDTH,
+  SEAT_MAP_WORLD_HEIGHT,
+} from '@/lib/seat-map-constants'
+import {
   groupTablesByTeamId,
   pickPrimaryTableForTeam,
   resolveTeamId,
 } from '@/lib/table-teams'
 import {
   SeatLogisticsBadges,
+  SeatLogisticsCallouts,
   SeatMapLandmarksLayer,
-  SEAT_MAP_WORLD_WIDTH,
-  SEAT_MAP_WORLD_HEIGHT,
   SEAT_MAP_ZOOM_MIN,
   SEAT_MAP_ZOOM_STEP,
   SEAT_MAP_ZOOM_MAX,
   SEAT_MAP_ZOOM_CATERING,
+  SEAT_MAP_LOGISTICS_FILTERS_DEFAULT,
   clampSeatMapTransform,
   createSeatMapPointerHandlers,
   SEAT_MAP_VIEWPORT_TOUCH_ACTION,
   type SeatMapGuestLogistics,
   type SeatMapLandmark,
+  type SeatMapLogisticsFilters,
 } from '@/components/SeatMap'
 
 export type SeatMapGuest = SeatMapGuestLogistics & {
@@ -157,11 +164,15 @@ function SeatMapTableGuests({
   capacity,
   guests,
   showLogistics,
+  logisticsCallouts,
+  logisticsFilters,
   tableLabel,
 }: {
   capacity: number
   guests: SeatMapGuest[]
   showLogistics: boolean
+  logisticsCallouts: boolean
+  logisticsFilters: SeatMapLogisticsFilters
   tableLabel: React.ReactNode
 }) {
   const middleRef = useRef<HTMLDivElement>(null)
@@ -246,12 +257,20 @@ function SeatMapTableGuests({
           )}
         </div>
         <SeatLogisticsBadges
-          showLogistics={showLogistics}
+          showLogistics={showLogistics && !logisticsCallouts}
           dietary_restrictions={guest.dietary_restrictions}
           needs_baby_chair={guest.needs_baby_chair}
           needs_kids_menu={guest.needs_kids_menu}
           scale={badgeScale}
         />
+        {logisticsCallouts ? (
+          <SeatLogisticsCallouts
+            filters={logisticsFilters}
+            dietary_restrictions={guest.dietary_restrictions}
+            needs_baby_chair={guest.needs_baby_chair}
+            needs_kids_menu={guest.needs_kids_menu}
+          />
+        ) : null}
       </div>
     )
   }
@@ -324,6 +343,8 @@ function SeatMapTableGuests({
 
 export type SeatMapProps = {
   showLogistics?: boolean
+  /** Speech-bubble logistics overlays with in-map filter toggles (catering view). */
+  logisticsCallouts?: boolean
   defaultZoom?: number
   tables: SeatMapTable[]
   guests: SeatMapGuest[]
@@ -332,8 +353,113 @@ export type SeatMapProps = {
   className?: string
 }
 
+function MapFilterToggle({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold shadow-sm transition-colors ${
+        active
+          ? 'border-zinc-900 bg-zinc-900 text-white'
+          : 'border-zinc-200/90 bg-white/95 text-zinc-700 hover:border-zinc-300 hover:bg-white'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
+function SeatMapControls({
+  onZoomIn,
+  onZoomOut,
+  fullscreen,
+  onToggleFullscreen,
+  logisticsCallouts,
+  logisticsFilters,
+  onToggleLogisticsFilter,
+}: {
+  onZoomIn: () => void
+  onZoomOut: () => void
+  fullscreen: boolean
+  onToggleFullscreen: () => void
+  logisticsCallouts: boolean
+  logisticsFilters: SeatMapLogisticsFilters
+  onToggleLogisticsFilter: (key: keyof SeatMapLogisticsFilters) => void
+}) {
+  return (
+    <div
+      className="absolute right-3 top-3 z-20 flex flex-col items-end gap-2"
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      {logisticsCallouts ? (
+        <div className="flex max-w-[min(100%,14rem)] flex-wrap justify-end gap-1.5">
+          <MapFilterToggle
+            active={logisticsFilters.allergies}
+            label="Allergies"
+            onClick={() => onToggleLogisticsFilter('allergies')}
+          />
+          <MapFilterToggle
+            active={logisticsFilters.babyChair}
+            label="Baby Chair"
+            onClick={() => onToggleLogisticsFilter('babyChair')}
+          />
+          <MapFilterToggle
+            active={logisticsFilters.kidsMenu}
+            label="Kids Menu"
+            onClick={() => onToggleLogisticsFilter('kidsMenu')}
+          />
+        </div>
+      ) : null}
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          aria-label="Zoom in"
+          onClick={onZoomIn}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-950 bg-zinc-900 text-lg font-semibold leading-none text-white shadow-sm"
+        >
+          +
+        </button>
+        <button
+          type="button"
+          aria-label="Zoom out"
+          onClick={onZoomOut}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-950 bg-zinc-900 text-lg font-semibold leading-none text-white shadow-sm"
+        >
+          −
+        </button>
+        <button
+          type="button"
+          aria-label={fullscreen ? 'Exit fullscreen map' : 'Open fullscreen map'}
+          onClick={onToggleFullscreen}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-950 bg-zinc-900 text-white shadow-sm"
+        >
+          {fullscreen ? (
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+              <path strokeLinecap="round" d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+              <path strokeLinecap="round" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+            </svg>
+          )}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function SeatMap({
   showLogistics = false,
+  logisticsCallouts = false,
   defaultZoom = SEAT_MAP_ZOOM_CATERING,
   tables,
   guests,
@@ -345,6 +471,10 @@ export function SeatMap({
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [transitionTransform, setTransitionTransform] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
+  const [logisticsFilters, setLogisticsFilters] = useState<SeatMapLogisticsFilters>(
+    SEAT_MAP_LOGISTICS_FILTERS_DEFAULT
+  )
 
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const mapFrameRef = useRef<HTMLDivElement | null>(null)
@@ -499,6 +629,28 @@ export function SeatMap({
     setPan(bounded.pan)
   }
 
+  const toggleLogisticsFilter = useCallback((key: keyof SeatMapLogisticsFilters) => {
+    setLogisticsFilters((prev) => ({ ...prev, [key]: !prev[key] }))
+  }, [])
+
+  useEffect(() => {
+    if (!fullscreen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFullscreen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [fullscreen])
+
+  useEffect(() => {
+    if (!fullscreen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [fullscreen])
+
   const viewportPointerHandlers = createSeatMapPointerHandlers({
     pan,
     zoom,
@@ -512,32 +664,21 @@ export function SeatMap({
     setTransitionTransform,
   })
 
-  return (
-    <div
-      ref={mapFrameRef}
-      className={`relative aspect-[4/3] w-full min-h-[min(72vh,720px)] overflow-hidden rounded-2xl border border-[#ebebeb] bg-zinc-50/90 ${className}`}
-    >
-      <div
-        className="absolute right-3 top-3 z-20 flex flex-col gap-2"
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        <button
-          type="button"
-          aria-label="Zoom in"
-          onClick={() => setZoomAnchored(zoom + SEAT_MAP_ZOOM_STEP)}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-950 bg-zinc-900 text-lg font-semibold leading-none text-white shadow-sm"
-        >
-          +
-        </button>
-        <button
-          type="button"
-          aria-label="Zoom out"
-          onClick={() => setZoomAnchored(zoom - SEAT_MAP_ZOOM_STEP)}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-950 bg-zinc-900 text-lg font-semibold leading-none text-white shadow-sm"
-        >
-          −
-        </button>
-      </div>
+  const mapFrameClassName = fullscreen
+    ? 'fixed inset-0 z-[200] h-full w-full min-h-0 overflow-hidden rounded-none border-0 bg-zinc-50/95'
+    : `relative aspect-[4/3] w-full min-h-[min(72vh,720px)] overflow-hidden rounded-2xl border border-[#ebebeb] bg-zinc-50/90 ${className}`
+
+  const mapContent = (
+    <div ref={mapFrameRef} className={mapFrameClassName}>
+      <SeatMapControls
+        onZoomIn={() => setZoomAnchored(zoom + SEAT_MAP_ZOOM_STEP)}
+        onZoomOut={() => setZoomAnchored(zoom - SEAT_MAP_ZOOM_STEP)}
+        fullscreen={fullscreen}
+        onToggleFullscreen={() => setFullscreen((v) => !v)}
+        logisticsCallouts={logisticsCallouts}
+        logisticsFilters={logisticsFilters}
+        onToggleLogisticsFilter={toggleLogisticsFilter}
+      />
 
       <div
         ref={viewportRef}
@@ -591,7 +732,9 @@ export function SeatMap({
                   <SeatMapTableGuests
                     capacity={table.capacity}
                     guests={table.guests}
-                    showLogistics={showLogistics}
+                    showLogistics={showLogistics || logisticsCallouts}
+                    logisticsCallouts={logisticsCallouts}
+                    logisticsFilters={logisticsFilters}
                     tableLabel={
                       <span className="block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-center text-[10px] font-semibold tracking-wide text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]">
                         {table.name}
@@ -606,6 +749,31 @@ export function SeatMap({
       </div>
     </div>
   )
+
+  if (fullscreen) {
+    return (
+      <>
+        <div
+          className={`aspect-[4/3] w-full min-h-[min(72vh,720px)] rounded-2xl border border-[#ebebeb] bg-zinc-50/60 ${className}`}
+          aria-hidden
+        />
+        {createPortal(
+          <div
+            className="fixed inset-0 z-[199] bg-zinc-900/40"
+            onMouseDown={() => setFullscreen(false)}
+            role="presentation"
+          >
+            <div onMouseDown={(e) => e.stopPropagation()} className="h-full w-full">
+              {mapContent}
+            </div>
+          </div>,
+          document.body
+        )}
+      </>
+    )
+  }
+
+  return mapContent
 }
 
 export type { SeatMapTable }

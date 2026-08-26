@@ -18,19 +18,22 @@ import {
   type VenueLandmarkShape,
 } from '@/lib/floor-layout'
 import {
+  dietaryBadgeClass,
   guestHasDietaryRestrictions,
   normalizeDietaryRestrictions,
 } from '@/lib/guest-logistics'
+import {
+  SEAT_MAP_WORLD_HEIGHT,
+  SEAT_MAP_WORLD_WIDTH,
+} from '@/lib/seat-map-constants'
 
-/** Guest map world size — matches admin floor plan canvas (4:3). */
-export const SEAT_MAP_WORLD_WIDTH = 960
-export const SEAT_MAP_WORLD_HEIGHT = 720
+export { SEAT_MAP_WORLD_HEIGHT, SEAT_MAP_WORLD_WIDTH } from '@/lib/seat-map-constants'
 
 /** Pan/zoom limits aligned with the guest seating map viewport. */
 export const SEAT_MAP_ZOOM_MIN = 0.35
 export const SEAT_MAP_ZOOM_STEP = 0.08
 export const SEAT_MAP_ZOOM_DEFAULT = SEAT_MAP_ZOOM_MIN + SEAT_MAP_ZOOM_STEP
-export const SEAT_MAP_ZOOM_MAX = 1.28
+export const SEAT_MAP_ZOOM_MAX = 2.75
 /** Slightly higher default zoom for internal catering / logistics scanning. */
 export const SEAT_MAP_ZOOM_CATERING =
   SEAT_MAP_ZOOM_DEFAULT + SEAT_MAP_ZOOM_STEP * 2
@@ -109,8 +112,80 @@ export function seatMapGuestHasLogistics(guest: SeatMapGuestLogistics): boolean 
   )
 }
 
+export type SeatMapLogisticsFilters = {
+  allergies: boolean
+  babyChair: boolean
+  kidsMenu: boolean
+}
+
+export const SEAT_MAP_LOGISTICS_FILTERS_DEFAULT: SeatMapLogisticsFilters = {
+  allergies: true,
+  babyChair: true,
+  kidsMenu: true,
+}
+
+type SeatLogisticsCalloutsProps = SeatMapGuestLogistics & {
+  filters: SeatMapLogisticsFilters
+}
+
+/** Floating speech bubbles for catering / logistics map overlays. */
+export function SeatLogisticsCallouts({
+  filters,
+  dietary_restrictions,
+  needs_baby_chair,
+  needs_kids_menu,
+}: SeatLogisticsCalloutsProps) {
+  const allergies = normalizeDietaryRestrictions(dietary_restrictions)
+  const showAllergies = filters.allergies && allergies.length > 0
+  const showBabyChair = filters.babyChair && Boolean(needs_baby_chair)
+  const showKidsMenu = filters.kidsMenu && Boolean(needs_kids_menu)
+  if (!showAllergies && !showBabyChair && !showKidsMenu) return null
+
+  return (
+    <div className="pointer-events-none absolute bottom-full left-1/2 z-[8] mb-1 w-max max-w-[min(128px,30vw)] -translate-x-1/2">
+      <div className="relative rounded-lg border border-zinc-200/90 bg-white px-1.5 py-1 shadow-[0_4px_14px_rgba(0,0,0,0.12)]">
+        <div className="flex flex-col items-center gap-0.5">
+          {showAllergies ? (
+            <div className="flex max-w-full flex-wrap items-center justify-center gap-0.5">
+              {allergies.map((item) => (
+                <span
+                  key={item}
+                  className={`inline-flex max-w-full truncate rounded-full border px-1.5 py-px text-[9px] font-semibold ${dietaryBadgeClass(item)}`}
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {showBabyChair ? (
+            <span className="whitespace-nowrap text-[9px] font-semibold text-zinc-800">
+              🪑 Baby Chair
+            </span>
+          ) : null}
+          {showKidsMenu ? (
+            <span className="whitespace-nowrap text-[9px] font-semibold text-zinc-800">
+              🧒 Kids Menu
+            </span>
+          ) : null}
+        </div>
+        <div
+          className="absolute left-1/2 top-full -translate-x-1/2 border-x-[5px] border-t-[6px] border-x-transparent border-t-white"
+          aria-hidden
+        />
+        <div
+          className="absolute left-1/2 top-full mt-px -translate-x-1/2 border-x-[6px] border-t-[7px] border-x-transparent border-t-zinc-200/90"
+          style={{ zIndex: -1 }}
+          aria-hidden
+        />
+      </div>
+    </div>
+  )
+}
+
 /** Inset padding when clamping pan so the canvas edge cannot scroll past the viewport. */
 export const SEAT_MAP_PAN_PADDING = 0
+/** Allow panning past the map edge by this fraction of the viewport (centers edge tables). */
+export const SEAT_MAP_PAN_OVERSCROLL_RATIO = 0.3
 
 export type SeatMapPan = { x: number; y: number }
 
@@ -255,10 +330,13 @@ export function clampSeatMapPan(
   viewportWidth: number,
   viewportHeight: number,
   zoom: number,
-  padding = SEAT_MAP_PAN_PADDING
+  padding = SEAT_MAP_PAN_PADDING,
+  overscrollRatio = SEAT_MAP_PAN_OVERSCROLL_RATIO
 ): SeatMapPan {
   const scaledW = SEAT_MAP_WORLD_WIDTH * zoom
   const scaledH = SEAT_MAP_WORLD_HEIGHT * zoom
+  const overscrollX = viewportWidth * overscrollRatio
+  const overscrollY = viewportHeight * overscrollRatio
 
   let minX: number
   let maxX: number
@@ -266,8 +344,8 @@ export function clampSeatMapPan(
     const cx = (viewportWidth - scaledW) / 2
     minX = maxX = cx
   } else {
-    minX = viewportWidth - scaledW - padding
-    maxX = padding
+    minX = viewportWidth - scaledW - padding - overscrollX
+    maxX = padding + overscrollX
   }
 
   let minY: number
@@ -276,8 +354,8 @@ export function clampSeatMapPan(
     const cy = (viewportHeight - scaledH) / 2
     minY = maxY = cy
   } else {
-    minY = viewportHeight - scaledH - padding
-    maxY = padding
+    minY = viewportHeight - scaledH - padding - overscrollY
+    maxY = padding + overscrollY
   }
 
   return {
