@@ -133,28 +133,31 @@ function logisticsPatchFromRow(r: EditorPartyRow) {
 }
 
 function LogisticsToggle({
-  active,
+  checked,
   label,
-  onClick,
+  onChange,
 }: {
-  active: boolean
+  checked: boolean
   label: string
-  onClick: () => void
+  onChange: (next: boolean) => void
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <label
       title={label}
-      aria-pressed={active}
-      className={`${DROPDOWN_BTN} border-0 shadow-none ${
-        active
+      className={`${DROPDOWN_BTN} cursor-pointer border-0 shadow-none ${
+        checked
           ? 'border-[#5b38f2]/35 bg-[#5b38f2]/10 text-[#3f2bb8]'
           : 'text-zinc-600'
       }`}
     >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="sr-only"
+      />
       <span className="truncate">{label}</span>
-    </button>
+    </label>
   )
 }
 
@@ -731,14 +734,12 @@ export function AttendeeEditorOverlay({
                   <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                     <div className={FOCUS_RING}>
                       <LogisticsToggle
-                        active={row.needs_baby_chair}
+                        checked={row.needs_baby_chair}
                         label="Baby Chair 🪑"
-                        onClick={() =>
+                        onChange={(needs_baby_chair) =>
                           setRows((prev) =>
                             prev.map((r) =>
-                              r.key === row.key
-                                ? { ...r, needs_baby_chair: !r.needs_baby_chair }
-                                : r
+                              r.key === row.key ? { ...r, needs_baby_chair } : r
                             )
                           )
                         }
@@ -746,14 +747,12 @@ export function AttendeeEditorOverlay({
                     </div>
                     <div className={FOCUS_RING}>
                       <LogisticsToggle
-                        active={row.needs_kids_menu}
+                        checked={row.needs_kids_menu}
                         label="Kids Menu 🧒"
-                        onClick={() =>
+                        onChange={(needs_kids_menu) =>
                           setRows((prev) =>
                             prev.map((r) =>
-                              r.key === row.key
-                                ? { ...r, needs_kids_menu: !r.needs_kids_menu }
-                                : r
+                              r.key === row.key ? { ...r, needs_kids_menu } : r
                             )
                           )
                         }
@@ -761,13 +760,11 @@ export function AttendeeEditorOverlay({
                     </div>
                     <div className={FOCUS_RING}>
                       <LogisticsToggle
-                        active={row.no_meal}
+                        checked={row.no_meal}
                         label="No Meal 🚫"
-                        onClick={() =>
+                        onChange={(no_meal) =>
                           setRows((prev) =>
-                            prev.map((r) =>
-                              r.key === row.key ? { ...r, no_meal: !r.no_meal } : r
-                            )
+                            prev.map((r) => (r.key === row.key ? { ...r, no_meal } : r))
                           )
                         }
                       />

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react'
 import { archiveAttendee, listAttendeesForAdmin, type AttendeeRow } from '@/lib/admin-attendees'
 import { listAttendeeGroups, type AttendeeGroupRow } from '@/lib/admin-attendee-groups'
+import { downloadCateringCsv } from '@/lib/catering-csv-export'
 import { listTablesForAdmin, type AdminTableRow } from '@/lib/admin-tables'
 import { physicalTableAdminLabel, resolveTeamId } from '@/lib/table-teams'
 import { AdminFilterRowSegmented } from '@/app/admin/_components/AdminFilterRowSegmented'
@@ -521,7 +522,15 @@ export default function AdminAttendeesPage() {
   }
 
   const GRADIENT_BTN =
-    'ml-auto inline-flex h-[40px] cursor-pointer items-center gap-2 rounded-full px-4 text-[14px] font-medium text-white transition-opacity hover:opacity-90 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]'
+    'inline-flex h-[40px] cursor-pointer items-center gap-2 rounded-full px-4 text-[14px] font-medium text-white transition-opacity hover:opacity-90 bg-[linear-gradient(to_right,_#1ca0d8,_#5b38f2)]'
+
+  const OUTLINE_BTN =
+    'inline-flex h-[40px] cursor-pointer items-center gap-2 rounded-full border border-[#ebebeb] bg-white px-4 text-[14px] font-medium text-[#171717] transition-colors hover:border-zinc-300 hover:bg-zinc-50'
+
+  function handleExportCateringCsv() {
+    downloadCateringCsv(rows, tables)
+    setToast({ kind: 'success', message: 'Catering CSV downloaded.' })
+  }
 
   return (
     <div className="admin-page-shell flex h-full min-h-0 flex-1 flex-col overflow-hidden">
@@ -602,21 +611,31 @@ export default function AdminAttendeesPage() {
                 />
               </div>
 
-              <button type="button" onClick={openCreateAttendeeEditor} className={GRADIENT_BTN}>
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-4 w-4"
-                  aria-hidden
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportCateringCsv}
+                  disabled={loading || rows.length === 0}
+                  className={`${OUTLINE_BTN} disabled:cursor-not-allowed disabled:opacity-50`}
                 >
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                <span>New attendee</span>
-              </button>
+                  Export Catering CSV 📥
+                </button>
+                <button type="button" onClick={openCreateAttendeeEditor} className={GRADIENT_BTN}>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-4 w-4"
+                    aria-hidden
+                  >
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  <span>New attendee</span>
+                </button>
+              </div>
             </div>
           </div>
 
