@@ -1,33 +1,5 @@
--- Beatcoin tokens: one redemption per (token, table) instead of global single-use.
--- Run in Supabase SQL Editor after beatcoin_tokens.sql.
-
--- ----- Per-table redemption ledger -----
-create table if not exists public.token_redemptions (
-  id uuid primary key default gen_random_uuid(),
-  token_id uuid not null references public.beatcoin_tokens (id) on delete cascade,
-  table_id uuid not null references public.tables (id) on delete cascade,
-  mission_submission_id uuid references public.mission_submissions (id) on delete set null,
-  redeemed_at timestamptz not null default now(),
-  constraint token_redemptions_token_table_unique unique (token_id, table_id)
-);
-
-create index if not exists token_redemptions_token_id_idx on public.token_redemptions (token_id);
-create index if not exists token_redemptions_table_id_idx on public.token_redemptions (table_id);
-
-comment on table public.token_redemptions is 'One Beatcoin claim per physical token per table.';
-
-alter table public.token_redemptions enable row level security;
-
--- Backfill from legacy single-claim columns (safe to re-run).
-insert into public.token_redemptions (token_id, table_id, redeemed_at)
-select bt.id, bt.claimed_by_table_id, bt.claimed_at
-from public.beatcoin_tokens bt
-where bt.claimed_at is not null
-  and bt.claimed_by_table_id is not null
-on conflict (token_id, table_id) do nothing;
-
--- ----- Peek (claim UI): points + per-table availability -----
-drop function if exists public.peek_beatcoin (text);
+-- Beatcoin token lookup: trim, case-insensitive token match, and UUID id fallback.
+-- Run in Supabase SQL Editor after token_redemptions_per_table.sql.
 
 create or replace function public.resolve_beatcoin_token_row(p_token text)
 returns public.beatcoin_tokens
@@ -74,7 +46,7 @@ security definer
 set search_path = public
 as $$
 declare
-  v_row public.beatcoin_tokens%rowtype;
+  v_row public.beatcoin_tokens;
   v_already boolean := false;
 begin
   v_row := public.resolve_beatcoin_token_row(p_token);
@@ -101,7 +73,6 @@ begin
 end;
 $$;
 
--- ----- Atomic claim (one redemption per table) -----
 create or replace function public.claim_beatcoin (p_token text, p_table_id uuid)
 returns jsonb
 language plpgsql
@@ -109,7 +80,8 @@ security definer
 set search_path = public
 as $$
 declare
-  v_row public.beatcoin_tokens%rowtype;
+  v_resolved public.beatcoin_tokens;
+  v_row public.beatcoin_tokens;
   v_missions_enabled boolean;
   v_mission record;
   v_sub_id uuid;
@@ -128,14 +100,14 @@ begin
     return jsonb_build_object('ok', false, 'error', 'missions_disabled');
   end if;
 
-  v_row := public.resolve_beatcoin_token_row(p_token);
-  if v_row is null or v_row.id is null then
+  v_resolved := public.resolve_beatcoin_token_row(p_token);
+  if v_resolved is null or v_resolved.id is null then
     return jsonb_build_object('ok', false, 'error', 'invalid_token');
   end if;
 
   select * into v_row
   from public.beatcoin_tokens
-  where id = v_row.id
+  where id = v_resolved.id
   for update;
 
   if not found then
@@ -222,71 +194,6 @@ exception
 end;
 $$;
 
--- ----- Admin reset: clear all redemptions for a token -----
-create or replace function public.reset_beatcoin_token(p_token_id uuid)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_token record;
-  v_sub_ids uuid[];
-  v_deleted int := 0;
-  v_redemption_count int := 0;
-begin
-  select id, mission_id
-  into v_token
-  from public.beatcoin_tokens
-  where id = p_token_id
-  for update;
-
-  if not found then
-    return jsonb_build_object('ok', false, 'error', 'token_not_found');
-  end if;
-
-  select count(*)::int
-  into v_redemption_count
-  from public.token_redemptions tr
-  where tr.token_id = p_token_id;
-
-  if v_redemption_count = 0 then
-    select case when claimed_at is not null then 1 else 0 end
-    into v_redemption_count
-    from public.beatcoin_tokens
-    where id = p_token_id;
-  end if;
-
-  select array_agg(ms.id)
-  into v_sub_ids
-  from public.mission_submissions ms
-  where ms.submission_type = 'beatcoin'
-    and ms.mission_id = v_token.mission_id
-    and ms.submission_data @> jsonb_build_object('beatcoin_token_id', p_token_id::text);
-
-  if v_sub_ids is not null and array_length(v_sub_ids, 1) > 0 then
-    delete from public.mission_submissions
-    where id = any(v_sub_ids);
-    get diagnostics v_deleted = row_count;
-  end if;
-
-  delete from public.token_redemptions
-  where token_id = p_token_id;
-
-  update public.beatcoin_tokens
-  set claimed_by_table_id = null,
-      claimed_at = null
-  where id = p_token_id;
-
-  return jsonb_build_object(
-    'ok', true,
-    'already_available', v_redemption_count = 0,
-    'deleted_submissions', v_deleted
-  );
-end;
-$$;
-
 grant execute on function public.resolve_beatcoin_token_row(text) to anon, authenticated;
 grant execute on function public.peek_beatcoin (text, uuid) to anon, authenticated;
 grant execute on function public.claim_beatcoin (text, uuid) to anon, authenticated;
-grant execute on function public.reset_beatcoin_token(uuid) to anon, authenticated;

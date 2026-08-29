@@ -791,6 +791,8 @@ export function SeatingMapPanel({
 
   const clearSelectionAndResetView = useCallback(() => {
     setSelectedId(null)
+    setSearch('')
+    setSearchResultsDismissed(false)
     setTransitionTransform(true)
     applyOverviewCamera()
     window.setTimeout(() => setTransitionTransform(false), TRANSFORM_MS + 40)

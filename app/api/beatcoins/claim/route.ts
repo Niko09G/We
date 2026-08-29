@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
+import { normalizeClaimTokenInput } from '@/lib/admin-tokens'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+
+export const dynamic = 'force-dynamic'
 
 /** Public: claim a Beatcoin for a table (one redemption per token per table). */
 export async function POST(request: Request) {
@@ -11,7 +14,8 @@ export async function POST(request: Request) {
   }
 
   const body = json as Record<string, unknown>
-  const token = typeof body.token === 'string' ? body.token.trim() : ''
+  const token =
+    typeof body.token === 'string' ? normalizeClaimTokenInput(body.token) : ''
   const table_id = typeof body.table_id === 'string' ? body.table_id.trim() : ''
 
   if (!token || !table_id) {

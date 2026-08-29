@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
+import { normalizeClaimTokenInput } from '@/lib/admin-tokens'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+
+export const dynamic = 'force-dynamic'
 
 /** Public: resolve QR token → points + claim status (no auth). */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const token = (searchParams.get('token') ?? '').trim()
+  const token = normalizeClaimTokenInput(searchParams.get('token') ?? '')
   const tableId = (searchParams.get('table_id') ?? '').trim()
   if (!token) {
     return NextResponse.json({ ok: false, error: 'missing_token' } as const, { status: 400 })
