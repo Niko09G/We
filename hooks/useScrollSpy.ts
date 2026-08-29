@@ -9,7 +9,7 @@ export type ScrollSpySection = {
   targetId: string
 }
 
-const DEFAULT_OFFSET_RATIO = 0.22
+const DEFAULT_OFFSET_RATIO = 0.2
 
 function pickActiveSection(
   sections: ScrollSpySection[],
@@ -52,7 +52,7 @@ export function useScrollSpy(
   useEffect(() => {
     if (sections.length === 0) return
 
-    const ratios = new Map<string, number>()
+    const intersecting = new Map<string, boolean>()
     let raf = 0
 
     const applyScrollPick = () => {
@@ -63,6 +63,16 @@ export function useScrollSpy(
         activeRef.current = picked
         setActiveId(picked)
       }
+    }
+
+    const pickFromIntersecting = (): string | null => {
+      let picked: string | null = null
+      for (const section of sectionsRef.current) {
+        if (intersecting.get(section.id)) {
+          picked = section.id
+        }
+      }
+      return picked
     }
 
     const onScroll = () => {
@@ -89,26 +99,19 @@ export function useScrollSpy(
               for (const entry of entries) {
                 const id = (entry.target as HTMLElement).dataset.scrollSpyId
                 if (!id) continue
-                ratios.set(id, entry.isIntersecting ? entry.intersectionRatio : 0)
+                intersecting.set(id, entry.isIntersecting)
               }
 
-              let bestId: string | null = null
-              let bestRatio = -1
-              for (const [id, ratio] of ratios.entries()) {
-                if (ratio > bestRatio) {
-                  bestRatio = ratio
-                  bestId = id
-                }
-              }
-
-              if (bestId && bestRatio > 0.05 && bestId !== activeRef.current) {
-                activeRef.current = bestId
-                setActiveId(bestId)
+              const picked = pickFromIntersecting()
+              if (picked && picked !== activeRef.current) {
+                activeRef.current = picked
+                setActiveId(picked)
               }
             },
             {
-              threshold: [0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1],
-              rootMargin: '-18% 0px -42% 0px',
+              // Triggers only when a section enters upper-middle viewport
+              rootMargin: '-20% 0px -60% 0px',
+              threshold: 0,
             }
           )
         : null
