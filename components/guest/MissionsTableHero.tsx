@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { GUEST_EMBLEM_PLACEHOLDER_DATA_URL } from '@/lib/guest-emblem-config'
+import { resolveTeamPageConfig } from '@/lib/team-page-config'
 import { COIN_SIZE, safeRewardPoints } from '@/lib/mission-ui'
 import { RewardUnitIcon } from '@/components/reward/RewardUnitIcon'
 import { MISSIONS_HERO_BACKGROUND } from '@/lib/guest-missions-gradients'
@@ -139,7 +140,10 @@ export function MissionsTableHero({
 
               <p className="mx-auto mt-3 max-w-[22rem] whitespace-pre-line text-sm font-medium leading-relaxed text-white/90">
                 {teamSubcopy?.trim() ||
-                  'We are Kaypoh Aunties! We see, we hear, we confirm win Bea & Niko’s wedding game.\nFaster go play!'}
+                  resolveTeamPageConfig(null, {
+                    tableColor: tableColor,
+                    tableName,
+                  }).hero.teamText}
               </p>
 
               <div className="mt-4 flex w-full flex-col items-center gap-2">

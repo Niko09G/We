@@ -115,7 +115,7 @@ function applyBoundedTransform(
   return clampSeatMapTransform(pan, zoom, viewport.clientWidth, viewport.clientHeight)
 }
 
-/** Vertical gradients per layout slot (team identity). `blue` slot = Kaypoh Auntie’s. */
+/** Vertical gradients per layout slot (team identity). */
 const TABLE_GRADIENT_BY_SLOT: Record<MapSlotKey, string> = {
   gold: 'linear-gradient(to bottom, #f75f0c 0%, #fca16a 100%)',
   blue: 'linear-gradient(to bottom, #952dfe 0%, #5a35f9 50%, #889af9 100%)',

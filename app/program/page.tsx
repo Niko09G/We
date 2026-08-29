@@ -1,5 +1,8 @@
 import Link from 'next/link'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default function EventProgramPage() {
   return (
     <main className="min-h-screen bg-zinc-950 px-4 py-8">

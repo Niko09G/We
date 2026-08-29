@@ -1,30 +1,43 @@
 import type { Metadata } from 'next'
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { resolveTeamId } from '@/lib/table-teams'
 
 type LayoutProps = {
   children: React.ReactNode
   params: Promise<{ tableId: string }>
 }
 
+export const revalidate = 0
+
 export async function generateMetadata({ params }: LayoutProps): Promise<Metadata> {
   const { tableId } = await params
-  const fallbackTitle = 'Team'
 
-  if (!tableId) return { title: fallbackTitle }
+  if (!tableId) return { title: 'Team' }
 
   try {
     const supabase = createServerSupabaseClient()
-    const { data } = await supabase
+    const { data: tableRow } = await supabase
       .from('tables')
-      .select('name')
+      .select('team_id')
       .eq('id', tableId)
       .maybeSingle()
 
-    const name = typeof data?.name === 'string' ? data.name.trim() : ''
-    return { title: name || fallbackTitle }
+    const teamId = resolveTeamId({
+      id: tableId,
+      team_id: (tableRow as { team_id?: string | null } | null)?.team_id ?? null,
+    })
+
+    const { data: teamRow } = await supabase
+      .from('teams')
+      .select('name')
+      .eq('id', teamId)
+      .maybeSingle()
+
+    const name = typeof teamRow?.name === 'string' ? teamRow.name.trim() : ''
+    return { title: name || 'Team' }
   } catch {
-    return { title: fallbackTitle }
+    return { title: 'Team' }
   }
 }
 

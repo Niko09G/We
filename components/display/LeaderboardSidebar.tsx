@@ -118,7 +118,7 @@ const TeamCard = forwardRef<HTMLDivElement, TeamCardProps>(function TeamCard(
   const { config: rewardUnit } = useRewardUnit()
   const unitLabel = rewardUnitCompactLabel(rewardUnit)
   const teamKey = leaderboardEntryTeamKey(entry)
-  const teamName = entry.teamName || entry.tableName
+  const teamName = entry.teamName
   const teamColor = entry.teamColor ?? entry.tableColor
   const gradient =
     visual?.gradientCss ??

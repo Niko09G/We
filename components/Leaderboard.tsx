@@ -150,7 +150,7 @@ export function Leaderboard({
             <span className="flex min-w-0 items-center gap-2.5 font-bold text-white">
               <span className="tabular-nums text-white">{i + 1}.</span>
               <TeamAvatar
-                name={row.teamName || row.tableName}
+                name={row.teamName}
                 avatarUrl={resolveTeamAvatarUrl(
                   row,
                   tableAvatars,
@@ -159,7 +159,7 @@ export function Leaderboard({
                 )}
                 tableColor={row.teamColor ?? row.tableColor}
               />
-              <span className="truncate">{row.teamName || row.tableName}</span>
+              <span className="truncate">{row.teamName}</span>
               {isYou ? (
                 <span className="shrink-0 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-extrabold text-white">
                   You

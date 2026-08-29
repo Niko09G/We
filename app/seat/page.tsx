@@ -1,6 +1,9 @@
 import Link from 'next/link'
 import { SeatingMapPanel } from '@/components/guest/SeatingMapPanel'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default function SeatFinderPage() {
   return (
     <main className="min-h-screen bg-white px-5 py-6 pb-10">

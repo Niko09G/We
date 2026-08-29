@@ -173,7 +173,7 @@ export async function fetchAdminScoreBreakdown(): Promise<
     for (const m of members) physicalToTeamId.set(m.id, teamId)
     breakdownByTeam.set(teamId, {
       tableId: teamId,
-      tableName: teamNameById.get(teamId) || primary.name,
+      tableName: teamNameById.get(teamId)?.trim() ?? '',
       tableColor: primary.color,
       totalPoints: 0,
       events: [],

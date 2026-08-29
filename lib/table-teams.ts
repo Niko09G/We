@@ -95,10 +95,11 @@ export function lobbyRowsFromParentTeams(
   for (const team of sortedTeams) {
     const members = grouped.get(team.id)
     if (!members?.length) continue
+    const teamName = team.name.trim()
+    if (!teamName) continue
     seen.add(team.id)
     const primary = pickPrimaryTableForTeam(members, team.id)
     const canonical = members.find((m) => m.id === team.id) ?? primary
-    const teamName = team.name.trim() || canonical.name
     const teamColor = (team.color ?? '').trim() || canonical.color
     rows.push({
       id: primary.id,

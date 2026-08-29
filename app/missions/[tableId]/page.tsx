@@ -772,7 +772,7 @@ export default function MissionsTablePage({
         setTeamScopeTableIds(scopeIds)
         let pageConfig = tRow.page_config ?? null
         let color = (tRow.color as string | null) ?? null
-        let displayName = (tRow.name as string) ?? ''
+        let displayName = ''
 
         if (teamId) {
           const [primaryRes, teamNameRes] = await Promise.all([
@@ -795,8 +795,8 @@ export default function MissionsTablePage({
             pageConfig = primary.page_config ?? pageConfig
             color = (primary.color as string | null) ?? color
           }
-          const teamName = (teamNameRes.data as { name?: string | null } | null)?.name?.trim()
-          if (teamName) displayName = teamName
+          displayName =
+            (teamNameRes.data as { name?: string | null } | null)?.name?.trim() ?? ''
         }
 
         if ((tRow.is_archived ?? false) === true) {

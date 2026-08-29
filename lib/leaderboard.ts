@@ -227,10 +227,10 @@ export async function fetchLeaderboardBundleWithClient(
       }, 0)
     const totalPoints = oneTimePoints + repeatablePoints
     const remainingCount = Math.max(0, totalMissions - completedCount)
-    const teamName = teamNameById.get(teamId) || primary.name
+    const teamName = teamNameById.get(teamId)?.trim() ?? ''
     const resolvedPage = resolveTeamPageConfig(tablePageConfig.get(primary.id) ?? null, {
       tableColor: primary.color,
-      tableName: primary.name,
+      tableName: teamName,
     })
     const avatar_url = resolvedPage.hero.avatarImage.url?.trim() || null
     const logo_url = resolvedPage.hero.heroImage.url?.trim() || null
@@ -294,7 +294,9 @@ export async function fetchLeaderboardBundleWithClient(
   const recentActivity: RecentActivityItem[] = sortedByTime.slice(0, recentLimit).map((c) => {
     const teamId = physicalToTeamId.get(c.table_id) ?? c.table_id
     const teamLabel =
-      teamNameById.get(teamId) || tableName.get(teamId) || tableName.get(c.table_id) || '—'
+      teamNameById.get(teamId)?.trim() ||
+        teamNameById.get(physicalToTeamId.get(c.table_id) ?? '')?.trim() ||
+        '—'
     const teamAccent = tableColor.get(teamId) ?? tableColor.get(c.table_id) ?? null
     return {
       id: c.id,

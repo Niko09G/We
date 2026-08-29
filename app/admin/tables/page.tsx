@@ -1,5 +1,6 @@
 'use client'
 
+import { revalidateGuestTeamViews } from '@/app/actions/revalidate-guest-views'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   archiveTable,
@@ -429,7 +430,7 @@ export default function TablesAdminPage() {
     const seen = new Map<string, string>()
     for (const row of rows) {
       if (!row.team_id || seen.has(row.team_id)) continue
-      seen.set(row.team_id, row.team_name || row.name)
+      seen.set(row.team_id, row.team_name)
     }
     return [...seen.entries()]
       .map(([id, name]) => ({ id, name }))
@@ -690,6 +691,7 @@ export default function TablesAdminPage() {
         await load()
         showToast('Table updated.', 'success')
       }
+      await revalidateGuestTeamViews()
       setPublishOpen(false)
       setEditorOpen(false)
     } catch (e) {

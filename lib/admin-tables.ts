@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase/client'
-import { resolveTeamId } from '@/lib/table-teams'
+import { pickPrimaryTableForTeam, resolveTeamId } from '@/lib/table-teams'
 
 export type AdminTableTeam = {
   id: string
@@ -37,7 +37,7 @@ export async function listTableTeams(): Promise<AdminTableTeam[]> {
   }))
 }
 
-/** Sync `teams.name` when the edited table is the canonical or sole member row. */
+/** Sync `teams.name` when the edited table is the lobby/leaderboard primary row or sole member. */
 async function syncTeamDisplayName(
   tableId: string,
   teamId: string,
@@ -46,23 +46,39 @@ async function syncTeamDisplayName(
   const trimmed = name.trim()
   if (!trimmed) return
 
-  if (tableId === teamId) {
-    const { error } = await supabase.from('teams').update({ name: trimmed }).eq('id', teamId)
-    if (error) throw new Error(error.message || 'Failed to update team name.')
-    return
-  }
-
-  const { count, error: countErr } = await supabase
+  const { data: members, error: membersErr } = await supabase
     .from('tables')
-    .select('id', { count: 'exact', head: true })
+    .select('id, display_order, name, team_id')
     .eq('team_id', teamId)
     .eq('is_archived', false)
 
-  if (countErr) throw new Error(countErr.message || 'Failed to check team members.')
-  if (count === 1) {
-    const { error } = await supabase.from('teams').update({ name: trimmed }).eq('id', teamId)
-    if (error) throw new Error(error.message || 'Failed to update team name.')
+  if (membersErr) throw new Error(membersErr.message || 'Failed to load team tables.')
+
+  const memberRows = (members ?? []) as Array<{
+    id: string
+    display_order?: number
+    name?: string
+    team_id?: string | null
+  }>
+
+  if (memberRows.length === 0) {
+    await updateTeamDisplayName(teamId, trimmed)
+    return
   }
+
+  const primary = pickPrimaryTableForTeam(memberRows, teamId)
+  if (memberRows.length > 1 && primary.id !== tableId) return
+
+  await updateTeamDisplayName(teamId, trimmed)
+}
+
+/** Update the parent team display name shown on lobby cards and leaderboards. */
+export async function updateTeamDisplayName(teamId: string, name: string): Promise<void> {
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error('Team name is required.')
+
+  const { error } = await supabase.from('teams').update({ name: trimmed }).eq('id', teamId)
+  if (error) throw new Error(error.message || 'Failed to update team name.')
 }
 
 async function ensureTableTeam(input: { id?: string; name: string }): Promise<string> {
@@ -160,7 +176,7 @@ export async function listTablesForAdmin(): Promise<AdminTableRow[]> {
       occupied_count: occupiedByTableId.get(row.id as string) ?? 0,
       page_config: (r.page_config as unknown) ?? null,
       team_id,
-      team_name: teamNameById.get(team_id) || ((row.name as string) ?? ''),
+      team_name: teamNameById.get(team_id) ?? '',
     }
   })
   rows.sort((a, b) => {

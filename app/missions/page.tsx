@@ -87,7 +87,7 @@ export default function MissionsEntryPage() {
         setTables(
           canonicalTablesForLobby(activeRows).map((t) => ({
             ...t,
-            name: teamNameById.get(resolveTeamId(t))?.trim() || t.name,
+            name: teamNameById.get(resolveTeamId(t))?.trim() ?? '',
           }))
         )
       } catch (e) {
@@ -124,7 +124,7 @@ export default function MissionsEntryPage() {
       setTables(
         canonicalTablesForLobby(activeRows).map((t) => ({
           ...t,
-          name: teamNameById.get(resolveTeamId(t))?.trim() || t.name,
+          name: teamNameById.get(resolveTeamId(t))?.trim() ?? '',
         }))
       )
     } catch {
