@@ -452,8 +452,8 @@ export const SEAT_MAP_PAN_OVERSCROLL_RATIO = 0.3
 
 export type SeatMapPan = { x: number; y: number }
 
-/** Allow horizontal map pan while letting vertical swipes scroll the page. */
-export const SEAT_MAP_VIEWPORT_TOUCH_ACTION = 'pan-x'
+/** Let vertical swipes scroll the page; horizontal pan is handled via pointer events. */
+export const SEAT_MAP_VIEWPORT_TOUCH_ACTION = 'pan-y'
 
 export type SeatMapPointerDragState = {
   sx: number

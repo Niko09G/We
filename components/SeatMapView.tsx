@@ -739,7 +739,7 @@ export function SeatMap({
         ref={viewportRef}
         role="application"
         aria-label="Catering logistics map"
-        className="relative h-full w-full cursor-grab select-none active:cursor-grabbing [touch-action:pan-x]"
+        className="relative h-full w-full cursor-grab select-none active:cursor-grabbing [touch-action:pan-y]"
         style={{ touchAction: SEAT_MAP_VIEWPORT_TOUCH_ACTION }}
         onPointerDown={viewportPointerHandlers.onPointerDown}
         onPointerMove={viewportPointerHandlers.onPointerMove}

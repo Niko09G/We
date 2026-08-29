@@ -89,10 +89,12 @@ export function BottomNav({
   highlightColor?: string
 }) {
   return (
-    <StickySectionNav
-      heroContainerId={heroContainerId}
-      items={items}
-      highlightColor={highlightColor}
-    />
+    <div className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-[100] w-[min(26rem,calc(100vw-1.25rem))] -translate-x-1/2">
+      <StickySectionNav
+        heroContainerId={heroContainerId}
+        items={items}
+        highlightColor={highlightColor}
+      />
+    </div>
   )
 }

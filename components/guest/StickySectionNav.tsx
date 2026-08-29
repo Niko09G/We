@@ -199,7 +199,7 @@ export function StickySectionNav({
 
   const dockClass = useMemo(
     () =>
-      `fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-[60] w-[min(26rem,calc(100vw-1.25rem))] -translate-x-1/2 overflow-visible ${
+      `overflow-visible transition-[transform,opacity] duration-300 ease-out ${
         visible
           ? 'translate-y-0 opacity-100 pointer-events-auto'
           : 'translate-y-8 opacity-0 pointer-events-none'
@@ -210,7 +210,7 @@ export function StickySectionNav({
   return (
     <div className={dockClass} aria-hidden={!visible}>
       <nav
-        className="relative h-[72px] overflow-visible rounded-[9999px] border border-zinc-200 bg-white p-1 shadow-[0_4px_12px_rgba(0,0,0,0.07)]"
+        className="pointer-events-auto relative h-[72px] overflow-visible rounded-[9999px] border border-zinc-200 bg-white p-1 shadow-[0_4px_12px_rgba(0,0,0,0.07)]"
         aria-label="Section navigation"
       >
         <div className="relative h-full overflow-hidden rounded-[9999px]">
