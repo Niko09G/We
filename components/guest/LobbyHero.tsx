@@ -96,7 +96,7 @@ export function LobbyHero({
         </div>
 
         {!loading ? (
-          <div className="-mt-6">
+          <div className="mt-6">
             <LobbyImageCarousel images={carouselImages} />
           </div>
         ) : null}

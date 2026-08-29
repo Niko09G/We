@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Inter, Montserrat, Outfit, Playfair_Display } from "next/font/google";
+import { AppBottomNav } from "@/components/AppBottomNav";
 import "./globals.css";
 import { AppProviders } from "./providers";
 
@@ -59,7 +60,7 @@ export default function RootLayout({
         className={`${montserrat.className} ${geistMono.variable} ${outfit.variable} antialiased`}
       >
         <AppProviders>{children}</AppProviders>
-        <div id="bottom-nav-portal" />
+        <AppBottomNav />
       </body>
     </html>
   );

@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { use, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { MissionSocialFeedSection } from '@/components/guest/MissionSocialFeedSection'
 import { SeatingMapPanel } from '@/components/guest/SeatingMapPanel'
-import { BottomNav, MISSION_BOTTOM_NAV_ITEMS } from '@/components/BottomNav'
 import { MissionsTableHero } from '@/components/guest/MissionsTableHero'
 import { Leaderboard } from '@/components/Leaderboard'
 import { getMissionsEnabled } from '@/lib/app-settings'
@@ -1181,8 +1180,6 @@ export default function MissionsTablePage({
 
   const showMissionUi = missionsEnabled === true && !error
 
-  const navHighlightColor = teamPage.theme.primaryColor
-
   return (
     <main className="guest-page-shell min-w-0 max-w-full bg-white">
       <div id="section-hero" className="sticky top-0 z-0 h-[85vh]">
@@ -1825,12 +1822,6 @@ export default function MissionsTablePage({
 
       </div>
       </div>
-
-      <BottomNav
-        heroContainerId="section-hero"
-        highlightColor={navHighlightColor}
-        items={MISSION_BOTTOM_NAV_ITEMS}
-      />
     </main>
   )
 }

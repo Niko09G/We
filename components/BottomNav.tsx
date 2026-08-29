@@ -1,7 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
 import {
   StickySectionNav,
   type StickySectionNavItem,
@@ -90,24 +88,13 @@ export function BottomNav({
   items: StickySectionNavItem[]
   highlightColor?: string
 }) {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-
-  if (!mounted) return null
-
-  const portalRoot =
-    document.getElementById('bottom-nav-portal') ?? document.body
-
-  return createPortal(
-    <div
-      className="pointer-events-auto fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-[9999] w-[min(26rem,calc(100vw-1.25rem))] -translate-x-1/2"
-    >
+  return (
+    <div className="fixed bottom-4 left-1/2 z-[9999] block w-[min(26rem,calc(100vw-1.25rem))] -translate-x-1/2 pointer-events-auto">
       <StickySectionNav
         heroContainerId={heroContainerId}
         items={items}
         highlightColor={highlightColor}
       />
-    </div>,
-    portalRoot
+    </div>
   )
 }

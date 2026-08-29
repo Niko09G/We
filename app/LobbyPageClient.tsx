@@ -6,7 +6,6 @@ import { LobbyEventProgramSection } from '@/components/guest/LobbyEventProgramSe
 import { LobbyHero } from '@/components/guest/LobbyHero'
 import { LobbyMcsSection } from '@/components/guest/LobbyMcsSection'
 import { LobbyTeamsSection, type LobbyTeamRow } from '@/components/guest/LobbyTeamsSection'
-import { BottomNav, LOBBY_BOTTOM_NAV_ITEMS } from '@/components/BottomNav'
 import { SeatingMapPanel } from '@/components/guest/SeatingMapPanel'
 import {
   fetchLobbySettings,
@@ -243,8 +242,6 @@ export function LobbyPageClient() {
           enabledModules.map((id) => renderModule(id))
         )}
       </div>
-
-      <BottomNav heroContainerId="section-hero" items={LOBBY_BOTTOM_NAV_ITEMS} />
     </main>
   )
 }

@@ -86,12 +86,30 @@ export default function AdminLobbyPage() {
     return () => window.clearTimeout(t)
   }, [success])
 
+  function normalizedFormForSave(data: LobbySettings): LobbySettings {
+    return {
+      ...data,
+      modules: Object.fromEntries(
+        Object.entries(data.modules).map(([id, mod]) => [
+          id,
+          { ...mod, description: mod.description?.trim() || null },
+        ])
+      ) as LobbySettings['modules'],
+      event_program: data.event_program.map((item) => ({
+        ...item,
+        description: item.description?.trim() || null,
+      })),
+    }
+  }
+
   async function save() {
     setSaving(true)
     setError(null)
     setSuccess(null)
     try {
-      await setLobbySettings(form)
+      const payload = normalizedFormForSave(form)
+      await setLobbySettings(payload)
+      setForm(payload)
       setSuccess('Lobby settings saved.')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save lobby settings.')
@@ -688,7 +706,7 @@ export default function AdminLobbyPage() {
                                     value={mod.description ?? ''}
                                     onChange={(e) =>
                                       updateModule(id, {
-                                        description: e.target.value.trim() || null,
+                                        description: e.target.value || null,
                                       })
                                     }
                                   />
@@ -785,7 +803,7 @@ export default function AdminLobbyPage() {
                                   value={item.description ?? ''}
                                   onChange={(e) =>
                                     updateProgramItem(item.id, {
-                                      description: e.target.value.trim() || null,
+                                      description: e.target.value || null,
                                     })
                                   }
                                 />
