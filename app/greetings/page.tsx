@@ -2,7 +2,6 @@
 
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { GreetingLightbox } from '@/components/guest/GreetingLightbox'
 import { TeamAvatar } from '@/components/guest/TeamAvatar'
 import { greetingSenderLabel, previewMessage } from '@/lib/greeting-display'
 import type { GreetingRow } from '@/lib/greetings-admin'
@@ -51,21 +50,6 @@ function teamGradientFromColor(tableColor: string | null): string {
   return 'linear-gradient(to right, rgb(23, 163, 214), rgb(56, 105, 233), rgb(95, 50, 243))'
 }
 
-function FeedKindBadge({ kind }: { kind: GuestLiveFeedItem['feedKind'] }) {
-  const isAdvice = kind === 'advice'
-  return (
-    <span
-      className={`absolute right-3 top-3 z-20 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide shadow-sm ${
-        isAdvice
-          ? 'bg-violet-600/90 text-white'
-          : 'bg-white/90 text-zinc-700 ring-1 ring-zinc-200/80'
-      }`}
-    >
-      {isAdvice ? 'Advice' : 'Greeting'}
-    </span>
-  )
-}
-
 function DynamicAdviceText({ text }: { text: string }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const textRef = useRef<HTMLParagraphElement>(null)
@@ -109,23 +93,14 @@ function DynamicAdviceText({ text }: { text: string }) {
   )
 }
 
-function TextAdviceCard({
-  item,
-  onOpen,
-}: {
-  item: GuestLiveFeedItem
-  onOpen: () => void
-}) {
+function TextAdviceCard({ item }: { item: GuestLiveFeedItem }) {
   const g = liveFeedItemToGreetingRow(item)
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="group relative flex aspect-[2/1] w-full flex-col overflow-hidden rounded-3xl text-left ring-1 ring-zinc-200/80 transition active:scale-[0.99] motion-safe:hover:brightness-105"
+    <div
+      className="group relative flex aspect-[2/1] w-full flex-col overflow-hidden rounded-3xl ring-1 ring-zinc-200/80"
       style={{ background: teamGradientFromColor(item.table_color ?? null) }}
     >
-      <FeedKindBadge kind={item.feedKind} />
       <div className="relative flex min-h-0 flex-1 flex-col px-4 pb-14 pt-4">
         <div
           className="pointer-events-none absolute left-4 top-3 z-0 select-none font-serif text-[52px] leading-none text-white/15"
@@ -144,41 +119,30 @@ function TextAdviceCard({
           className="h-9 w-9 border-2 border-white/40"
         />
       </div>
-    </button>
+    </div>
   )
 }
 
-function ImageGreetingCard({
-  item,
-  onOpen,
-}: {
-  item: GuestLiveFeedItem
-  onOpen: () => void
-}) {
+function ImageGreetingCard({ item }: { item: GuestLiveFeedItem }) {
   const g = liveFeedItemToGreetingRow(item)
   const [imgErr, setImgErr] = useState(false)
   const gradientCss = teamGradientFromColor(item.table_color ?? null)
 
   if (imgErr || !item.image_url?.trim()) {
-    return <TextAdviceCard item={item} onOpen={onOpen} />
+    return <TextAdviceCard item={item} />
   }
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="group relative aspect-[4/5] w-full overflow-hidden rounded-3xl bg-zinc-200 text-left ring-1 ring-zinc-200 transition active:scale-[0.99] motion-safe:hover:opacity-95"
-    >
-      <FeedKindBadge kind={item.feedKind} />
+    <div className="group relative aspect-[4/5] w-full overflow-hidden rounded-3xl bg-zinc-200 ring-1 ring-zinc-200">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={item.image_url}
         alt=""
-        className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+        className="pointer-events-auto absolute inset-0 h-full w-full object-cover"
         onError={() => setImgErr(true)}
       />
-      <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/55 via-black/20 to-transparent px-4 pb-4 pt-16">
-        <div className="flex items-end gap-2.5">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/55 via-black/20 to-transparent px-4 pb-4 pt-16">
+        <div className="flex items-center gap-2.5">
           <div
             className="shrink-0 rounded-full border-2 border-white/90 p-0.5 shadow-[0_3px_12px_rgba(0,0,0,0.32)]"
             style={{ background: gradientCss }}
@@ -194,10 +158,10 @@ function ImageGreetingCard({
           </div>
           <div className="relative min-w-0 flex-1">
             <div
-              className="absolute -left-1.5 bottom-5 h-2.5 w-2.5 rotate-45 bg-white shadow-sm"
+              className="absolute -left-1.5 top-1/2 z-10 h-2.5 w-2.5 -translate-y-1/2 rotate-45 bg-white shadow-sm"
               aria-hidden
             />
-            <div className="origin-bottom-left rounded-2xl rounded-bl-md bg-white px-3.5 py-3 shadow-[0_6px_24px_rgba(0,0,0,0.22)]">
+            <div className="origin-center rounded-2xl rounded-bl-md bg-white px-3.5 py-3 shadow-[0_6px_24px_rgba(0,0,0,0.22)]">
               <p className="truncate text-sm font-bold leading-tight text-zinc-900">
                 {greetingSenderLabel(g)}
               </p>
@@ -208,7 +172,7 @@ function ImageGreetingCard({
           </div>
         </div>
       </div>
-    </button>
+    </div>
   )
 }
 
@@ -216,12 +180,10 @@ function FeedCard({
   item,
   tableAvatars,
   guestEmblems,
-  onOpen,
 }: {
   item: GuestLiveFeedItem
   tableAvatars: Record<string, string>
   guestEmblems: GuestEmblemsSettingsValue
-  onOpen: () => void
 }) {
   const avatarUrl =
     item.avatar_url ||
@@ -233,10 +195,10 @@ function FeedCard({
   const enriched = avatarUrl ? { ...item, avatar_url: avatarUrl } : item
 
   if (!item.image_url?.trim()) {
-    return <TextAdviceCard item={enriched} onOpen={onOpen} />
+    return <TextAdviceCard item={enriched} />
   }
 
-  return <ImageGreetingCard item={enriched} onOpen={onOpen} />
+  return <ImageGreetingCard item={enriched} />
 }
 
 export default function GreetingsGalleryPage() {
@@ -246,8 +208,6 @@ export default function GreetingsGalleryPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [nextCursor, setNextCursor] = useState<LiveFeedCursor | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  const [lightboxOpen, setLightboxOpen] = useState(false)
-  const [lightboxIndex, setLightboxIndex] = useState(0)
   const [guestEmblems, setGuestEmblems] = useState<GuestEmblemsSettingsValue>({})
   const [tableAvatars, setTableAvatars] = useState<Record<string, string>>({})
   const loadMoreRef = useRef<HTMLDivElement>(null)
@@ -342,8 +302,6 @@ export default function GreetingsGalleryPage() {
     return () => observer.disconnect()
   }, [nextCursor, loadMore, loading])
 
-  const lightboxItems = items.map(liveFeedItemToGreetingRow)
-
   return (
     <main className="min-h-screen bg-white pb-20">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-sm">
@@ -389,7 +347,7 @@ export default function GreetingsGalleryPage() {
         ) : (
           <>
             <div className="grid gap-4 sm:grid-cols-2">
-              {items.map((item, i) => {
+              {items.map((item) => {
                 const textOnly = !item.image_url?.trim()
                 return (
                   <div key={item.id} className={textOnly ? 'sm:col-span-2' : undefined}>
@@ -397,10 +355,6 @@ export default function GreetingsGalleryPage() {
                       item={item}
                       tableAvatars={tableAvatars}
                       guestEmblems={guestEmblems}
-                      onOpen={() => {
-                        setLightboxIndex(i)
-                        setLightboxOpen(true)
-                      }}
                     />
                   </div>
                 )
@@ -414,14 +368,6 @@ export default function GreetingsGalleryPage() {
           </>
         )}
       </div>
-
-      <GreetingLightbox
-        items={lightboxItems}
-        index={lightboxIndex}
-        open={lightboxOpen}
-        onClose={() => setLightboxOpen(false)}
-        onIndexChange={setLightboxIndex}
-      />
     </main>
   )
 }

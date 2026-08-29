@@ -64,6 +64,7 @@ export type GuestMissionFeedItem =
       kind: 'greeting'
       id: string
       missionId: string
+      tableId: string | null
       createdAt: string
       mediaUrl: string
       mediaType: 'image' | 'video'
@@ -118,18 +119,31 @@ export function normalizeSubmissionData(raw: unknown): Record<string, unknown> {
   return {}
 }
 
-async function loadTableMeta(tableIds: string[]) {
-  const tableMeta = new Map<string, { name: string; color: string | null }>()
-  if (tableIds.length === 0) return tableMeta
+type TableMeta = { name: string; color: string | null }
+
+async function loadTableMeta(tableIds: string[]): Promise<Map<string, TableMeta>> {
+  const tableMeta = new Map<string, TableMeta>()
+  const unique = [...new Set(tableIds.map((id) => id?.trim()).filter(Boolean) as string[])]
+  if (unique.length === 0) return tableMeta
 
   const { data: trows, error: terr } = await supabase
     .from('tables')
-    .select('id,name,color')
-    .in('id', tableIds)
+    .select('id,name,color,team_id,teams(id,name)')
+    .in('id', unique)
   if (!terr && trows) {
-    for (const t of trows as Array<{ id: string; name?: string | null; color?: string | null }>) {
+    for (const raw of trows) {
+      const t = raw as {
+        id: string
+        name?: string | null
+        color?: string | null
+        teams?: { id: string; name: string } | { id: string; name: string }[] | null
+      }
+      const embedded = t.teams
+      const teamRow = Array.isArray(embedded) ? embedded[0] : embedded
+      const teamName = typeof teamRow?.name === 'string' ? teamRow.name.trim() : ''
+      const tableName = (t.name ?? '').trim()
       tableMeta.set(t.id, {
-        name: (t.name ?? '').trim() || 'Table',
+        name: teamName || tableName || 'Table',
         color: t.color?.trim() ?? null,
       })
     }
@@ -190,7 +204,7 @@ async function fetchGreetingFeedItemsFromGreetingsTable(
     const { data: rows, error: gErr } = await supabase
       .from('greetings')
       .select(
-        'id, message, image_url, created_at, table_name, table_color, mission_submission_id'
+        'id, message, image_url, created_at, table_id, table_name, table_color, mission_submission_id'
       )
       .eq('source_type', 'mission')
       .eq('status', 'ready')
@@ -207,6 +221,11 @@ async function fetchGreetingFeedItemsFromGreetingsTable(
     (a, b) => safeTime(b.created_at) - safeTime(a.created_at)
   )
 
+  const tableIds = list
+    .map((g) => (typeof g.table_id === 'string' ? g.table_id : null))
+    .filter((id): id is string => Boolean(id))
+  const tableMeta = await loadTableMeta(tableIds)
+
   const out: Extract<GuestMissionFeedItem, { kind: 'greeting' }>[] = []
   for (const g of list) {
     const url =
@@ -215,17 +234,22 @@ async function fetchGreetingFeedItemsFromGreetingsTable(
 
     const caption =
       typeof g.message === 'string' ? g.message.trim() : ''
+    const tableId = typeof g.table_id === 'string' ? g.table_id : null
+    const meta = tableId ? tableMeta.get(tableId) : undefined
     const sender =
-      typeof g.table_name === 'string' && g.table_name.trim().length > 0
+      meta?.name ??
+      (typeof g.table_name === 'string' && g.table_name.trim().length > 0
         ? g.table_name.trim()
-        : 'Table'
+        : 'Table')
     const tableColor =
-      typeof g.table_color === 'string' ? g.table_color.trim() : null
+      meta?.color ??
+      (typeof g.table_color === 'string' ? g.table_color.trim() : null)
 
     out.push({
       kind: 'greeting',
       id: g.id,
       missionId: greetingMissionId,
+      tableId,
       createdAt: g.created_at,
       mediaUrl: url,
       mediaType: inferMediaTypeFromUrl(url),
@@ -386,6 +410,7 @@ function greetingRowToLiveFeedItem(
     source_type?: string | null
     status?: string
   },
+  tableMeta: Map<string, TableMeta>,
   tableAvatars: Record<string, string>,
   guestEmblems: { team_emblem_by_table_id?: Record<string, string> } | null
 ): GuestLiveFeedItem | null {
@@ -394,14 +419,17 @@ function greetingRowToLiveFeedItem(
   if (!message && !imageUrl) return null
 
   const tableId = typeof g.table_id === 'string' ? g.table_id : null
+  const meta = tableId ? tableMeta.get(tableId) : undefined
   const tableName =
-    typeof g.table_name === 'string' && g.table_name.trim()
+    meta?.name ??
+    (typeof g.table_name === 'string' && g.table_name.trim()
       ? g.table_name.trim()
-      : null
+      : null)
   const tableColor =
-    typeof g.table_color === 'string' && g.table_color.trim()
+    meta?.color ??
+    (typeof g.table_color === 'string' && g.table_color.trim()
       ? g.table_color.trim()
-      : null
+      : null)
 
   return {
     id: `greeting-${g.id}`,
@@ -514,9 +542,20 @@ export async function fetchGuestLiveFeedPage(
     throw new Error(adviceRes.error.message || 'Failed to load advice submissions.')
   }
 
+  const greetingRows = (greetingRes.data ?? []) as GreetingLiveRow[]
+  const greetingTableIds = greetingRows
+    .map((g) => (typeof g.table_id === 'string' ? g.table_id : null))
+    .filter((id): id is string => Boolean(id))
+  const greetingTableMeta = await loadTableMeta(greetingTableIds)
+
   const greetingItems: GuestLiveFeedItem[] = []
-  for (const raw of (greetingRes.data ?? []) as GreetingLiveRow[]) {
-    const item = greetingRowToLiveFeedItem(raw, tableAvatars, guestEmblems)
+  for (const raw of greetingRows) {
+    const item = greetingRowToLiveFeedItem(
+      raw,
+      greetingTableMeta,
+      tableAvatars,
+      guestEmblems
+    )
     if (item && liveFeedItemAfterCursor(item, cursor)) {
       greetingItems.push(item)
     }
