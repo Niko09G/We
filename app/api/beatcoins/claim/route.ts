@@ -1,8 +1,18 @@
 import { NextResponse } from 'next/server'
-import { normalizeClaimTokenInput } from '@/lib/admin-tokens'
+import { isBeatcoinTokenUuid, normalizeClaimTokenInput } from '@/lib/admin-tokens'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
+
+function readTableId(body: Record<string, unknown>): string {
+  const raw =
+    typeof body.table_id === 'string'
+      ? body.table_id
+      : typeof body.tableId === 'string'
+        ? body.tableId
+        : ''
+  return raw.trim()
+}
 
 /** Public: claim a Beatcoin for a table (one redemption per token per table). */
 export async function POST(request: Request) {
@@ -16,11 +26,18 @@ export async function POST(request: Request) {
   const body = json as Record<string, unknown>
   const token =
     typeof body.token === 'string' ? normalizeClaimTokenInput(body.token) : ''
-  const table_id = typeof body.table_id === 'string' ? body.table_id.trim() : ''
+  const table_id = readTableId(body)
 
   if (!token || !table_id) {
     return NextResponse.json(
       { ok: false, error: 'missing_token_or_table' } as const,
+      { status: 400 }
+    )
+  }
+
+  if (!isBeatcoinTokenUuid(table_id)) {
+    return NextResponse.json(
+      { ok: false, error: 'invalid_table_id' } as const,
       { status: 400 }
     )
   }
@@ -30,6 +47,7 @@ export async function POST(request: Request) {
     supabase = createServerSupabaseClient()
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Server configuration error'
+    console.error('[BeatCoin Claim Error]:', e)
     return NextResponse.json({ ok: false, error: msg } as const, { status: 500 })
   }
 
@@ -39,6 +57,7 @@ export async function POST(request: Request) {
   })
 
   if (error) {
+    console.error('[BeatCoin Claim Error]:', error)
     return NextResponse.json(
       { ok: false, error: error.message || 'claim_failed' } as const,
       { status: 500 }
@@ -47,7 +66,10 @@ export async function POST(request: Request) {
 
   const row = data as { ok?: boolean; error?: string; points?: number } | null
   if (!row || row.ok !== true) {
-    const code = (row as { error?: string })?.error ?? 'claim_failed'
+    const rawCode = (row as { error?: string })?.error ?? 'claim_failed'
+    const code =
+      rawCode === 'already_claimed' ? 'already_claimed_by_table' : rawCode
+    console.error('[BeatCoin Claim Error]:', row)
     const status =
       code === 'already_claimed_by_table' || code === 'invalid_token'
         ? 409

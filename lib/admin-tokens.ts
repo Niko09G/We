@@ -136,5 +136,20 @@ export async function claimBeatcoinToken(
       table_id: tableId.trim(),
     }),
   })
-  return (await res.json()) as BeatcoinClaimResponse
+
+  let payload: BeatcoinClaimResponse & { message?: string }
+  try {
+    payload = (await res.json()) as BeatcoinClaimResponse & { message?: string }
+  } catch {
+    return { ok: false, error: `Request failed (${res.status})` }
+  }
+
+  if (payload.ok === true) return payload
+
+  const error =
+    payload.error?.trim() ||
+    payload.message?.trim() ||
+    (res.ok ? 'claim_failed' : `Request failed (${res.status})`)
+
+  return { ok: false, error }
 }

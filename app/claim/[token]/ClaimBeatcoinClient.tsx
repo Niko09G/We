@@ -247,10 +247,14 @@ export default function ClaimBeatcoinClient({ token }: { token: string }) {
         const data = await claimBeatcoinToken(token, tableId)
         if (data.ok !== true) {
           const code = data.error ?? 'claim_failed'
-          if (code === 'already_claimed_by_table') {
+          if (code === 'already_claimed_by_table' || code === 'already_claimed') {
             setPhase('claimed')
             return
           }
+          const serverMessage =
+            data.error ||
+            (data as { message?: string }).message ||
+            'claim_failed'
           setErrorMessage(
             code === 'missions_disabled'
               ? 'Missions are paused right now.'
@@ -258,7 +262,7 @@ export default function ClaimBeatcoinClient({ token }: { token: string }) {
                 ? 'This mission is not available for that team.'
                 : code === 'invalid_token'
                   ? `This ${rewardUnit.name} link is not valid.`
-                  : 'Could not claim. Try again.'
+                  : serverMessage
           )
           setPhase(remembered?.tableId ? 'ready' : 'pick_table')
           return
@@ -267,8 +271,17 @@ export default function ClaimBeatcoinClient({ token }: { token: string }) {
         setPointsAwarded(typeof data.points === 'number' ? data.points : lookup.points)
         saveGuestTableContext(tableId, tableName)
         setPhase('success')
-      } catch {
-        setErrorMessage('Network error. Try again.')
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : typeof err === 'object' &&
+                err !== null &&
+                'error' in err &&
+                typeof (err as { error?: unknown }).error === 'string'
+              ? (err as { error: string }).error
+              : 'Network error. Try again.'
+        setErrorMessage(message)
         setPhase(remembered?.tableId ? 'ready' : 'pick_table')
       } finally {
         setIsSubmitting(false)
