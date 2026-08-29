@@ -1,7 +1,7 @@
 import { resolveTeamPageConfig } from '@/lib/team-page-config'
 import { supabase } from '@/lib/supabase/client'
 
-const FEED_LIMIT = 14
+const FEED_LIMIT = 18
 export const LIVE_FEED_PAGE_SIZE = 15
 
 function safeTime(iso: string | null | undefined): number {
@@ -288,7 +288,7 @@ export async function resolveFeedMissionIds(): Promise<{
 /**
  * Combined feed: advice from mission_submissions (approved/pending);
  * greetings from `greetings` (ready, mission) scoped to greeting mission via linked submission ids.
- * Newest first, max 14 total.
+ * Newest first, max 18 total.
  */
 export async function fetchGuestMissionFeed(
   adviceMissionId: string | null,

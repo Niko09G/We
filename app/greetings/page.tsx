@@ -101,16 +101,7 @@ function TextAdviceCard({ item }: { item: GuestLiveFeedItem }) {
       className="group relative flex aspect-[2/1] w-full flex-col overflow-hidden rounded-3xl ring-1 ring-zinc-200/80"
       style={{ background: teamGradientFromColor(item.table_color ?? null) }}
     >
-      <div className="relative flex min-h-0 flex-1 flex-col px-4 pb-14 pt-4">
-        <div
-          className="pointer-events-none absolute left-4 top-3 z-0 select-none font-serif text-[52px] leading-none text-white/15"
-          aria-hidden
-        >
-          &quot;
-        </div>
-        <DynamicAdviceText text={item.message} />
-      </div>
-      <div className="absolute bottom-4 left-4 z-10">
+      <div className="absolute top-3 right-3 z-10">
         <TeamAvatar
           name={greetingSenderLabel(g)}
           avatarUrl={item.avatar_url}
@@ -118,6 +109,15 @@ function TextAdviceCard({ item }: { item: GuestLiveFeedItem }) {
           size="md"
           className="h-9 w-9 border-2 border-white/40"
         />
+      </div>
+      <div className="relative flex min-h-0 flex-1 flex-col px-4 pb-4 pt-4">
+        <div
+          className="pointer-events-none absolute left-4 top-3 z-0 select-none font-serif text-[52px] leading-none text-white/15"
+          aria-hidden
+        >
+          &quot;
+        </div>
+        <DynamicAdviceText text={item.message} />
       </div>
     </div>
   )

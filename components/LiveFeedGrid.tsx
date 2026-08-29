@@ -207,7 +207,10 @@ function AdviceCard({
       className="group relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-2xl text-left ring-1 ring-white/15 transition active:scale-[0.98] motion-safe:hover:brightness-105"
       style={{ background: teamGradientFromColor(item.tableColor) }}
     >
-      <div className="relative flex min-h-0 flex-1 flex-col px-3 pb-12 pt-3">
+      <div className="absolute top-3 right-3 z-10">
+        <AdviceTeamAvatar avatarUrl={avatarUrl} tableColor={item.tableColor} />
+      </div>
+      <div className="relative flex min-h-0 flex-1 flex-col px-3 pb-3 pt-3">
         <div
           className="pointer-events-none absolute left-3 top-1 z-0 select-none font-serif text-[52px] leading-none text-white/15"
           aria-hidden
@@ -215,9 +218,6 @@ function AdviceCard({
           &quot;
         </div>
         <AdviceCardText text={item.advice} />
-      </div>
-      <div className="absolute bottom-4 left-4 z-10">
-        <AdviceTeamAvatar avatarUrl={avatarUrl} tableColor={item.tableColor} />
       </div>
     </button>
   )

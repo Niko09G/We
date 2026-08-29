@@ -92,16 +92,7 @@ function OverlayAdviceCard({
       className="relative flex aspect-square w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-br ring-1 ring-white/15"
       style={{ background: teamGradientFromColor(item.tableColor) }}
     >
-      <div className="relative flex min-h-0 flex-1 flex-col px-4 pb-14 pt-4">
-        <div
-          className="pointer-events-none absolute left-4 top-3 z-0 select-none font-serif text-[52px] leading-none text-white/15"
-          aria-hidden
-        >
-          &quot;
-        </div>
-        <OverlayAdviceText text={item.advice} />
-      </div>
-      <div className="absolute bottom-4 left-4 z-10">
+      <div className="absolute top-3 right-3 z-10">
         <TeamAvatar
           name={item.tableName}
           avatarUrl={avatarUrl}
@@ -109,6 +100,15 @@ function OverlayAdviceCard({
           size="md"
           className="h-9 w-9 border-2 border-white/40"
         />
+      </div>
+      <div className="relative flex min-h-0 flex-1 flex-col px-4 pb-4 pt-4">
+        <div
+          className="pointer-events-none absolute left-4 top-3 z-0 select-none font-serif text-[52px] leading-none text-white/15"
+          aria-hidden
+        >
+          &quot;
+        </div>
+        <OverlayAdviceText text={item.advice} />
       </div>
     </div>
   )

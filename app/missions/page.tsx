@@ -6,6 +6,7 @@ import { DynamicThemeColor } from '@/components/DynamicThemeColor'
 import { supabase } from '@/lib/supabase/client'
 import { getMissionsEnabled } from '@/lib/app-settings'
 import { canonicalTablesForLobby, resolveTeamId } from '@/lib/table-teams'
+import { teamPageAdminFormDefaults } from '@/lib/team-page-config'
 
 type GuestTable = {
   id: string
@@ -14,6 +15,7 @@ type GuestTable = {
   is_active: boolean
   team_id?: string | null
   display_order?: number
+  page_config?: unknown
 }
 
 function isUuid(value: unknown): value is string {
@@ -23,37 +25,11 @@ function isUuid(value: unknown): value is string {
   )
 }
 
-function hexToRgba(hex: string, alpha: number): string {
-  const cleaned = hex.trim().replace(/^#/, '')
-  const full =
-    cleaned.length === 3
-      ? cleaned
-          .split('')
-          .map((c) => c + c)
-          .join('')
-      : cleaned
-  if (full.length !== 6) return `rgba(255,255,255,${alpha})`
-  const r = Number.parseInt(full.slice(0, 2), 16)
-  const g = Number.parseInt(full.slice(2, 4), 16)
-  const b = Number.parseInt(full.slice(4, 6), 16)
-  return `rgba(${r},${g},${b},${alpha})`
-}
-
 export default function MissionsEntryPage() {
   const [missionsEnabled, setMissionsEnabled] = useState<boolean | null>(null)
   const [tables, setTables] = useState<GuestTable[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [showBackToTop, setShowBackToTop] = useState(false)
-
-  useEffect(() => {
-    const onScroll = () => {
-      setShowBackToTop(window.scrollY > 240)
-    }
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -68,7 +44,7 @@ export default function MissionsEntryPage() {
         const [{ data, error: tErr }, teamsRes] = await Promise.all([
           supabase
             .from('tables')
-            .select('id,name,color,is_active,team_id,display_order')
+            .select('id,name,color,is_active,team_id,display_order,page_config')
             .eq('is_archived', false)
             .order('name'),
           supabase.from('teams').select('id,name'),
@@ -106,7 +82,7 @@ export default function MissionsEntryPage() {
       const [{ data, error: tErr }, teamsRes] = await Promise.all([
         supabase
           .from('tables')
-          .select('id,name,color,is_active,team_id,display_order')
+          .select('id,name,color,is_active,team_id,display_order,page_config')
           .eq('is_archived', false)
           .order('name'),
         supabase.from('teams').select('id,name'),
@@ -191,44 +167,44 @@ export default function MissionsEntryPage() {
 
     if (!tables.length) {
       return (
-        <div className="rounded-xl border border-zinc-800 bg-white/5 px-4 py-3 text-center">
-          <div className="text-sm font-semibold text-white">No tables yet</div>
-          <div className="mt-1 text-xs text-white/70">Please check back soon.</div>
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-center">
+          <div className="text-sm font-semibold text-zinc-900">No tables yet</div>
+          <div className="mt-1 text-xs text-zinc-600">Please check back soon.</div>
         </div>
       )
     }
 
     return (
-      <div className="grid grid-cols-2 gap-3">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4">
         {tables.map((t) => {
           if (!isUuid(t.id)) return null
-          const hasColor = typeof t.color === 'string' && t.color.trim().length > 0
-          const accent = hasColor ? t.color!.trim() : '#3f3f46'
+          const resolved = teamPageAdminFormDefaults(t.page_config, {
+            tableColor: t.color,
+            tableName: t.name,
+          })
+          const art =
+            resolved.heroImageUrl.trim() || resolved.avatarImageUrl.trim() || null
           return (
             <Link
               key={t.id}
               href={`/missions/${t.id}`}
-              className="block rounded-2xl border border-zinc-800 bg-white/5 p-3"
+              className="group relative h-[220px] overflow-hidden rounded-2xl border border-zinc-200 text-left outline-none transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-zinc-400/70 focus-visible:ring-offset-2 sm:h-[250px]"
               style={{
-                borderLeftWidth: 6,
-                borderLeftColor: accent,
-                backgroundColor: hasColor ? hexToRgba(accent, 0.06) : undefined,
+                background: `linear-gradient(to bottom, ${resolved.heroTop}, ${resolved.heroMiddle || resolved.heroBottom}, ${resolved.heroBottom})`,
               }}
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-white">
-                    {t.name}
-                  </div>
-                  <div className="mt-1 text-[11px] text-white/70">Select table</div>
-                </div>
-                <div
-                  className="h-2.5 w-2.5 shrink-0 rounded-full border border-white/10"
-                  style={{
-                    backgroundColor: hasColor ? accent : '#71717a',
-                  }}
-                  aria-hidden
-                />
+              <div className="relative flex h-full flex-col p-3 text-white">
+                <p className="relative z-[1] text-center text-sm font-bold leading-tight sm:text-base">
+                  {t.name}
+                </p>
+                {art ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={art}
+                    alt=""
+                    className="relative z-[1] mx-auto mt-2 h-28 w-full max-w-full flex-1 object-contain opacity-95 sm:h-32"
+                  />
+                ) : null}
               </div>
             </Link>
           )
@@ -238,26 +214,21 @@ export default function MissionsEntryPage() {
   }, [loading, missionsEnabled, tables])
 
   return (
-    <main className="guest-page-shell bg-zinc-950 px-4 py-8">
-      <DynamicThemeColor color="#09090b" />
+    <main className="guest-page-shell bg-white px-4 py-8">
+      <DynamicThemeColor color="#ffffff" />
       <div className="mx-auto w-full max-w-md">
-        <div className="mb-5 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
-          <h1 className="text-2xl font-semibold tracking-tight text-white">
-            Missions
-          </h1>
-          <p className="mt-2 text-sm text-white/70 leading-relaxed">
-            Pick your table to see what quests are available.
-          </p>
-        </div>
+        <h1 className="text-center text-2xl font-semibold tracking-tight text-black">
+          Choose your table
+        </h1>
 
         {content}
 
         {loading && (
-          <div className="mt-3 space-y-3">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4">
             {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="h-[92px] animate-pulse rounded-2xl border border-zinc-800 bg-white/5"
+                className="h-[220px] animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 sm:h-[250px]"
               />
             ))}
           </div>
@@ -270,20 +241,6 @@ export default function MissionsEntryPage() {
           </div>
         )}
       </div>
-
-      <div className="mx-auto mt-8 flex w-full max-w-md justify-center px-4 pb-8">
-        <button
-          type="button"
-          aria-label="Back to top"
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className={`rounded-full border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-zinc-50 active:scale-95 ${
-            showBackToTop ? 'opacity-100' : 'opacity-70'
-          }`}
-        >
-          Back to top
-        </button>
-      </div>
     </main>
   )
 }
-
