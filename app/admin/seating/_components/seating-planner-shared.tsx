@@ -1,6 +1,14 @@
 'use client'
 
-import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import {
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useTransition,
+  type CSSProperties,
+} from 'react'
 
 import type { AttendeeRow } from '@/lib/admin-attendees'
 import {
@@ -17,10 +25,14 @@ import {
   type SeatingParty,
 } from '@/lib/seating-planner'
 
+/** Avoid persistent compositor layers that amplify layout jitter during seat/capacity updates. */
 const GPU_LAYER_STYLE: CSSProperties = {
-  willChange: 'transform',
-  transform: 'translateZ(0)',
+  willChange: 'auto',
 }
+
+/** Fixed vertical band for large overlay seat map (prevents height oscillation on capacity changes). */
+export const ADMIN_LARGE_SEAT_MAP_ROW_BAND_PX = 108
+export const ADMIN_LARGE_SEAT_MAP_CENTER_BAND_PX = 116
 
 function seatCenterX(
   colIndex: number,
@@ -674,22 +686,43 @@ export function AdminTableTwinSeatMap({
   const [middleW, setMiddleW] = useState(0)
 
   const safeCapacity = Math.min(MAX_SEAT_MAP_CAPACITY, Math.max(1, Math.trunc(capacity)))
+  const [layoutCapacity, setLayoutCapacity] = useState(safeCapacity)
+  const [, startCapacityTransition] = useTransition()
+  const renderCapacity = useDeferredValue(layoutCapacity)
+
+  useEffect(() => {
+    if (safeCapacity === layoutCapacity) return
+    startCapacityTransition(() => {
+      setLayoutCapacity(safeCapacity)
+    })
+  }, [safeCapacity, layoutCapacity])
 
   useLayoutEffect(() => {
     const el = middleRef.current
     if (!el) return
-    const ro = new ResizeObserver(() => setMiddleW(el.clientWidth))
+    let rafId: number | null = null
+    const syncWidth = () => {
+      rafId = null
+      setMiddleW(el.clientWidth)
+    }
+    const ro = new ResizeObserver(() => {
+      if (rafId != null) return
+      rafId = requestAnimationFrame(syncWidth)
+    })
     ro.observe(el)
     setMiddleW(el.clientWidth)
-    return () => ro.disconnect()
-  }, [safeCapacity])
+    return () => {
+      ro.disconnect()
+      if (rafId != null) cancelAnimationFrame(rafId)
+    }
+  }, [renderCapacity])
 
   const bySeat = new Map<number, AttendeeRow>()
   for (const r of attendeesAtTable) {
     const n = r.seat_number
     if (typeof n === 'number' && Number.isFinite(n)) {
       const sn = Math.trunc(n)
-      if (sn >= 1 && sn <= safeCapacity) bySeat.set(sn, r)
+      if (sn >= 1 && sn <= renderCapacity) bySeat.set(sn, r)
     }
   }
 
@@ -700,7 +733,7 @@ export function AdminTableTwinSeatMap({
     rightEndSeat,
     bottomStart,
     bottomCount,
-  } = computeFourSideCounts(safeCapacity)
+  } = computeFourSideCounts(renderCapacity)
 
   const fourSideLayout: FourSideLayout = {
     leftEndSeat,
@@ -795,7 +828,16 @@ export function AdminTableTwinSeatMap({
     return undefined
   }
 
-  const isInteracting = highlightPartyKey != null || previewSeatRange != null
+  const isInteracting =
+    highlightPartyKey != null ||
+    previewSeatRange != null ||
+    safeCapacity !== renderCapacity ||
+    layoutCapacity !== renderCapacity
+
+  const centerBandPx =
+    size === 'large'
+      ? ADMIN_LARGE_SEAT_MAP_CENTER_BAND_PX
+      : layoutMetrics.centerBandPx
 
   const shared: SeatMapSharedProps = {
     bySeat,
@@ -818,10 +860,16 @@ export function AdminTableTwinSeatMap({
     Math.max(0, bottomCount - 1) * effectiveGapPxBottom
 
   return (
-    <div className="w-full max-w-full min-w-0 overflow-x-auto rounded-none bg-transparent p-0">
+    <div
+      className="w-full max-w-full min-w-0 overflow-x-auto rounded-none bg-transparent p-0"
+      style={{ willChange: 'auto' }}
+    >
       <div
-        className="grid w-full max-w-full min-w-0 grid-cols-[auto_1fr_auto] items-center gap-x-1"
+        className={`grid w-full max-w-full min-w-0 grid-cols-[auto_1fr_auto] items-center gap-x-1 ${
+          isInteracting ? 'transition-none' : ''
+        }`}
         style={{
+          willChange: 'auto',
           paddingTop: layoutMetrics.edgePaddingTop,
           paddingBottom: layoutMetrics.edgePaddingBottom,
         }}
@@ -835,10 +883,10 @@ export function AdminTableTwinSeatMap({
           ) : null}
         </div>
 
-        <div ref={middleRef} className="min-w-0 max-w-full self-stretch">
+        <div ref={middleRef} className="min-w-0 max-w-full self-stretch" style={{ willChange: 'auto' }}>
           <div
-            className="relative flex min-w-0 flex-col gap-1"
-            style={{ minHeight: layoutMetrics.centerBandPx }}
+            className={`relative flex min-w-0 flex-col gap-1 ${isInteracting ? 'transition-none' : ''}`}
+            style={{ minHeight: centerBandPx, willChange: 'auto' }}
           >
             <CoupleVerticalConnectors
               links={coupleLinks}
@@ -941,7 +989,7 @@ function SideRow({
 
   return (
     <div className="relative w-full min-w-0 max-w-full">
-      <div className={`relative w-full max-w-full ${isLarge ? 'min-h-[108px]' : 'min-h-[72px]'}`}>
+      <div className={`relative w-full min-w-0 max-w-full ${isLarge ? 'min-h-[108px]' : 'min-h-[72px]'}`}>
         {horizontalLinks.length > 0 ? (
           <div
             className={`pointer-events-none absolute inset-x-0 z-[2] grid ${

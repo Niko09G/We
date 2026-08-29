@@ -393,9 +393,13 @@ function LargeSeatingOverlay({
           </button>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-3 pb-3 pt-2">
+        <div
+          className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-scroll px-3 pb-3 pt-2"
+          style={{ willChange: 'auto' }}
+        >
           <div
-            className="relative min-h-0 w-full max-w-full min-w-0 shrink-0 overflow-x-auto rounded-xl border border-[#ebebeb] bg-[#fafafa] px-2 py-2 sm:px-3 sm:py-3"
+            className="relative flex h-[min(36vh,340px)] min-h-[300px] max-h-[340px] w-full max-w-full min-w-0 shrink-0 items-center overflow-x-auto overflow-y-hidden rounded-xl border border-[#ebebeb] bg-[#fafafa] px-2 py-2 sm:px-3 sm:py-3"
+            style={{ willChange: 'auto' }}
             onDragOver={(e) => {
               if (!dragPartyKey) return
               e.preventDefault()
@@ -637,8 +641,11 @@ function LargeSeatingOverlay({
             ) : null}
           </div>
 
-          <div className="admin-scroll-area min-h-0 flex-1 overflow-y-auto rounded-xl border border-[#ebebeb] p-2.5">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div
+            className="admin-scroll-area min-h-[200px] flex-1 overflow-y-scroll rounded-xl border border-[#ebebeb] p-2.5"
+            style={{ willChange: 'auto' }}
+          >
+            <div className="grid min-h-[180px] grid-cols-2 gap-2 sm:grid-cols-4">
               {list.map((p) => {
                 const rowDraggable = !busy && !p.splitWarning
                 return (
