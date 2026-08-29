@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
-/** Public: claim a Beatcoin for a table (idempotent token lock in RPC). */
+/** Public: claim a Beatcoin for a table (one redemption per token per table). */
 export async function POST(request: Request) {
   let json: unknown
   try {
@@ -45,7 +45,11 @@ export async function POST(request: Request) {
   if (!row || row.ok !== true) {
     const code = (row as { error?: string })?.error ?? 'claim_failed'
     const status =
-      code === 'already_claimed' || code === 'invalid_token' ? 409 : code === 'missions_disabled' ? 503 : 422
+      code === 'already_claimed_by_table' || code === 'invalid_token'
+        ? 409
+        : code === 'missions_disabled'
+          ? 503
+          : 422
     return NextResponse.json({ ok: false, error: code } as const, { status })
   }
 

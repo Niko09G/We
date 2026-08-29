@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const token = (searchParams.get('token') ?? '').trim()
+  const tableId = (searchParams.get('table_id') ?? '').trim()
   if (!token) {
     return NextResponse.json({ ok: false, error: 'missing_token' } as const, { status: 400 })
   }
@@ -17,7 +18,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: msg } as const, { status: 500 })
   }
 
-  const { data, error } = await supabase.rpc('peek_beatcoin', { p_token: token })
+  const { data, error } = await supabase.rpc('peek_beatcoin', {
+    p_token: token,
+    p_table_id: tableId || null,
+  })
   if (error) {
     return NextResponse.json(
       { ok: false, error: error.message || 'lookup_failed' } as const,
