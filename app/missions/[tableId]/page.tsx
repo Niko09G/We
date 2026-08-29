@@ -1217,7 +1217,7 @@ export default function MissionsTablePage({
         />
       </div>
 
-      <div className="relative z-10 -mt-12 min-h-dvh rounded-t-3xl bg-white shadow-2xl isolate">
+      <div className="relative z-20 -mt-14 min-h-dvh rounded-t-[32px] bg-white shadow-2xl isolate">
       {loading && showMissionUi ? (
         <section className="w-full pt-8" aria-busy="true">
           <div className="mb-5 flex items-end justify-between gap-4">
@@ -1457,6 +1457,29 @@ export default function MissionsTablePage({
           </div>
         ) : null}
 
+        <section id="seat-finder" className="scroll-mt-8">
+          <h2
+            className="text-left text-2xl font-semibold leading-snug text-zinc-900"
+            style={{ color: teamPage.typography.textColorPrimary }}
+          >
+            Find your people
+          </h2>
+          <p
+            className="mt-1 text-base text-zinc-500"
+            style={{ color: teamPage.typography.textColorSecondary }}
+          >
+            Search your name or explore the tables
+          </p>
+          <div className="mt-3 min-h-0">
+            <SeatingMapPanel
+              layout="embedded"
+              showSectionHeading={false}
+              className="w-full"
+              viewerAccentColor={teamPage.theme.primaryColor}
+            />
+          </div>
+        </section>
+
         <section id="leaderboard" className="scroll-mt-8">
           <h2
             className="text-left text-2xl font-semibold leading-snug text-zinc-900"
@@ -1679,29 +1702,6 @@ export default function MissionsTablePage({
               </p>
             </div>
           )}
-        </section>
-
-        <section id="seat-finder" className="scroll-mt-8">
-          <h2
-            className="text-left text-2xl font-semibold leading-snug text-zinc-900"
-            style={{ color: teamPage.typography.textColorPrimary }}
-          >
-            Find your people
-          </h2>
-          <p
-            className="mt-1 text-base text-zinc-500"
-            style={{ color: teamPage.typography.textColorSecondary }}
-          >
-            Search your name or explore the tables
-          </p>
-          <div className="mt-3 min-h-0">
-            <SeatingMapPanel
-              layout="embedded"
-              showSectionHeading={false}
-              className="w-full"
-              viewerAccentColor={teamPage.theme.primaryColor}
-            />
-          </div>
         </section>
 
         {selectedMissionId

@@ -5,6 +5,8 @@ import {
   type StickySectionNavItem,
 } from '@/components/guest/StickySectionNav'
 
+/** Scroll-spy section tracking is handled via `useScrollSpy` inside StickySectionNav. */
+
 /** Lobby landing page — anchor jumps to in-page sections. */
 export const LOBBY_BOTTOM_NAV_ITEMS: StickySectionNavItem[] = [
   {

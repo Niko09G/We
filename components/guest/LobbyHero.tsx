@@ -11,7 +11,6 @@ export type LobbyHeroProps = {
   heroBackgroundUrl?: string | null
   carouselImages?: string[]
   onFindSeat: () => void
-  onSeeProgram: () => void
 }
 
 /**
@@ -24,7 +23,6 @@ export function LobbyHero({
   heroBackgroundUrl = null,
   carouselImages = [],
   onFindSeat,
-  onSeeProgram,
 }: LobbyHeroProps) {
   const logo = headerLogoUrl?.trim()
   const background = heroBackgroundUrl?.trim()
@@ -63,14 +61,10 @@ export function LobbyHero({
               <div className="mx-auto h-4 w-full max-w-xs rounded-lg bg-white/15" />
               <div className="mx-auto h-4 w-56 rounded-lg bg-white/15" />
               <div className="mx-auto h-12 w-full max-w-xs rounded-[9999px] bg-white/20" />
-              <div className="mx-auto h-12 w-full max-w-xs rounded-[9999px] bg-white/15" />
             </div>
           ) : (
             <>
-              <h1
-                className="text-center text-3xl font-semibold leading-tight text-white sm:text-4xl"
-                style={{ fontFamily: 'var(--font-playfair), "Playfair Display", Georgia, serif' }}
-              >
+              <h1 className="text-center text-3xl font-bold leading-tight text-white sm:text-4xl">
                 {hero.title}
               </h1>
 
@@ -95,14 +89,6 @@ export function LobbyHero({
                 >
                   <span aria-hidden>🪑</span>
                   <span>{hero.cta_find_seat_label}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={onSeeProgram}
-                  className="inline-flex w-full max-w-xs items-center justify-center gap-1.5 rounded-[9999px] border border-white/35 bg-white/15 px-6 py-3 text-base font-medium text-white backdrop-blur-sm transition active:scale-[0.99] hover:bg-white/25"
-                >
-                  <span aria-hidden>📅</span>
-                  <span>{hero.cta_program_label}</span>
                 </button>
               </div>
             </>

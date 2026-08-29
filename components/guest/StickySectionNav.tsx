@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useScrollSpy, type ScrollSpySection } from '@/hooks/useScrollSpy'
 
 export type StickySectionNavItem = {
   id: string
@@ -34,9 +35,6 @@ export function StickySectionNav({
 }) {
   const railRef = useRef<HTMLDivElement>(null)
   const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({})
-  const [activeSection, setActiveSection] = useState<string>(items[0]?.id ?? '')
-  const activeSectionRef = useRef(activeSection)
-  /** True: nav click drives active state until scroll settles — observer must not override. */
   const manualNavLockRef = useRef(false)
   /** Section id clicked during programmatic navigation. */
   const manualNavTargetRef = useRef<string | null>(null)
@@ -48,6 +46,24 @@ export function StickySectionNav({
   const [overlayActive, setOverlayActive] = useState(false)
   const [showLeftFade, setShowLeftFade] = useState(false)
   const [showRightFade, setShowRightFade] = useState(false)
+  const [manualActiveSection, setManualActiveSection] = useState<string | null>(null)
+
+  const scrollSpySections = useMemo<ScrollSpySection[]>(
+    () =>
+      items.map((item) => ({
+        id: item.id,
+        targetId: item.targetId,
+      })),
+    [items]
+  )
+
+  const scrollSpyActive = useScrollSpy(scrollSpySections, {
+    pausedRef: manualNavLockRef,
+  })
+
+  const activeSection = manualActiveSection ?? scrollSpyActive
+
+  const activeSectionRef = useRef(activeSection)
 
   useEffect(() => {
     activeSectionRef.current = activeSection
@@ -99,56 +115,7 @@ export function StickySectionNav({
     return () => mo.disconnect()
   }, [])
 
-  // Scroll behavior: pick most visible section using IntersectionObserver ratios.
-  useEffect(() => {
-    const targets = items
-      .map((i) => {
-        const el = document.getElementById(i.targetId)
-        return el ? { id: i.id, el } : null
-      })
-      .filter((x): x is { id: string; el: HTMLElement } => Boolean(x))
-    if (targets.length === 0) return
-
-    const ratios = new Map<string, number>()
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (manualNavLockRef.current) return
-
-        for (const e of entries) {
-          const id = (e.target as HTMLElement).dataset.stickyNavId
-          if (!id) continue
-          ratios.set(id, e.isIntersecting ? e.intersectionRatio : 0)
-        }
-
-        let bestId = activeSectionRef.current
-        let bestRatio = -1
-        for (const [id, ratio] of ratios.entries()) {
-          if (ratio > bestRatio) {
-            bestRatio = ratio
-            bestId = id
-          }
-        }
-
-        if (bestId && bestId !== activeSectionRef.current) {
-          setActiveSection(bestId)
-        }
-      },
-      {
-        threshold: [0, 0.15, 0.3, 0.45, 0.6, 0.8, 1],
-        rootMargin: '-20% 0px -40% 0px',
-      }
-    )
-
-    for (const t of targets) {
-      t.el.dataset.stickyNavId = t.id
-      io.observe(t.el)
-    }
-
-    return () => io.disconnect()
-  }, [items])
-
-  // Release manual nav lock only after document scroll settles (not ratio-threshold mid-flight).
+  // Release manual nav lock only after document scroll settles.
   useEffect(() => {
     const clearSettleTimer = () => {
       if (settleTimerRef.current) {
@@ -162,6 +129,7 @@ export function StickySectionNav({
       const targetSectionId = manualNavTargetRef.current
       if (!targetSectionId) {
         manualNavLockRef.current = false
+        setManualActiveSection(null)
         return
       }
 
@@ -170,6 +138,7 @@ export function StickySectionNav({
       if (!el) {
         manualNavLockRef.current = false
         manualNavTargetRef.current = null
+        setManualActiveSection(null)
         return
       }
 
@@ -194,6 +163,7 @@ export function StickySectionNav({
       const release = () => {
         manualNavLockRef.current = false
         manualNavTargetRef.current = null
+        setManualActiveSection(null)
       }
 
       // Target is the geometric winner in the reading band (tall sections, hero-sized blocks).
@@ -221,9 +191,6 @@ export function StickySectionNav({
         bestBand > vh * 0.08
       ) {
         release()
-        if (bestId !== activeSectionRef.current) {
-          setActiveSection(bestId)
-        }
         return
       }
 
@@ -366,7 +333,7 @@ export function StickySectionNav({
                 onClick={() => {
                   manualNavLockRef.current = true
                   manualNavTargetRef.current = item.id
-                  setActiveSection(item.id)
+                  setManualActiveSection(item.id)
                   const target = document.getElementById(item.targetId)
                   if (target) {
                     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -374,6 +341,7 @@ export function StickySectionNav({
                   } else {
                     manualNavLockRef.current = false
                     manualNavTargetRef.current = null
+                    setManualActiveSection(null)
                   }
                 }}
                 aria-current={isActive ? 'true' : undefined}

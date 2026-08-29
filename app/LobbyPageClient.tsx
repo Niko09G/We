@@ -222,11 +222,10 @@ export function LobbyPageClient() {
           heroBackgroundUrl={settings?.hero_background_url}
           carouselImages={settings?.carousel_images}
           onFindSeat={() => scrollToSection('seat-finder')}
-          onSeeProgram={() => scrollToSection('program')}
         />
       </div>
 
-      <div className="relative z-10 -mt-12 min-h-dvh rounded-t-3xl bg-white pb-28 shadow-2xl isolate">
+      <div className="relative z-20 -mt-14 min-h-dvh rounded-t-[32px] bg-white pb-28 shadow-2xl isolate">
         {error ? (
           <div className="mx-5 mt-8 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
             <p className="text-sm font-semibold text-red-800">Could not load lobby</p>
