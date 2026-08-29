@@ -24,7 +24,7 @@
 html,
 body {
   transition: background-color 0.3s ease;
-  overscroll-behavior-y: contain;
+  overscroll-behavior-y: none;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -50,6 +50,7 @@ body {
 .guest-page-shell {
   min-height: 100dvh;
   width: 100%;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -71,11 +72,6 @@ select {
   to {
     transform: translateX(-50%);
   }
-}
-
-.lobby-carousel-mask {
-  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
 }
 
 .lobby-carousel-track {

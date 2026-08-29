@@ -11,8 +11,8 @@ type LobbyMcsSectionProps = {
 function McCard({ mc }: { mc: LobbyMc }) {
   const photo = mc.photo_url?.trim()
   return (
-    <article className="flex flex-col items-center rounded-2xl border-none bg-white p-5 text-center shadow-none">
-      <div className="h-24 w-24 overflow-hidden rounded-2xl border border-zinc-200 bg-gradient-to-br from-violet-100 to-fuchsia-100 shadow-none">
+    <article className="flex flex-col items-start rounded-2xl border border-zinc-200 bg-white p-5 text-left">
+      <div className="h-24 w-24 overflow-hidden rounded-2xl border border-zinc-200 bg-gradient-to-br from-violet-100 to-fuchsia-100">
         {photo ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={photo} alt="" className="h-full w-full object-cover" />

@@ -204,7 +204,7 @@ export function LobbyPageClient() {
   const hero = settings?.hero
 
   return (
-    <main className="guest-page-shell min-w-0 max-w-full bg-white">
+    <main className="guest-page-shell min-w-0 max-w-full overflow-x-hidden bg-white pb-px">
       <DynamicThemeColor color={MISSIONS_HERO_THEME_COLOR} />
       <div id="section-hero" className="sticky top-0 z-0 h-[100dvh]">
         <LobbyHero

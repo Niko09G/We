@@ -31,7 +31,7 @@ export function LobbyHero({
 
   return (
     <section
-      className={`relative isolate box-border flex h-full min-h-0 w-full max-w-full min-w-0 flex-col justify-between pb-10 pt-[env(safe-area-inset-top,0px)] text-white ${
+      className={`relative isolate box-border flex h-full min-h-0 w-full max-w-full min-w-0 flex-col justify-between pb-0 pt-[env(safe-area-inset-top,0px)] text-white ${
         background ? 'bg-cover bg-center bg-no-repeat' : ''
       }`}
       style={
@@ -53,10 +53,10 @@ export function LobbyHero({
 
       <div
         className={`relative z-10 flex min-h-0 w-full flex-1 flex-col px-5 ${
-          logo ? '-mt-2 justify-start pt-2' : 'justify-center pt-2'
+          logo ? '-mt-2 justify-start pt-4' : 'justify-start pt-4'
         }`}
       >
-        <div className="relative mx-auto w-full max-w-sm text-center">
+        <div className="relative mx-auto w-full max-w-sm pb-6 pt-4 text-center">
           {loading ? (
             <div className="space-y-5 animate-pulse">
               <div className="mx-auto h-8 w-48 rounded-2xl bg-white/20" />

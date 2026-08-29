@@ -37,10 +37,10 @@ export function LobbyImageCarousel({ images }: LobbyImageCarouselProps) {
 
   return (
     <div
-      className="lobby-carousel-mask relative -mx-5 mt-8 w-[calc(100%+2.5rem)] overflow-hidden"
+      className="relative -mx-5 mt-auto w-[calc(100%+2.5rem)] min-h-[176px] overflow-hidden"
       aria-hidden
     >
-      <div className="lobby-carousel-track flex w-max items-center gap-5 py-2">
+      <div className="lobby-carousel-track flex w-max items-end gap-5 pb-0 pt-2">
         {track.map((url, index) => {
           const style = styleForIndex(index)
           return (
@@ -52,7 +52,7 @@ export function LobbyImageCarousel({ images }: LobbyImageCarouselProps) {
               <img
                 src={url}
                 alt=""
-                className="max-h-36 w-auto max-w-[min(42vw,11rem)] object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.28)] sm:max-h-40 sm:max-w-[12rem]"
+                className="max-h-[158px] w-auto max-w-[min(42vw,11rem)] object-contain sm:max-h-[176px] sm:max-w-[12rem]"
                 draggable={false}
               />
             </div>
