@@ -15,14 +15,8 @@ export type StickySectionNavItem = {
 const ACTIVE_GRADIENT =
   'linear-gradient(to right, #17a3d6, #3869e9, #5f32f3)'
 
-/** After last window scroll, wait this long before treating scroll as settled. */
-const SCROLL_SETTLE_MS = 220
-
-function visibleHeightInBand(rect: DOMRect, vh: number): number {
-  const bandTop = vh * 0.12
-  const bandBottom = vh * 0.62
-  return Math.max(0, Math.min(rect.bottom, bandBottom) - Math.max(rect.top, bandTop))
-}
+/** Keep scroll-spy paused through smooth programmatic scroll (~600ms or scrollend). */
+const MANUAL_SCROLL_LOCK_MS = 600
 
 export function StickySectionNav({
   items,
@@ -36,12 +30,8 @@ export function StickySectionNav({
   const railRef = useRef<HTMLDivElement>(null)
   const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const manualNavLockRef = useRef(false)
-  /** Section id clicked during programmatic navigation. */
-  const manualNavTargetRef = useRef<string | null>(null)
-  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const itemsRef = useRef(items)
-  itemsRef.current = items
-  const scheduleManualNavSettleRef = useRef<() => void>(() => {})
+  const manualScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const manualScrollEndHandlerRef = useRef<(() => void) | null>(null)
   const [show, setShow] = useState(false)
   const [overlayActive, setOverlayActive] = useState(false)
   const [showLeftFade, setShowLeftFade] = useState(false)
@@ -63,11 +53,52 @@ export function StickySectionNav({
 
   const activeSection = manualActiveSection ?? scrollSpyActive
 
-  const activeSectionRef = useRef(activeSection)
+  const clearManualScrollLock = () => {
+    if (manualScrollTimerRef.current) {
+      clearTimeout(manualScrollTimerRef.current)
+      manualScrollTimerRef.current = null
+    }
+    if (manualScrollEndHandlerRef.current) {
+      window.removeEventListener('scrollend', manualScrollEndHandlerRef.current)
+      manualScrollEndHandlerRef.current = null
+    }
+    manualNavLockRef.current = false
+    setManualActiveSection(null)
+  }
+
+  const releaseManualScrollLock = () => {
+    if (!manualNavLockRef.current) return
+    clearManualScrollLock()
+  }
+
+  const beginManualScroll = (sectionId: string) => {
+    clearManualScrollLock()
+    manualNavLockRef.current = true
+    setManualActiveSection(sectionId)
+  }
+
+  const scheduleManualScrollRelease = () => {
+    if (manualScrollTimerRef.current) {
+      clearTimeout(manualScrollTimerRef.current)
+    }
+    manualScrollTimerRef.current = setTimeout(() => {
+      manualScrollTimerRef.current = null
+      releaseManualScrollLock()
+    }, MANUAL_SCROLL_LOCK_MS)
+
+    const onScrollEnd = () => {
+      releaseManualScrollLock()
+    }
+    if (manualScrollEndHandlerRef.current) {
+      window.removeEventListener('scrollend', manualScrollEndHandlerRef.current)
+    }
+    manualScrollEndHandlerRef.current = onScrollEnd
+    window.addEventListener('scrollend', onScrollEnd)
+  }
 
   useEffect(() => {
-    activeSectionRef.current = activeSection
-  }, [activeSection])
+    return () => clearManualScrollLock()
+  }, [])
 
   // Keep prop for future theming wiring; currently active uses fixed gradient.
   void highlightColor
@@ -113,118 +144,6 @@ export function StickySectionNav({
     const mo = new MutationObserver(compute)
     mo.observe(document.body, { childList: true, subtree: true, attributes: true })
     return () => mo.disconnect()
-  }, [])
-
-  // Release manual nav lock only after document scroll settles.
-  useEffect(() => {
-    const clearSettleTimer = () => {
-      if (settleTimerRef.current) {
-        clearTimeout(settleTimerRef.current)
-        settleTimerRef.current = null
-      }
-    }
-
-    const tryReleaseManualNavLock = () => {
-      if (!manualNavLockRef.current) return
-      const targetSectionId = manualNavTargetRef.current
-      if (!targetSectionId) {
-        manualNavLockRef.current = false
-        setManualActiveSection(null)
-        return
-      }
-
-      const meta = itemsRef.current.find((i) => i.id === targetSectionId)
-      const el = meta ? document.getElementById(meta.targetId) : null
-      if (!el) {
-        manualNavLockRef.current = false
-        manualNavTargetRef.current = null
-        setManualActiveSection(null)
-        return
-      }
-
-      const vh = window.innerHeight
-      const rect = el.getBoundingClientRect()
-      const targetBand = visibleHeightInBand(rect, vh)
-
-      /** Min px lead in band to avoid flip-flops */
-      const DOMINANCE_LEAD_PX = Math.round(vh * 0.12) + 48
-      let bestId: string | null = null
-      let bestBand = -1
-      for (const it of itemsRef.current) {
-        const node = document.getElementById(it.targetId)
-        if (!node) continue
-        const band = visibleHeightInBand(node.getBoundingClientRect(), vh)
-        if (band > bestBand) {
-          bestBand = band
-          bestId = it.id
-        }
-      }
-
-      const release = () => {
-        manualNavLockRef.current = false
-        manualNavTargetRef.current = null
-        setManualActiveSection(null)
-      }
-
-      // Target is the geometric winner in the reading band (tall sections, hero-sized blocks).
-      if (bestId === targetSectionId && targetBand > vh * 0.04) {
-        release()
-        return
-      }
-
-      // scrollIntoView({ block: 'start' }): target anchored near top after settle.
-      const alignedForClickNav =
-        rect.top >= -72 &&
-        rect.top <= Math.min(200, vh * 0.28) &&
-        rect.bottom > 96
-
-      if (alignedForClickNav) {
-        release()
-        return
-      }
-
-      // User scrolled away: only switch when another section clearly wins the band.
-      if (
-        bestId &&
-        bestId !== targetSectionId &&
-        bestBand > targetBand + DOMINANCE_LEAD_PX &&
-        bestBand > vh * 0.08
-      ) {
-        release()
-        return
-      }
-
-      // Still settling or ambiguous — keep lock; next scroll idle / scrollend retries.
-    }
-
-    const scheduleSettleCheck = () => {
-      if (!manualNavLockRef.current) return
-      clearSettleTimer()
-      settleTimerRef.current = setTimeout(() => {
-        settleTimerRef.current = null
-        tryReleaseManualNavLock()
-      }, SCROLL_SETTLE_MS)
-    }
-
-    const onScrollActivity = () => {
-      scheduleSettleCheck()
-    }
-
-    const onScrollEnd = () => {
-      if (!manualNavLockRef.current) return
-      clearSettleTimer()
-      tryReleaseManualNavLock()
-    }
-
-    window.addEventListener('scroll', onScrollActivity, { passive: true })
-    window.addEventListener('scrollend', onScrollEnd)
-    scheduleManualNavSettleRef.current = scheduleSettleCheck
-    return () => {
-      scheduleManualNavSettleRef.current = () => {}
-      window.removeEventListener('scroll', onScrollActivity)
-      window.removeEventListener('scrollend', onScrollEnd)
-      clearSettleTimer()
-    }
   }, [])
 
   // Keep active item visible naturally by centering it in the rail.
@@ -331,17 +250,13 @@ export function StickySectionNav({
                 }}
                 type="button"
                 onClick={() => {
-                  manualNavLockRef.current = true
-                  manualNavTargetRef.current = item.id
-                  setManualActiveSection(item.id)
+                  beginManualScroll(item.id)
                   const target = document.getElementById(item.targetId)
                   if (target) {
                     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    scheduleManualNavSettleRef.current()
+                    scheduleManualScrollRelease()
                   } else {
-                    manualNavLockRef.current = false
-                    manualNavTargetRef.current = null
-                    setManualActiveSection(null)
+                    clearManualScrollLock()
                   }
                 }}
                 aria-current={isActive ? 'true' : undefined}

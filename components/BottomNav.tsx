@@ -62,7 +62,7 @@ export const MISSION_BOTTOM_NAV_ITEMS: StickySectionNavItem[] = [
     iconAlt: 'Feed',
   },
   {
-    id: 'seat',
+    id: 'seat-finder',
     label: 'Seat finder',
     targetId: 'seat-finder',
     activeIconSrc: '/nav/PinW.svg',

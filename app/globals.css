@@ -51,7 +51,6 @@ body {
 .guest-page-shell {
   min-height: 100dvh;
   width: 100%;
-  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
 }
 

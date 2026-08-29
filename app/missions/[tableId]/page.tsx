@@ -1185,7 +1185,7 @@ export default function MissionsTablePage({
 
   return (
     <main className="guest-page-shell min-w-0 max-w-full bg-white">
-      <div id="section-hero" className="sticky top-0 z-0 h-[100dvh]">
+      <div id="section-hero" className="sticky top-0 z-0 h-[85vh]">
         <MissionsTableHero
           loading={loading}
           tableName={tableName}
@@ -1217,7 +1217,7 @@ export default function MissionsTablePage({
         />
       </div>
 
-      <div className="relative z-20 -mt-16 min-h-dvh rounded-t-[32px] bg-white shadow-2xl">
+      <div className="relative z-20 -mt-12 min-h-dvh rounded-t-[32px] bg-white shadow-2xl">
       {loading && showMissionUi ? (
         <section className="w-full pt-8" aria-busy="true">
           <div className="mb-5 flex items-end justify-between gap-4">

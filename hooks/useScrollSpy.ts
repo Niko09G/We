@@ -12,15 +12,19 @@ export type ScrollSpySection = {
 const DEFAULT_OFFSET_RATIO = 0.3
 const SCROLL_DEBOUNCE_MS = 15
 
+/** Single focal line in document space: scrollY + innerHeight * ratio. */
+function focalLineViewportY(offsetRatio: number): number {
+  return window.innerHeight * offsetRatio
+}
+
 /**
- * Pick the section whose vertical span contains the focal line (viewport Y).
- * Falls back to the last section whose top is above the line, then the first section.
+ * Pick exactly one section using a single focal-line check.
+ * Prefer the section whose span contains the line; otherwise the last section above it.
  */
 function pickActiveSection(
   sections: ScrollSpySection[],
   triggerLineViewportY: number
 ): string | null {
-  let crossing: string | null = null
   let lastAbove: string | null = null
 
   for (const section of sections) {
@@ -28,15 +32,15 @@ function pickActiveSection(
     if (!el) continue
 
     const rect = el.getBoundingClientRect()
+    if (rect.top <= triggerLineViewportY && rect.bottom > triggerLineViewportY) {
+      return section.id
+    }
     if (rect.top <= triggerLineViewportY) {
       lastAbove = section.id
     }
-    if (rect.top <= triggerLineViewportY && rect.bottom > triggerLineViewportY) {
-      crossing = section.id
-    }
   }
 
-  return crossing ?? lastAbove ?? sections[0]?.id ?? null
+  return lastAbove ?? sections[0]?.id ?? null
 }
 
 /**
@@ -69,7 +73,7 @@ export function useScrollSpy(
     const applyScrollPick = () => {
       if (pausedRef?.current) return
 
-      const triggerLineViewportY = window.innerHeight * offsetRatio
+      const triggerLineViewportY = focalLineViewportY(offsetRatio)
       const picked = pickActiveSection(sectionsRef.current, triggerLineViewportY)
       if (picked && picked !== activeRef.current) {
         activeRef.current = picked

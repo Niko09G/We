@@ -39,7 +39,7 @@ export function LobbyHero({
       }
     >
       {logo ? (
-        <header className="relative z-20 flex shrink-0 justify-center px-5 pt-4">
+        <header className="relative z-20 flex shrink-0 justify-center px-5 pt-10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={logo}
@@ -51,10 +51,10 @@ export function LobbyHero({
 
       <div
         className={`relative z-10 flex min-h-0 w-full flex-1 flex-col px-5 ${
-          logo ? '-mt-2 justify-start pt-4' : 'justify-start pt-4'
+          logo ? '-mt-2 justify-start pt-8' : 'justify-start pt-10'
         }`}
       >
-        <div className="relative mx-auto w-full max-w-sm pb-6 pt-4 text-center">
+        <div className="relative mx-auto w-full max-w-sm pb-6 pt-2 text-center">
           {loading ? (
             <div className="space-y-5 animate-pulse">
               <div className="mx-auto h-8 w-48 rounded-2xl bg-white/20" />
@@ -95,7 +95,11 @@ export function LobbyHero({
           )}
         </div>
 
-        {!loading ? <LobbyImageCarousel images={carouselImages} /> : null}
+        {!loading ? (
+          <div className="-mt-6">
+            <LobbyImageCarousel images={carouselImages} />
+          </div>
+        ) : null}
       </div>
     </section>
   )
