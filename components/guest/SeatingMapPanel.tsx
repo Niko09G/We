@@ -814,27 +814,17 @@ export function SeatingMapPanel({
     }
   }, [applyOverviewCamera, loading])
 
-  /** Two-finger pinch zoom (non-passive so we can prevent browser zoom/scroll). */
+  /** Two-finger pinch zoom — non-passive touchmove only while pinching so vertical page scroll stays native. */
   useEffect(() => {
     const el = viewportRef.current
     if (!el || loading) return
 
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length !== 2) return
-      const t0 = e.touches[0]!
-      const t1 = e.touches[1]!
-      const d0 = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY)
-      if (d0 < 10) return
-      const mx = (t0.clientX + t1.clientX) / 2
-      const my = (t0.clientY + t1.clientY) / 2
-      const { x: px, y: py, zoom: z } = panZoomRef.current
-      pinchRef.current = {
-        d0,
-        z0: z,
-        wx: (mx - px) / z,
-        wy: (my - py) / z,
-      }
-      setTransitionTransform(false)
+    let pinchMoveListener: ((e: TouchEvent) => void) | null = null
+
+    const removePinchMoveListener = () => {
+      if (!pinchMoveListener) return
+      el.removeEventListener('touchmove', pinchMoveListener)
+      pinchMoveListener = null
     }
 
     const onTouchMove = (e: TouchEvent) => {
@@ -853,22 +843,46 @@ export function SeatingMapPanel({
       setPan(bounded.pan)
     }
 
-    const endPinch = (e: TouchEvent) => {
-      if (e.touches.length < 2) pinchRef.current = null
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return
+      const t0 = e.touches[0]!
+      const t1 = e.touches[1]!
+      const d0 = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY)
+      if (d0 < 10) return
+      const mx = (t0.clientX + t1.clientX) / 2
+      const my = (t0.clientY + t1.clientY) / 2
+      const { x: px, y: py, zoom: z } = panZoomRef.current
+      pinchRef.current = {
+        d0,
+        z0: z,
+        wx: (mx - px) / z,
+        wy: (my - py) / z,
+      }
+      setTransitionTransform(false)
+      if (!pinchMoveListener) {
+        pinchMoveListener = onTouchMove
+        el.addEventListener('touchmove', pinchMoveListener, { passive: false })
+      }
     }
 
-    el.addEventListener('touchstart', onTouchStart, { passive: false })
-    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    const endPinch = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        pinchRef.current = null
+        removePinchMoveListener()
+      }
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
     el.addEventListener('touchend', endPinch)
     el.addEventListener('touchcancel', endPinch)
 
     return () => {
       el.removeEventListener('touchstart', onTouchStart)
-      el.removeEventListener('touchmove', onTouchMove)
+      removePinchMoveListener()
       el.removeEventListener('touchend', endPinch)
       el.removeEventListener('touchcancel', endPinch)
     }
-  }, [loading])
+  }, [loading, applyBoundedTransform])
 
   const selectGuest = (g: GuestWithTable) => {
     setSelectedId(g.id)
@@ -1051,7 +1065,7 @@ export function SeatingMapPanel({
 
       <div
         ref={mapFrameRef}
-        className="relative mt-3 aspect-square w-full max-h-[min(92vw,360px)] shrink-0 overflow-hidden rounded-3xl border border-zinc-200 bg-zinc-50/90"
+        className="relative mt-3 aspect-square w-full max-h-[min(92vw,360px)] shrink-0 overflow-hidden rounded-3xl border border-zinc-200 bg-zinc-50/90 [touch-action:pan-y]"
       >
         <div
           className="absolute right-3 top-3 z-20 flex flex-col gap-2"

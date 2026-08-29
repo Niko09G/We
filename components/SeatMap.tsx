@@ -503,20 +503,40 @@ export function createSeatMapPointerHandlers({
   setTransitionTransform,
   onNeutralBackdropTap,
 }: CreateSeatMapPointerHandlersArgs): SeatMapPointerHandlers {
+  const releasePointerCapture = (el: HTMLElement, pointerId: number) => {
+    try {
+      el.releasePointerCapture(pointerId)
+    } catch {
+      /* ignore */
+    }
+  }
+
   const endDrag = (e: ReactPointerEvent<HTMLElement>) => {
     if (dragging && !dragMovedRef.current && onNeutralBackdropTap) {
       onNeutralBackdropTap(e)
     }
     if (dragging) {
-      try {
-        e.currentTarget.releasePointerCapture(e.pointerId)
-      } catch {
-        /* ignore */
-      }
+      releasePointerCapture(e.currentTarget, e.pointerId)
     }
     setDragging(false)
     dragRef.current = null
     pendingDragRef.current = null
+  }
+
+  const abortDragForVerticalScroll = (
+    e: ReactPointerEvent<HTMLElement>
+  ): boolean => {
+    if (!dragging) return false
+    const d = dragRef.current
+    if (!d) return false
+    const dx = e.clientX - d.sx
+    const dy = e.clientY - d.sy
+    if (Math.abs(dy) <= Math.abs(dx)) return false
+    releasePointerCapture(e.currentTarget, e.pointerId)
+    setDragging(false)
+    dragRef.current = null
+    pendingDragRef.current = null
+    return true
   }
 
   return {
@@ -534,6 +554,8 @@ export function createSeatMapPointerHandlers({
       }
     },
     onPointerMove: (e) => {
+      if (abortDragForVerticalScroll(e)) return
+
       const pending = pendingDragRef.current
       if (!dragging && !pending) return
 
@@ -550,6 +572,8 @@ export function createSeatMapPointerHandlers({
         pendingDragRef.current = null
         e.currentTarget.setPointerCapture(e.pointerId)
       }
+
+      if (abortDragForVerticalScroll(e)) return
 
       const d = dragRef.current
       if (!d) return
