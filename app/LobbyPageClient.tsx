@@ -6,6 +6,7 @@ import { LobbyEventProgramSection } from '@/components/guest/LobbyEventProgramSe
 import { LobbyHero } from '@/components/guest/LobbyHero'
 import { LobbyMcsSection } from '@/components/guest/LobbyMcsSection'
 import { LobbyTeamsSection, type LobbyTeamRow } from '@/components/guest/LobbyTeamsSection'
+import { BottomNav, LOBBY_BOTTOM_NAV_ITEMS } from '@/components/BottomNav'
 import { SeatingMapPanel } from '@/components/guest/SeatingMapPanel'
 import {
   fetchLobbySettings,
@@ -221,11 +222,11 @@ export function LobbyPageClient() {
           heroBackgroundUrl={settings?.hero_background_url}
           carouselImages={settings?.carousel_images}
           onFindSeat={() => scrollToSection('seat-finder')}
-          onSeeProgram={() => scrollToSection('event-program')}
+          onSeeProgram={() => scrollToSection('program')}
         />
       </div>
 
-      <div className="relative z-10 -mt-6 min-h-dvh rounded-t-3xl bg-white shadow-2xl isolate">
+      <div className="relative z-10 -mt-12 min-h-dvh rounded-t-3xl bg-white pb-28 shadow-2xl isolate">
         {error ? (
           <div className="mx-5 mt-8 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
             <p className="text-sm font-semibold text-red-800">Could not load lobby</p>
@@ -243,6 +244,8 @@ export function LobbyPageClient() {
           enabledModules.map((id) => renderModule(id))
         )}
       </div>
+
+      <BottomNav heroContainerId="section-hero" items={LOBBY_BOTTOM_NAV_ITEMS} />
     </main>
   )
 }

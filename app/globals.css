@@ -32,6 +32,7 @@ html {
   min-height: 100dvh;
   overflow-x: clip;
   max-width: 100%;
+  scroll-behavior: smooth;
 }
 
 body {

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { use, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { MissionSocialFeedSection } from '@/components/guest/MissionSocialFeedSection'
 import { SeatingMapPanel } from '@/components/guest/SeatingMapPanel'
-import { StickySectionNav } from '@/components/guest/StickySectionNav'
+import { BottomNav, MISSION_BOTTOM_NAV_ITEMS } from '@/components/BottomNav'
 import { MissionsTableHero } from '@/components/guest/MissionsTableHero'
 import { Leaderboard } from '@/components/Leaderboard'
 import { getMissionsEnabled } from '@/lib/app-settings'
@@ -1217,7 +1217,7 @@ export default function MissionsTablePage({
         />
       </div>
 
-      <div className="relative z-10 -mt-6 min-h-dvh rounded-t-3xl bg-white shadow-2xl isolate">
+      <div className="relative z-10 -mt-12 min-h-dvh rounded-t-3xl bg-white shadow-2xl isolate">
       {loading && showMissionUi ? (
         <section className="w-full pt-8" aria-busy="true">
           <div className="mb-5 flex items-end justify-between gap-4">
@@ -1826,43 +1826,10 @@ export default function MissionsTablePage({
       </div>
       </div>
 
-      <StickySectionNav
+      <BottomNav
         heroContainerId="section-hero"
         highlightColor={navHighlightColor}
-        items={[
-          {
-            id: 'missions',
-            label: 'Missions',
-            targetId: 'missions',
-            activeIconSrc: '/nav/MissionW.svg',
-            inactiveIconSrc: '/nav/MissionC.svg',
-            iconAlt: 'Missions',
-          },
-          {
-            id: 'feed',
-            label: 'Feed',
-            targetId: 'feed',
-            activeIconSrc: '/nav/HeartW.svg',
-            inactiveIconSrc: '/nav/HeartC.svg',
-            iconAlt: 'Feed',
-          },
-          {
-            id: 'seat',
-            label: 'Seat finder',
-            targetId: 'seat-finder',
-            activeIconSrc: '/nav/PinW.svg',
-            inactiveIconSrc: '/nav/PinC.svg',
-            iconAlt: 'Seat finder',
-          },
-          {
-            id: 'leaderboard',
-            label: 'Leaderboard',
-            targetId: 'leaderboard',
-            activeIconSrc: '/nav/BarW.svg',
-            inactiveIconSrc: '/nav/BarC.svg',
-            iconAlt: 'Leaderboard',
-          },
-        ]}
+        items={MISSION_BOTTOM_NAV_ITEMS}
       />
     </main>
   )

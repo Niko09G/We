@@ -14,7 +14,7 @@ export function LobbyEventProgramSection({
   items,
 }: LobbyEventProgramSectionProps) {
   return (
-    <section id="event-program" className="w-full scroll-mt-8 px-5 pt-8 pb-6">
+    <section id="program" className="w-full scroll-mt-8 px-5 pt-8 pb-6">
       <h2 className="text-left text-2xl font-semibold leading-snug text-zinc-900">{title}</h2>
       {description?.trim() ? (
         <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-zinc-600">
