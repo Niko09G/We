@@ -93,18 +93,21 @@ export function BottomNav({
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
-  const nav = (
+  if (!mounted) return null
+
+  const portalRoot =
+    document.getElementById('bottom-nav-portal') ?? document.body
+
+  return createPortal(
     <div
-      className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-[100] w-[min(26rem,calc(100vw-1.25rem))] -translate-x-1/2"
+      className="pointer-events-auto fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-[9999] w-[min(26rem,calc(100vw-1.25rem))] -translate-x-1/2"
     >
       <StickySectionNav
         heroContainerId={heroContainerId}
         items={items}
         highlightColor={highlightColor}
       />
-    </div>
+    </div>,
+    portalRoot
   )
-
-  if (!mounted) return nav
-  return createPortal(nav, document.body)
 }

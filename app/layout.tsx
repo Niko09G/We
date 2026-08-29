@@ -59,6 +59,7 @@ export default function RootLayout({
         className={`${montserrat.className} ${geistMono.variable} ${outfit.variable} antialiased`}
       >
         <AppProviders>{children}</AppProviders>
+        <div id="bottom-nav-portal" />
       </body>
     </html>
   );
