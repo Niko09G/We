@@ -9,27 +9,39 @@ export type ScrollSpySection = {
   targetId: string
 }
 
-const DEFAULT_OFFSET_RATIO = 0.2
+const DEFAULT_OFFSET_RATIO = 0.3
+const SCROLL_DEBOUNCE_MS = 15
 
+/**
+ * Pick the section whose vertical span contains the focal line (viewport Y).
+ * Falls back to the last section whose top is above the line, then the first section.
+ */
 function pickActiveSection(
   sections: ScrollSpySection[],
-  offsetPx: number
+  triggerLineViewportY: number
 ): string | null {
-  let active: string | null = null
+  let crossing: string | null = null
+  let lastAbove: string | null = null
+
   for (const section of sections) {
     const el = document.getElementById(section.targetId)
     if (!el) continue
-    const top = el.getBoundingClientRect().top
-    if (top <= offsetPx) {
-      active = section.id
+
+    const rect = el.getBoundingClientRect()
+    if (rect.top <= triggerLineViewportY) {
+      lastAbove = section.id
+    }
+    if (rect.top <= triggerLineViewportY && rect.bottom > triggerLineViewportY) {
+      crossing = section.id
     }
   }
-  return active ?? sections[0]?.id ?? null
+
+  return crossing ?? lastAbove ?? sections[0]?.id ?? null
 }
 
 /**
  * Tracks which in-page section is active while scrolling (lobby + mission pages).
- * Uses scroll position with IntersectionObserver as a secondary signal.
+ * Uses a single focal-line check for deterministic section selection.
  */
 export function useScrollSpy(
   sections: ScrollSpySection[],
@@ -52,73 +64,25 @@ export function useScrollSpy(
   useEffect(() => {
     if (sections.length === 0) return
 
-    const intersecting = new Map<string, boolean>()
-    let raf = 0
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
     const applyScrollPick = () => {
       if (pausedRef?.current) return
-      const offsetPx = window.innerHeight * offsetRatio
-      const picked = pickActiveSection(sectionsRef.current, offsetPx)
+
+      const triggerLineViewportY = window.innerHeight * offsetRatio
+      const picked = pickActiveSection(sectionsRef.current, triggerLineViewportY)
       if (picked && picked !== activeRef.current) {
         activeRef.current = picked
         setActiveId(picked)
       }
     }
 
-    const pickFromIntersecting = (): string | null => {
-      let picked: string | null = null
-      for (const section of sectionsRef.current) {
-        if (intersecting.get(section.id)) {
-          picked = section.id
-        }
-      }
-      return picked
-    }
-
     const onScroll = () => {
-      if (raf) return
-      raf = window.requestAnimationFrame(() => {
-        raf = 0
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null
         applyScrollPick()
-      })
-    }
-
-    const targets = sections
-      .map((s) => {
-        const el = document.getElementById(s.targetId)
-        return el ? { id: s.id, el } : null
-      })
-      .filter((x): x is { id: string; el: HTMLElement } => Boolean(x))
-
-    const io =
-      targets.length > 0
-        ? new IntersectionObserver(
-            (entries) => {
-              if (pausedRef?.current) return
-
-              for (const entry of entries) {
-                const id = (entry.target as HTMLElement).dataset.scrollSpyId
-                if (!id) continue
-                intersecting.set(id, entry.isIntersecting)
-              }
-
-              const picked = pickFromIntersecting()
-              if (picked && picked !== activeRef.current) {
-                activeRef.current = picked
-                setActiveId(picked)
-              }
-            },
-            {
-              // Triggers only when a section enters upper-middle viewport
-              rootMargin: '-20% 0px -60% 0px',
-              threshold: 0,
-            }
-          )
-        : null
-
-    for (const t of targets) {
-      t.el.dataset.scrollSpyId = t.id
-      io?.observe(t.el)
+      }, SCROLL_DEBOUNCE_MS)
     }
 
     applyScrollPick()
@@ -126,10 +90,9 @@ export function useScrollSpy(
     window.addEventListener('resize', onScroll)
 
     return () => {
-      if (raf) window.cancelAnimationFrame(raf)
+      if (debounceTimer) clearTimeout(debounceTimer)
       window.removeEventListener('scroll', onScroll)
       window.removeEventListener('resize', onScroll)
-      io?.disconnect()
     }
   }, [sections, offsetRatio, pausedRef])
 

@@ -205,7 +205,7 @@ export function LobbyPageClient() {
   const hero = settings?.hero
 
   return (
-    <main className="guest-page-shell min-w-0 max-w-full overflow-x-hidden bg-white pb-px">
+    <main className="guest-page-shell min-w-0 max-w-full bg-white pb-px">
       <DynamicThemeColor color={MISSIONS_HERO_THEME_COLOR} />
       <div id="section-hero" className="sticky top-0 z-0 h-[100dvh]">
         <LobbyHero
@@ -225,7 +225,7 @@ export function LobbyPageClient() {
         />
       </div>
 
-      <div className="relative z-20 -mt-14 min-h-dvh rounded-t-[32px] bg-white pb-28 shadow-2xl isolate">
+      <div className="relative z-20 -mt-16 min-h-dvh rounded-t-[32px] bg-white pb-28 shadow-2xl">
         {error ? (
           <div className="mx-5 mt-8 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
             <p className="text-sm font-semibold text-red-800">Could not load lobby</p>

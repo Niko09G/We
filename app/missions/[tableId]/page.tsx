@@ -1217,7 +1217,7 @@ export default function MissionsTablePage({
         />
       </div>
 
-      <div className="relative z-20 -mt-14 min-h-dvh rounded-t-[32px] bg-white shadow-2xl isolate">
+      <div className="relative z-20 -mt-16 min-h-dvh rounded-t-[32px] bg-white shadow-2xl">
       {loading && showMissionUi ? (
         <section className="w-full pt-8" aria-busy="true">
           <div className="mb-5 flex items-end justify-between gap-4">

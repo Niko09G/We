@@ -29,7 +29,7 @@ export function LobbyHero({
 
   return (
     <section
-      className={`relative isolate box-border flex h-full min-h-0 w-full max-w-full min-w-0 flex-col justify-between pb-0 pt-[env(safe-area-inset-top,0px)] text-white ${
+      className={`relative z-0 box-border flex h-full min-h-0 w-full max-w-full min-w-0 flex-col justify-between pb-0 pt-[env(safe-area-inset-top,0px)] text-white ${
         background ? 'bg-cover bg-center bg-no-repeat' : ''
       }`}
       style={
