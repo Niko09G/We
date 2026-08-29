@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono, Inter, Montserrat, Outfit } from "next/font/google";
+import { Geist_Mono, Inter, Montserrat, Outfit, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "./providers";
 
@@ -26,6 +26,12 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const playfairDisplay = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: {
     default: "NikoBeaApp",
@@ -48,7 +54,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${montserrat.variable} ${inter.variable}`}>
+    <html lang="en" className={`${montserrat.variable} ${inter.variable} ${playfairDisplay.variable}`}>
       <body
         className={`${montserrat.className} ${geistMono.variable} ${outfit.variable} antialiased`}
       >

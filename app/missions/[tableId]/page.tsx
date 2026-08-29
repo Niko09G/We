@@ -533,6 +533,20 @@ export default function MissionsTablePage({
         /* keep previous leaderboard */
       }
 
+      if (creditTableId) {
+        try {
+          const teamNameRes = await supabase
+            .from('teams')
+            .select('name')
+            .eq('id', creditTableId)
+            .maybeSingle()
+          const teamName = (teamNameRes.data as { name?: string | null } | null)?.name?.trim()
+          if (teamName) setTableName(teamName)
+        } catch {
+          /* keep previous team name */
+        }
+      }
+
       const [cRes, pRes, slotRes, rRes] = await Promise.all([
         supabase.from('completions').select('mission_id').in('table_id', teamScopeTableIds),
         supabase
@@ -598,6 +612,7 @@ export default function MissionsTablePage({
       void loadMissionFeed()
     })()
   }, [
+    creditTableId,
     teamScopeTableIds,
     loadMissionFeed,
     buildMomentumEntries,
@@ -627,6 +642,20 @@ export default function MissionsTablePage({
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'mission_submissions' },
+          () => {
+            refreshTableDataRef.current()
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'teams' },
+          () => {
+            refreshTableDataRef.current()
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'tables' },
           () => {
             refreshTableDataRef.current()
           }

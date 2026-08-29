@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DynamicThemeColor } from '@/components/DynamicThemeColor'
 import { supabase } from '@/lib/supabase/client'
 import { getMissionsEnabled } from '@/lib/app-settings'
@@ -100,6 +100,73 @@ export default function MissionsEntryPage() {
       cancelled = true
     }
   }, [])
+
+  const reloadMissionTables = useCallback(async () => {
+    try {
+      const [{ data, error: tErr }, teamsRes] = await Promise.all([
+        supabase
+          .from('tables')
+          .select('id,name,color,is_active,team_id,display_order')
+          .eq('is_archived', false)
+          .order('name'),
+        supabase.from('teams').select('id,name'),
+      ])
+      if (tErr) throw tErr
+      if (teamsRes.error) throw teamsRes.error
+      const teamNameById = new Map<string, string>()
+      for (const row of teamsRes.data ?? []) {
+        teamNameById.set(row.id as string, (row.name as string) ?? '')
+      }
+      const rows = (data ?? []) as GuestTable[]
+      const activeRows = rows
+        .filter((t) => (t.is_active ?? true) === true)
+        .filter((t) => isUuid(t.id))
+      setTables(
+        canonicalTablesForLobby(activeRows).map((t) => ({
+          ...t,
+          name: teamNameById.get(resolveTeamId(t))?.trim() || t.name,
+        }))
+      )
+    } catch {
+      /* keep previous list */
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let resubscribeTimer: number | null = null
+
+    const attachRealtimeChannel = () => {
+      if (cancelled) return
+      channel = supabase
+        .channel('missions-entry-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => {
+          void reloadMissionTables()
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tables' }, () => {
+          void reloadMissionTables()
+        })
+        .subscribe((status) => {
+          if (cancelled) return
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            if (channel) {
+              supabase.removeChannel(channel)
+              channel = null
+            }
+            resubscribeTimer = window.setTimeout(attachRealtimeChannel, 2_000)
+          }
+        })
+    }
+
+    attachRealtimeChannel()
+
+    return () => {
+      cancelled = true
+      if (resubscribeTimer) window.clearTimeout(resubscribeTimer)
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [reloadMissionTables])
 
   const content = useMemo(() => {
     if (loading || missionsEnabled === null) return null

@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase/client'
 
 export const LOBBY_SETTINGS_KEY = 'lobby_settings' as const
+export const LOBBY_CAROUSEL_MAX_IMAGES = 10
 
 export type LobbyModuleId = 'seat-finder' | 'event-program' | 'mcs' | 'teams'
 
@@ -42,6 +43,8 @@ export type LobbySettings = {
   hero: LobbyHeroSettings
   header_logo_url: string | null
   hero_background_url: string | null
+  /** Up to {@link LOBBY_CAROUSEL_MAX_IMAGES} public URLs for the hero image marquee. */
+  carousel_images: string[]
   modules_order: LobbyModuleId[]
   modules: Record<LobbyModuleId, LobbyModuleConfig>
   event_program: LobbyProgramItem[]
@@ -85,6 +88,7 @@ export const DEFAULT_LOBBY_SETTINGS: LobbySettings = {
   },
   header_logo_url: null,
   hero_background_url: null,
+  carousel_images: [],
   modules_order: [...LOBBY_MODULE_IDS],
   modules: { ...DEFAULT_MODULES },
   event_program: [],
@@ -153,6 +157,18 @@ function parseMc(value: unknown, fallback: LobbyMc): LobbyMc {
   }
 }
 
+function parseCarouselImages(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const out: string[] = []
+  for (const item of value) {
+    const url = cleanNullableStr(item)
+    if (!url || out.includes(url)) continue
+    out.push(url)
+    if (out.length >= LOBBY_CAROUSEL_MAX_IMAGES) break
+  }
+  return out
+}
+
 export function parseLobbySettings(value: unknown): LobbySettings {
   if (value == null || typeof value !== 'object') return DEFAULT_LOBBY_SETTINGS
   const o = value as Record<string, unknown>
@@ -210,6 +226,7 @@ export function parseLobbySettings(value: unknown): LobbySettings {
     },
     header_logo_url: cleanNullableStr(o.header_logo_url),
     hero_background_url: cleanNullableStr(o.hero_background_url),
+    carousel_images: parseCarouselImages(o.carousel_images),
     modules_order,
     modules,
     event_program,

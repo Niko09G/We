@@ -37,6 +37,34 @@ export async function listTableTeams(): Promise<AdminTableTeam[]> {
   }))
 }
 
+/** Sync `teams.name` when the edited table is the canonical or sole member row. */
+async function syncTeamDisplayName(
+  tableId: string,
+  teamId: string,
+  name: string
+): Promise<void> {
+  const trimmed = name.trim()
+  if (!trimmed) return
+
+  if (tableId === teamId) {
+    const { error } = await supabase.from('teams').update({ name: trimmed }).eq('id', teamId)
+    if (error) throw new Error(error.message || 'Failed to update team name.')
+    return
+  }
+
+  const { count, error: countErr } = await supabase
+    .from('tables')
+    .select('id', { count: 'exact', head: true })
+    .eq('team_id', teamId)
+    .eq('is_archived', false)
+
+  if (countErr) throw new Error(countErr.message || 'Failed to check team members.')
+  if (count === 1) {
+    const { error } = await supabase.from('teams').update({ name: trimmed }).eq('id', teamId)
+    if (error) throw new Error(error.message || 'Failed to update team name.')
+  }
+}
+
 async function ensureTableTeam(input: { id?: string; name: string }): Promise<string> {
   if (input.id) {
     const { data, error } = await supabase
@@ -236,6 +264,20 @@ export async function updateTable(
     if (error.code === '23505')
       throw new Error('A table with this name already exists.')
     throw new Error(error.message || 'Failed to update table.')
+  }
+
+  if (patch.name !== undefined) {
+    const { data: updated, error: lookupErr } = await supabase
+      .from('tables')
+      .select('team_id')
+      .eq('id', id)
+      .maybeSingle()
+    if (lookupErr) throw new Error(lookupErr.message || 'Failed to resolve team after update.')
+    const teamId = resolveTeamId({
+      id,
+      team_id: (updated as { team_id?: string | null } | null)?.team_id ?? null,
+    })
+    await syncTeamDisplayName(id, teamId, patch.name)
   }
 }
 

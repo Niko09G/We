@@ -11,8 +11,10 @@ import {
 import {
   removeLobbyHeaderLogoByPublicUrl,
   removeLobbyHeroBackgroundByPublicUrl,
+  removeLobbyCarouselImageByPublicUrl,
   uploadLobbyHeaderLogo,
   uploadLobbyHeroBackground,
+  uploadLobbyCarouselImage,
 } from '@/lib/lobby-assets'
 import {
   removeLobbyMcPhotoByPublicUrl,
@@ -21,6 +23,7 @@ import {
 import {
   DEFAULT_LOBBY_SETTINGS,
   fetchLobbySettings,
+  LOBBY_CAROUSEL_MAX_IMAGES,
   lobbyModuleLabel,
   setLobbySettings,
   type LobbyMc,
@@ -55,6 +58,7 @@ export default function AdminLobbyPage() {
   const [uploadingMcId, setUploadingMcId] = useState<LobbyMc['id'] | null>(null)
   const [uploadingHeaderLogo, setUploadingHeaderLogo] = useState(false)
   const [uploadingHeroBackground, setUploadingHeroBackground] = useState(false)
+  const [uploadingCarouselId, setUploadingCarouselId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [form, setForm] = useState<LobbySettings>(DEFAULT_LOBBY_SETTINGS)
@@ -264,6 +268,53 @@ export default function AdminLobbyPage() {
     }
   }
 
+  async function handleCarouselUpload(file: File) {
+    if (form.carousel_images.length >= LOBBY_CAROUSEL_MAX_IMAGES) {
+      setError(`You can upload up to ${LOBBY_CAROUSEL_MAX_IMAGES} carousel images.`)
+      return
+    }
+    if (!isAcceptedImageFile(file)) {
+      setError('Please choose a JPEG, PNG, or WebP image.')
+      return
+    }
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      setError(`Image must be under ${prettyMb(MAX_IMAGE_UPLOAD_BYTES)}.`)
+      return
+    }
+
+    const uploadId = uuidv4()
+    setUploadingCarouselId(uploadId)
+    setError(null)
+    try {
+      const compressed = await compressPhotoImage(file)
+      const webp = webpUploadFile(compressed.blob, 'lobby-carousel')
+      const publicUrl = await uploadLobbyCarouselImage(webp)
+      setForm((prev) => ({
+        ...prev,
+        carousel_images: [...prev.carousel_images, publicUrl].slice(0, LOBBY_CAROUSEL_MAX_IMAGES),
+      }))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Carousel image upload failed.')
+    } finally {
+      setUploadingCarouselId(null)
+    }
+  }
+
+  async function removeCarouselImage(url: string) {
+    setForm((prev) => ({
+      ...prev,
+      carousel_images: prev.carousel_images.filter((item) => item !== url),
+    }))
+    await removeLobbyCarouselImageByPublicUrl(url).catch(() => undefined)
+  }
+
+  function moveCarouselImage(index: number, direction: 'up' | 'down') {
+    setForm((prev) => ({
+      ...prev,
+      carousel_images: moveItem(prev.carousel_images, index, direction),
+    }))
+  }
+
   return (
     <div className="admin-page-shell flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <p className="sr-only" aria-live="polite">
@@ -408,6 +459,93 @@ export default function AdminLobbyPage() {
                           ) : null}
                         </div>
                       </div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <span className="mb-1.5 block text-[13px] font-medium text-zinc-700">
+                        Hero image carousel
+                      </span>
+                      <p className="mb-3 text-xs text-zinc-500">
+                        Up to {LOBBY_CAROUSEL_MAX_IMAGES} images shown in a slow scrolling collage
+                        below the hero buttons on the guest home page.
+                      </p>
+                      {form.carousel_images.length > 0 ? (
+                        <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          {form.carousel_images.map((url, index) => {
+                            const canMoveUp = index > 0
+                            const canMoveDown = index < form.carousel_images.length - 1
+                            return (
+                              <div
+                                key={url}
+                                className="flex items-start gap-2 rounded-xl border border-zinc-200 bg-zinc-50 p-2"
+                              >
+                                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-white">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={url}
+                                    alt=""
+                                    className="h-full w-full object-contain"
+                                  />
+                                </div>
+                                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                                  <div className="flex gap-1">
+                                    <button
+                                      type="button"
+                                      disabled={!canMoveUp}
+                                      onClick={() => moveCarouselImage(index, 'up')}
+                                      className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-200 bg-white text-sm font-semibold disabled:opacity-40"
+                                      aria-label="Move carousel image up"
+                                    >
+                                      ↑
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={!canMoveDown}
+                                      onClick={() => moveCarouselImage(index, 'down')}
+                                      className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-200 bg-white text-sm font-semibold disabled:opacity-40"
+                                      aria-label="Move carousel image down"
+                                    >
+                                      ↓
+                                    </button>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => void removeCarouselImage(url)}
+                                    className="text-left text-[12px] font-medium text-red-600 hover:underline"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <p className="mb-3 text-sm text-zinc-500">No carousel images yet.</p>
+                      )}
+                      <label
+                        className={`inline-flex cursor-pointer items-center rounded-full border border-[#ebebeb] bg-white px-3 py-1.5 text-[12px] font-medium text-zinc-800 hover:bg-zinc-50 ${
+                          form.carousel_images.length >= LOBBY_CAROUSEL_MAX_IMAGES ||
+                          uploadingCarouselId
+                            ? 'pointer-events-none opacity-50'
+                            : ''
+                        }`}
+                      >
+                        {uploadingCarouselId ? 'Uploading…' : 'Upload carousel image'}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="sr-only"
+                          disabled={
+                            !!uploadingCarouselId ||
+                            form.carousel_images.length >= LOBBY_CAROUSEL_MAX_IMAGES
+                          }
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            e.target.value = ''
+                            if (file) void handleCarouselUpload(file)
+                          }}
+                        />
+                      </label>
                     </div>
                     <label className="block md:col-span-2">
                       <span className="mb-1.5 block text-[13px] font-medium text-zinc-700">

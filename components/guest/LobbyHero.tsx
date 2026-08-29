@@ -2,12 +2,14 @@
 
 import { MISSIONS_HERO_BACKGROUND } from '@/lib/guest-missions-gradients'
 import type { LobbyHeroSettings } from '@/lib/lobby-settings'
+import { LobbyImageCarousel } from '@/components/guest/LobbyImageCarousel'
 
 export type LobbyHeroProps = {
   loading: boolean
   hero: LobbyHeroSettings
   headerLogoUrl?: string | null
   heroBackgroundUrl?: string | null
+  carouselImages?: string[]
   onFindSeat: () => void
   onSeeProgram: () => void
 }
@@ -20,6 +22,7 @@ export function LobbyHero({
   hero,
   headerLogoUrl = null,
   heroBackgroundUrl = null,
+  carouselImages = [],
   onFindSeat,
   onSeeProgram,
 }: LobbyHeroProps) {
@@ -38,17 +41,21 @@ export function LobbyHero({
       }
     >
       {logo ? (
-        <header className="relative z-20 flex shrink-0 justify-center px-5 pt-5">
+        <header className="relative z-20 flex shrink-0 justify-center px-5 pt-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={logo}
             alt=""
-            className="max-w-[250px] w-full object-contain"
+            className="max-h-[80px] w-auto max-w-[250px] object-contain"
           />
         </header>
       ) : null}
 
-      <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col justify-center px-5 pt-2">
+      <div
+        className={`relative z-10 flex min-h-0 w-full flex-1 flex-col px-5 ${
+          logo ? '-mt-2 justify-start pt-2' : 'justify-center pt-2'
+        }`}
+      >
         <div className="relative mx-auto w-full max-w-sm text-center">
           {loading ? (
             <div className="space-y-5 animate-pulse">
@@ -60,7 +67,10 @@ export function LobbyHero({
             </div>
           ) : (
             <>
-              <h1 className="text-center text-3xl font-bold leading-tight text-white sm:text-4xl">
+              <h1
+                className="text-center text-3xl font-semibold leading-tight text-white sm:text-4xl"
+                style={{ fontFamily: 'var(--font-playfair), "Playfair Display", Georgia, serif' }}
+              >
                 {hero.title}
               </h1>
 
@@ -73,7 +83,7 @@ export function LobbyHero({
                 role="presentation"
               />
 
-              <p className="mx-auto mt-5 max-w-[22rem] whitespace-pre-line text-sm font-medium leading-relaxed text-white/90 sm:text-base">
+              <p className="mx-auto mt-5 max-w-[22rem] whitespace-pre-line text-base font-medium leading-relaxed text-white/90 sm:text-lg">
                 {hero.description}
               </p>
 
@@ -98,6 +108,8 @@ export function LobbyHero({
             </>
           )}
         </div>
+
+        {!loading ? <LobbyImageCarousel images={carouselImages} /> : null}
       </div>
     </section>
   )

@@ -590,6 +590,13 @@ export default function DisplayPage() {
         )
         .on(
           'postgres_changes',
+          { event: '*', schema: 'public', table: 'teams' },
+          () => {
+            void refreshLiveData()
+          }
+        )
+        .on(
+          'postgres_changes',
           { event: '*', schema: 'public', table: 'completions' },
           () => {
             void refreshLiveData()

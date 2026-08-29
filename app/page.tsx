@@ -9,6 +9,7 @@ import { LobbyTeamsSection, type LobbyTeamRow } from '@/components/guest/LobbyTe
 import { SeatingMapPanel } from '@/components/guest/SeatingMapPanel'
 import {
   fetchLobbySettings,
+  LOBBY_SETTINGS_KEY,
   type LobbyModuleId,
   type LobbySettings,
 } from '@/lib/lobby-settings'
@@ -35,59 +36,104 @@ export default function LobbyPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
+  const loadLobbyData = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
       setLoading(true)
       setError(null)
-      try {
-        const [lobby, tablesRes, teamsRes] = await Promise.all([
-          fetchLobbySettings(),
-          supabase
-            .from('tables')
-            .select('id,name,color,page_config,is_active,display_order,team_id')
-            .eq('is_archived', false)
-            .eq('is_active', true)
-            .order('display_order')
-            .order('name'),
-          supabase
-            .from('teams')
-            .select('id,name,color,sort_order,is_active')
-            .eq('is_active', true)
-            .order('sort_order')
-            .order('name'),
-        ])
+    }
+    try {
+      const [lobby, tablesRes, teamsRes] = await Promise.all([
+        fetchLobbySettings(),
+        supabase
+          .from('tables')
+          .select('id,name,color,page_config,is_active,display_order,team_id')
+          .eq('is_archived', false)
+          .eq('is_active', true)
+          .order('display_order')
+          .order('name'),
+        supabase
+          .from('teams')
+          .select('id,name,color,sort_order,is_active')
+          .eq('is_active', true)
+          .order('sort_order')
+          .order('name'),
+      ])
 
-        if (tablesRes.error) throw tablesRes.error
-        if (teamsRes.error) throw teamsRes.error
+      if (tablesRes.error) throw tablesRes.error
+      if (teamsRes.error) throw teamsRes.error
 
-        if (cancelled) return
-
-        setSettings(lobby)
-        const physical = ((tablesRes.data ?? []) as (LobbyTeamRow & {
-          is_active?: boolean
-          display_order?: number
-          team_id?: string | null
-        })[]).filter((t) => isUuid(t.id))
-        const parentTeams = (teamsRes.data ?? []) as Array<{
-          id: string
-          name: string
-          color?: string | null
-          sort_order?: number
-        }>
-        setTables(lobbyRowsFromParentTeams(parentTeams, physical))
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Failed to load lobby.')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
+      setSettings(lobby)
+      const physical = ((tablesRes.data ?? []) as (LobbyTeamRow & {
+        is_active?: boolean
+        display_order?: number
+        team_id?: string | null
+      })[]).filter((t) => isUuid(t.id))
+      const parentTeams = (teamsRes.data ?? []) as Array<{
+        id: string
+        name: string
+        color?: string | null
+        sort_order?: number
+      }>
+      setTables(lobbyRowsFromParentTeams(parentTeams, physical))
+    } catch (e) {
+      if (!opts?.silent) {
+        setError(e instanceof Error ? e.message : 'Failed to load lobby.')
       }
-    })()
-    return () => {
-      cancelled = true
+    } finally {
+      if (!opts?.silent) setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    void loadLobbyData()
+  }, [loadLobbyData])
+
+  useEffect(() => {
+    let cancelled = false
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let resubscribeTimer: number | null = null
+
+    const attachRealtimeChannel = () => {
+      if (cancelled) return
+      channel = supabase
+        .channel('lobby-guest-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => {
+          void loadLobbyData({ silent: true })
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tables' }, () => {
+          void loadLobbyData({ silent: true })
+        })
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'app_settings' },
+          (payload) => {
+            const key =
+              typeof (payload.new as { key?: unknown } | null)?.key === 'string'
+                ? (payload.new as { key: string }).key
+                : null
+            if (key === LOBBY_SETTINGS_KEY) void loadLobbyData({ silent: true })
+          }
+        )
+        .subscribe((status) => {
+          if (cancelled) return
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            if (channel) {
+              supabase.removeChannel(channel)
+              channel = null
+            }
+            resubscribeTimer = window.setTimeout(attachRealtimeChannel, 2_000)
+          }
+        })
+    }
+
+    attachRealtimeChannel()
+
+    return () => {
+      cancelled = true
+      if (resubscribeTimer) window.clearTimeout(resubscribeTimer)
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [loadLobbyData])
 
   const enabledModules = useMemo(() => {
     if (!settings) return []
@@ -173,6 +219,7 @@ export default function LobbyPage() {
           }
           headerLogoUrl={settings?.header_logo_url}
           heroBackgroundUrl={settings?.hero_background_url}
+          carouselImages={settings?.carousel_images}
           onFindSeat={() => scrollToSection('seat-finder')}
           onSeeProgram={() => scrollToSection('event-program')}
         />

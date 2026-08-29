@@ -64,7 +64,31 @@ select {
   font-size: 16px;
 }
 
-@property --seat-map-beam-angle {
+@keyframes lobbyCarouselScroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.lobby-carousel-mask {
+  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+}
+
+.lobby-carousel-track {
+  animation: lobbyCarouselScroll 48s linear infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lobby-carousel-track {
+    animation: none;
+  }
+}
+
   syntax: '<angle>';
   initial-value: 0deg;
   inherits: false;

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase/client'
 const BUCKET = 'mission-submissions'
 const HEADER_LOGO_PREFIX = 'lobby-header-logos'
 const HERO_BACKGROUND_PREFIX = 'lobby-hero-backgrounds'
+const CAROUSEL_PREFIX = 'lobby-carousel-images'
 
 function extForContentType(contentType: string): 'webp' {
   if (contentType !== 'image/webp') {
@@ -56,6 +57,10 @@ export async function uploadLobbyHeroBackground(file: File): Promise<string> {
   return uploadLobbyImage(file, HERO_BACKGROUND_PREFIX)
 }
 
+export async function uploadLobbyCarouselImage(file: File): Promise<string> {
+  return uploadLobbyImage(file, CAROUSEL_PREFIX)
+}
+
 export async function removeLobbyHeaderLogoByPublicUrl(
   publicUrl: string | null | undefined
 ): Promise<void> {
@@ -66,4 +71,10 @@ export async function removeLobbyHeroBackgroundByPublicUrl(
   publicUrl: string | null | undefined
 ): Promise<void> {
   return removeLobbyImageByPublicUrl(publicUrl, HERO_BACKGROUND_PREFIX)
+}
+
+export async function removeLobbyCarouselImageByPublicUrl(
+  publicUrl: string | null | undefined
+): Promise<void> {
+  return removeLobbyImageByPublicUrl(publicUrl, CAROUSEL_PREFIX)
 }
