@@ -18,6 +18,23 @@ export function normalizeClaimTokenInput(raw: string): string {
   let s = (raw ?? '').trim()
   if (!s) return ''
 
+  const claimPathMatch = s.match(/^\/?claim\/([^/?#]+)/i)
+  if (claimPathMatch?.[1]) {
+    return normalizeClaimTokenInput(claimPathMatch[1])
+  }
+
+  if (s.includes('://') || s.startsWith('//')) {
+    try {
+      const url = new URL(s.startsWith('//') ? `https:${s}` : s)
+      const fromQuery = url.searchParams.get('token')?.trim()
+      if (fromQuery) return normalizeClaimTokenInput(fromQuery)
+      const fromPath = url.pathname.match(/\/claim\/([^/?#]+)/i)?.[1]
+      if (fromPath) return normalizeClaimTokenInput(fromPath)
+    } catch {
+      /* not a parseable URL */
+    }
+  }
+
   const qIdx = s.indexOf('?')
   if (qIdx >= 0) {
     try {

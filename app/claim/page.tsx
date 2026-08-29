@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 export default async function ClaimQueryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ token?: string }>
+  searchParams: Promise<{ token?: string }> | { token?: string }
 }) {
   const sp = await searchParams
   const token = normalizeClaimTokenInput(sp.token ?? '')
