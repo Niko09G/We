@@ -89,6 +89,7 @@ select {
   }
 }
 
+@property --seat-map-beam-angle {
   syntax: '<angle>';
   initial-value: 0deg;
   inherits: false;
