@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { isBeatcoinTokenUuid, normalizeClaimTokenInput } from '@/lib/admin-tokens'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import {
+  isTokenRedemptionMigrationError,
+  tokenRedemptionMigrationMessage,
+} from '@/lib/tokens'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,6 +62,16 @@ export async function POST(request: Request) {
 
   if (error) {
     console.error('[BeatCoin Claim Error]:', error)
+    if (isTokenRedemptionMigrationError(error)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'missing_migration',
+          message: tokenRedemptionMigrationMessage(),
+        } as const,
+        { status: 503 }
+      )
+    }
     return NextResponse.json(
       { ok: false, error: error.message || 'claim_failed' } as const,
       { status: 500 }
