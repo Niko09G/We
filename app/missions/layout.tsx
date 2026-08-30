@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 /** Missions routes inherit Montserrat from root layout. No overflow wrappers — sticky hero needs visible overflow on ancestors. */

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { use, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { MissionSocialFeedSection } from '@/components/guest/MissionSocialFeedSection'
+import { MissionCard } from '@/components/guest/MissionCard'
 import { SeatingMapPanel } from '@/components/guest/SeatingMapPanel'
 import { MissionsTableHero } from '@/components/guest/MissionsTableHero'
 import { Leaderboard } from '@/components/Leaderboard'
@@ -15,12 +16,9 @@ import {
   isAtSubmissionLimit,
   isRepeatableAutoMission,
 } from '@/lib/mission-limits'
-import {
-  normalizeMissionValidationType,
-  type MissionValidationType,
-} from '@/lib/mission-validation-type'
+import { fetchGuestMissionsForScope, type GuestMissionRow } from '@/lib/missions'
+import { resolveMissionHeaderImageUrl } from '@/lib/missions-schema'
 import { supabase } from '@/lib/supabase/client'
-import { RewardAmount } from '@/components/reward/RewardAmount'
 import { RewardUnitIcon } from '@/components/reward/RewardUnitIcon'
 import { useRewardUnit } from '@/components/reward/RewardUnitProvider'
 import { rewardUnitCompactLabel } from '@/lib/reward-unit'
@@ -33,7 +31,6 @@ import {
   type GuestMissionFeedItem,
 } from '@/lib/guest-mission-feed'
 import { saveGuestTableContext } from '@/lib/guest-table-context'
-import { MissionCategoryTypeIcon } from '@/components/mission/MissionCategoryTypeIcon'
 import { COIN_SIZE, safeRewardPoints } from '@/lib/mission-ui'
 import {
   fetchGuestEmblemsConfig,
@@ -41,7 +38,6 @@ import {
   type GuestEmblemsSettingsValue,
 } from '@/lib/guest-emblem-config'
 import {
-  MISSION_CARD_BACKGROUNDS,
   MISSION_CARD_SKELETON_BACKGROUND,
   TABLE_GREETING_ARTWORK_PATH,
   TRUMPET_STORY_CARD_ARTWORK_PATH,
@@ -54,30 +50,7 @@ import {
 
 type TableIdParams = { tableId: string }
 
-type MissionRow = {
-  id: string
-  title: string
-  description: string | null
-  points: number
-  points_per_submission?: number | null
-  validation_type: MissionValidationType
-  is_active: boolean
-  approval_mode?: 'auto' | 'manual'
-  allow_multiple_submissions?: boolean
-  /** null = unlimited (after migration + backfill). */
-  max_submissions_per_table?: number | null
-  message_required?: boolean
-  target_person_name?: string | null
-  submission_hint?: string | null
-  header_title?: string | null
-  header_image_url?: string | null
-  card_theme_index?: number | null
-  card_cover_image_url?: string | null
-  success_message?: string | null
-  card_cta_label?: string | null
-  card_completed_label?: string | null
-  created_at?: string
-}
+type MissionRow = GuestMissionRow
 
 type CompletionRow = { mission_id: string }
 type PendingRow = { mission_id: string }
@@ -173,6 +146,16 @@ function isUuid(value: unknown): value is string {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value
   )
+}
+
+function legacyModalHeaderImageUrl(title: string): string | null {
+  if (/get alex to explain the trumpet story/i.test(title)) {
+    return TRUMPET_STORY_CARD_ARTWORK_PATH
+  }
+  if (/post a table greeting/i.test(title)) {
+    return TABLE_GREETING_ARTWORK_PATH
+  }
+  return null
 }
 
 export default function MissionsTablePage({
@@ -608,11 +591,22 @@ export default function MissionsTablePage({
         })
       }
       setRejectedSubmissionByMissionId(rejectedMap)
+
+      if (missionsEnabled === true && teamScopeTableIds.length > 0) {
+        try {
+          const activeMs = await fetchGuestMissionsForScope(supabase, teamScopeTableIds)
+          setMissions(activeMs)
+        } catch {
+          /* keep previous missions */
+        }
+      }
+
       void loadMissionFeed()
     })()
   }, [
     creditTableId,
     teamScopeTableIds,
+    missionsEnabled,
     loadMissionFeed,
     buildMomentumEntries,
     pushMomentum,
@@ -655,6 +649,20 @@ export default function MissionsTablePage({
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'tables' },
+          () => {
+            refreshTableDataRef.current()
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'missions' },
+          () => {
+            refreshTableDataRef.current()
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'mission_assignments' },
           () => {
             refreshTableDataRef.current()
           }
@@ -845,7 +853,7 @@ export default function MissionsTablePage({
           return
         }
 
-        const [cRes, pRes, slotRes, aRes] = await Promise.all([
+        const [cRes, pRes, slotRes, missionsRes] = await Promise.all([
           supabase.from('completions').select('mission_id').in('table_id', scopeIds),
           supabase
             .from('mission_submissions')
@@ -857,11 +865,7 @@ export default function MissionsTablePage({
             .select('mission_id')
             .in('table_id', scopeIds)
             .in('status', ['pending', 'approved']),
-          supabase
-            .from('mission_assignments')
-            .select('mission_id')
-            .in('table_id', scopeIds)
-            .eq('is_active', true),
+          fetchGuestMissionsForScope(supabase, scopeIds),
         ])
 
         const rRes = await supabase
@@ -874,8 +878,6 @@ export default function MissionsTablePage({
 
         if (cancelled) return
 
-        if (aRes.error)
-          throw new Error(`mission_assignments: ${aRes.error.message}`)
         if (cRes.error) throw new Error(`completions: ${cRes.error.message}`)
         if (pRes.error)
           throw new Error(`mission_submissions(pending): ${pRes.error.message}`)
@@ -884,84 +886,7 @@ export default function MissionsTablePage({
         if (rRes.error)
           throw new Error(`mission_submissions(rejected): ${rRes.error.message}`)
 
-        const assignedMissionIds = [...new Set(((aRes.data ?? []) as PendingRow[]).map(
-          (r) => r.mission_id
-        ))]
-
-        if (assignedMissionIds.length === 0) {
-          setMissions([])
-        } else {
-          const { data: mRes, error: mErr } = await supabase
-            .from('missions')
-            .select(
-              'id,title,description,points,points_per_submission,validation_type,approval_mode,is_active,allow_multiple_submissions,max_submissions_per_table,message_required,target_person_name,submission_hint,header_title,header_image_url,card_theme_index,card_cover_image_url,success_message,card_cta_label,card_completed_label'
-            )
-            .in('id', assignedMissionIds)
-            .eq('is_active', true)
-            .order('sort_order', { ascending: true })
-            .order('title')
-
-          if (mErr) throw new Error(`missions: ${mErr.message}`)
-
-          const ms = (mRes ?? []) as Array<{
-            id: string
-            title: string
-            description: string | null
-            points: number
-            points_per_submission?: number | null
-            validation_type: string | null
-            approval_mode?: string | null
-            is_active: boolean
-            allow_multiple_submissions?: boolean
-            max_submissions_per_table?: number | null
-            message_required?: boolean
-            target_person_name?: string | null
-            submission_hint?: string | null
-            header_title?: string | null
-            header_image_url?: string | null
-            card_theme_index?: number | null
-            card_cover_image_url?: string | null
-            success_message?: string | null
-            card_cta_label?: string | null
-            card_completed_label?: string | null
-          }>
-
-          const activeMs: MissionRow[] = ms.map((m) => ({
-            id: m.id as string,
-            title: m.title as string,
-            description: m.description ?? null,
-            points: Number(m.points) || 0,
-            points_per_submission:
-              m.points_per_submission == null || m.points_per_submission === undefined
-                ? null
-                : Math.max(0, Math.floor(Number(m.points_per_submission))),
-            validation_type: normalizeMissionValidationType(
-              m.validation_type as string | null | undefined
-            ),
-            is_active: m.is_active ?? true,
-            approval_mode:
-              String(m.approval_mode ?? 'manual') === 'auto' ? 'auto' : 'manual',
-            allow_multiple_submissions: m.allow_multiple_submissions ?? false,
-            max_submissions_per_table:
-              m.max_submissions_per_table === undefined || m.max_submissions_per_table === null
-                ? null
-                : Math.max(1, Math.floor(Number(m.max_submissions_per_table))),
-            message_required: m.message_required ?? false,
-            target_person_name: m.target_person_name ?? null,
-            submission_hint: m.submission_hint ?? null,
-            header_title: m.header_title ?? null,
-            header_image_url: m.header_image_url ?? null,
-            card_theme_index:
-              m.card_theme_index == null
-                ? null
-                : Math.max(0, Math.min(5, Math.floor(Number(m.card_theme_index)))),
-            card_cover_image_url: m.card_cover_image_url ?? null,
-            success_message: m.success_message ?? null,
-            card_cta_label: m.card_cta_label ?? null,
-            card_completed_label: m.card_completed_label ?? null,
-          }))
-          setMissions(activeMs)
-        }
+        setMissions(missionsRes)
 
         const completed = ((cRes.data ?? []) as CompletionRow[]).map(
           (r) => r.mission_id
@@ -1270,120 +1195,16 @@ export default function MissionsTablePage({
               ref={carouselRef}
               className="mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain pb-3 pl-5 pr-6 [scroll-padding-left:1.25rem] [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
             >
-              {orderedMissions.map((m, i) => {
-                const st = statusFor(m.id, m)
-                const completed = st === 'completed'
-                const pending = st === 'pending'
-                const limitReached = st === 'limit_reached'
-                const surface = guestMissionSurfaceGradient(m, orderedMissions, i)
-                const rewardAmount = guestMissionDisplayReward(m)
-                const isTableGreetingCard = /post a table greeting/i.test(m.title)
-                const isTrumpetStoryCard =
-                  /get alex to explain the trumpet story/i.test(m.title)
-                const customCardCover =
-                  typeof m.card_cover_image_url === 'string' &&
-                  m.card_cover_image_url.trim().length > 0 &&
-                  !isTrumpetStoryCard &&
-                  !isTableGreetingCard
-                const ctaLabel = (m.card_cta_label ?? '').trim() || 'Start mission'
-                const completedLabel =
-                  (m.card_completed_label ?? '').trim() || 'Completed'
-
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    data-mission-card
-                    disabled={limitReached}
-                    onClick={() => openMissionModal(m)}
-                    className={`relative flex h-[min(420px,62vh)] w-[min(300px,78vw)] shrink-0 snap-start flex-col overflow-hidden rounded-3xl p-5 text-left transition active:scale-[0.99] ${limitReached ? 'opacity-95' : ''}`}
-                    style={
-                      isTrumpetStoryCard || isTableGreetingCard || customCardCover
-                        ? undefined
-                        : { background: surface }
-                    }
-                  >
-                    {customCardCover ? (
-                      <span
-                        aria-hidden
-                        className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat"
-                        style={{
-                          backgroundImage: `url(${m.card_cover_image_url})`,
-                        }}
-                      />
-                    ) : isTrumpetStoryCard ? (
-                      <span
-                        aria-hidden
-                        className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat"
-                        style={{
-                          backgroundImage: `url(${TRUMPET_STORY_CARD_ARTWORK_PATH})`,
-                        }}
-                      />
-                    ) : isTableGreetingCard ? (
-                      <span
-                        aria-hidden
-                        className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat"
-                        style={{ backgroundImage: `url(${TABLE_GREETING_ARTWORK_PATH})` }}
-                      />
-                    ) : null}
-                    <span
-                      className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 leading-none text-zinc-800"
-                      aria-hidden
-                    >
-                      <MissionCategoryTypeIcon type={m.validation_type} size={COIN_SIZE} className="h-6 w-6" />
-                    </span>
-
-                    <h3 className="relative z-10 pr-12 text-left text-lg font-bold leading-snug text-white">
-                      {m.title}
-                    </h3>
-                    <p className="relative z-10 mt-2 text-left text-sm font-semibold tabular-nums text-white/95">
-                      <span className="inline-flex items-center gap-1">
-                        <RewardAmount
-                          showPlus
-                          amount={rewardAmount}
-                          iconSize={COIN_SIZE}
-                          className="text-white/95"
-                          displayVariant="onDark"
-                        />
-                      </span>
-                    </p>
-
-                    {pending && !limitReached ? (
-                      <p className="relative z-10 mt-2 text-left text-xs font-medium text-white/90">
-                        Pending review
-                      </p>
-                    ) : null}
-
-                    <div className="relative z-10 mt-3 w-full">
-                      {completed ? (
-                        <span className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm">
-                          <svg
-                            className="h-4 w-4 shrink-0 text-white"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
-                            aria-hidden
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                          {completedLabel}
-                        </span>
-                      ) : limitReached ? (
-                        <span className="flex w-full items-center justify-center rounded-xl bg-white px-4 py-2.5 text-center text-sm font-semibold text-black">
-                          Done
-                        </span>
-                      ) : (
-                        <span className="flex w-full items-center justify-center rounded-xl bg-white px-4 py-2.5 text-center text-sm font-semibold text-black">
-                          {ctaLabel}
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                )
-              })}
+              {orderedMissions.map((m, i) => (
+                <MissionCard
+                  key={m.id}
+                  mission={m}
+                  missionIndex={i}
+                  allMissions={orderedMissions}
+                  status={statusFor(m.id, m)}
+                  onOpen={() => openMissionModal(m)}
+                />
+              ))}
             </div>
             </div>
           )}
@@ -1726,9 +1547,6 @@ export default function MissionsTablePage({
                   tablePoints + missionRewardGuest >=
                     safeRewardPoints(teamAbove.totalPoints)
               )
-              const isTableGreetingMission = /post a table greeting/i.test(m.title)
-              const isTrumpetStoryMission =
-                /get alex to explain the trumpet story/i.test(m.title)
               const rankEmblemUrl = resolveRankEmblemUrl(
                 guestEmblems,
                 tableRank ?? null
@@ -1753,11 +1571,8 @@ export default function MissionsTablePage({
                 submission_hint: m.submission_hint ?? null,
                 header_title: m.header_title ?? null,
                 /** Used for circular mission image in white content area. */
-                header_image_url: isTrumpetStoryMission
-                  ? TRUMPET_STORY_CARD_ARTWORK_PATH
-                  : isTableGreetingMission
-                    ? TABLE_GREETING_ARTWORK_PATH
-                    : (m.header_image_url ?? null),
+                header_image_url:
+                  resolveMissionHeaderImageUrl(m) ?? legacyModalHeaderImageUrl(m.title),
                 approval_mode: m.approval_mode ?? 'manual',
                 allow_multiple_submissions: m.allow_multiple_submissions ?? false,
                 max_submissions_per_table: m.max_submissions_per_table ?? null,

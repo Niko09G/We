@@ -38,3 +38,44 @@ export type MissionsTableRow = {
   /** Admin manual display order (lower = earlier). */
   sort_order: number
 }
+
+/** Fields that may supply a guest mission card/modal image (DB + legacy aliases). */
+export type MissionImageFields = {
+  card_cover_image_url?: string | null
+  header_image_url?: string | null
+  cover_image?: string | null
+  image_url?: string | null
+  cover_url?: string | null
+}
+
+function firstNonEmptyImageUrl(
+  ...candidates: Array<string | null | undefined>
+): string | null {
+  for (const candidate of candidates) {
+    const trimmed = typeof candidate === 'string' ? candidate.trim() : ''
+    if (trimmed) return trimmed
+  }
+  return null
+}
+
+/** Full-bleed carousel card artwork — prefers `card_cover_image_url`. */
+export function resolveMissionCoverImageUrl(mission: MissionImageFields): string | null {
+  return firstNonEmptyImageUrl(
+    mission.card_cover_image_url,
+    mission.cover_image,
+    mission.cover_url,
+    mission.header_image_url,
+    mission.image_url
+  )
+}
+
+/** Modal / circular mission artwork — prefers `header_image_url`. */
+export function resolveMissionHeaderImageUrl(mission: MissionImageFields): string | null {
+  return firstNonEmptyImageUrl(
+    mission.header_image_url,
+    mission.image_url,
+    mission.card_cover_image_url,
+    mission.cover_image,
+    mission.cover_url
+  )
+}
