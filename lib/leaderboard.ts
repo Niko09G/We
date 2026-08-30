@@ -92,17 +92,50 @@ export async function fetchLeaderboardBundle(
   return fetchLeaderboardBundleWithClient(supabase, recentLimit)
 }
 
+/** Live display name keyed by team id and each physical table id in that team. */
+export type TableNameLookup = Record<string, string>
+
+function resolveTeamDisplayName(
+  teamId: string,
+  primaryTableName: string,
+  teamNameById: Map<string, string>
+): string {
+  return primaryTableName.trim() || teamNameById.get(teamId)?.trim() || ''
+}
+
+function buildTableNameLookup(
+  tablesByTeam: Map<string, TableRow[]>,
+  teamNameById: Map<string, string>
+): TableNameLookup {
+  const lookup: TableNameLookup = {}
+  for (const [teamId, members] of tablesByTeam) {
+    const primary = pickPrimaryTableForTeam(members, teamId)
+    const displayName = resolveTeamDisplayName(teamId, primary.name, teamNameById)
+    if (!displayName) continue
+    lookup[teamId] = displayName
+    for (const member of members) {
+      lookup[member.id] = displayName
+    }
+  }
+  return lookup
+}
+
 /** Server or client: lightweight JSON scores + recent activity (no images). */
 export async function fetchLeaderboardBundleWithClient(
   client: SupabaseClient,
   recentLimit = 3
-): Promise<{ leaderboard: LeaderboardEntry[]; recentActivity: RecentActivityItem[] }> {
-  const [tablesRes, missionsRes, completionsRes, approvedSubsRes] = await Promise.all([
+): Promise<{
+  leaderboard: LeaderboardEntry[]
+  recentActivity: RecentActivityItem[]
+  tableNames: TableNameLookup
+}> {
+  const [tablesRes, teamsRes, missionsRes, completionsRes, approvedSubsRes] = await Promise.all([
     client
       .from('tables')
       .select('id,name,color,team_id,page_config,teams(id,name)')
       .eq('is_archived', false)
       .order('name'),
+    client.from('teams').select('id,name'),
     client
       .from('missions')
       .select(
@@ -117,6 +150,7 @@ export async function fetchLeaderboardBundleWithClient(
   ])
 
   if (tablesRes.error) throw new Error(tablesRes.error.message || 'Failed to load tables.')
+  if (teamsRes.error) throw new Error(teamsRes.error.message || 'Failed to load teams.')
   if (missionsRes.error) throw new Error(missionsRes.error.message || 'Failed to load missions.')
   if (completionsRes.error) throw new Error(completionsRes.error.message || 'Failed to load completions.')
   if (approvedSubsRes.error)
@@ -144,6 +178,11 @@ export async function fetchLeaderboardBundleWithClient(
   }) as TableRow[]
 
   const teamNameById = new Map<string, string>()
+  for (const row of teamsRes.data ?? []) {
+    const id = row.id as string
+    const name = typeof row.name === 'string' ? row.name.trim() : ''
+    if (id && name) teamNameById.set(id, name)
+  }
   for (const raw of tablesRes.data ?? []) {
     const row = raw as TableWithTeamRow
     const teamId = resolveTeamId({
@@ -200,6 +239,7 @@ export async function fetchLeaderboardBundleWithClient(
   const totalMissions = allMissionIds.size
 
   const tablesByTeam = groupTablesByTeamId(tables)
+  const tableNames = buildTableNameLookup(tablesByTeam, teamNameById)
   const entries: LeaderboardEntry[] = [...tablesByTeam.entries()].map(([teamId, members]) => {
     const memberIds = new Set(members.map((m) => m.id))
     const primary = pickPrimaryTableForTeam(members, teamId)
@@ -227,10 +267,10 @@ export async function fetchLeaderboardBundleWithClient(
       }, 0)
     const totalPoints = oneTimePoints + repeatablePoints
     const remainingCount = Math.max(0, totalMissions - completedCount)
-    const teamName = teamNameById.get(teamId)?.trim() ?? ''
+    const teamName = resolveTeamDisplayName(teamId, primary.name, teamNameById)
     const resolvedPage = resolveTeamPageConfig(tablePageConfig.get(primary.id) ?? null, {
       tableColor: primary.color,
-      tableName: teamName,
+      tableName: primary.name,
     })
     const avatar_url = resolvedPage.hero.avatarImage.url?.trim() || null
     const logo_url = resolvedPage.hero.heroImage.url?.trim() || null
@@ -296,9 +336,10 @@ export async function fetchLeaderboardBundleWithClient(
   const recentActivity: RecentActivityItem[] = sortedByTime.slice(0, recentLimit).map((c) => {
     const teamId = physicalToTeamId.get(c.table_id) ?? c.table_id
     const teamLabel =
-      teamNameById.get(teamId)?.trim() ||
-        teamNameById.get(physicalToTeamId.get(c.table_id) ?? '')?.trim() ||
-        '—'
+      tableNames[teamId] ||
+      tableNames[c.table_id] ||
+      tableName.get(c.table_id)?.trim() ||
+      '—'
     const teamAccent = tableColor.get(teamId) ?? tableColor.get(c.table_id) ?? null
     return {
       id: c.id,
@@ -311,7 +352,7 @@ export async function fetchLeaderboardBundleWithClient(
     }
   })
 
-  return { leaderboard: entries, recentActivity }
+  return { leaderboard: entries, recentActivity, tableNames }
 }
 
 /** Recent scoring events across all teams (completions + approved submissions). */

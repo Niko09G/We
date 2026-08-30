@@ -46,10 +46,13 @@ export function MomentumFeed({
   items,
   teamVisuals,
   teamAvatars,
+  teamNames,
 }: {
   items: MomentumFeedItem[]
   teamVisuals: Record<string, DisplayTeamVisual>
   teamAvatars: Record<string, string>
+  /** Live table/team names from DB — overrides stale names on feed cards. */
+  teamNames?: Record<string, string>
 }) {
   const { config: rewardUnit } = useRewardUnit()
   const unitLabel = rewardUnitCompactLabel(rewardUnit)
@@ -71,6 +74,7 @@ export function MomentumFeed({
           const visual = teamVisuals[item.tableId]
           const avatar = teamAvatars[item.tableId] ?? visual?.avatarUrl ?? null
           const gradient = teamGradientCss(visual ?? null, item.tableColor)
+          const displayName = teamNames?.[item.tableId]?.trim() || item.tableName
           return (
             <motion.div
               key={item.feedKey}
@@ -86,7 +90,7 @@ export function MomentumFeed({
                 <TeamChipAvatar avatarUrl={avatar} />
                 <div className="min-w-0 flex-1">
                   <p className="text-base font-medium leading-snug text-white md:text-lg">
-                    <span className="font-bold">{item.tableName}</span>
+                    <span className="font-bold">{displayName}</span>
                     {' completed '}
                     <span>{item.missionTitle}</span>
                   </p>
@@ -108,7 +112,10 @@ export function MomentumFeed({
 }
 
 /** Merge incoming scoring events into a TTL-managed feed queue. */
-export function useMomentumFeed(recentActivity: RecentActivityItem[]) {
+export function useMomentumFeed(
+  recentActivity: RecentActivityItem[],
+  teamNames?: Record<string, string>
+) {
   const [feedItems, setFeedItems] = useState<MomentumFeedItem[]>([])
   const seenRef = useRef<Set<string>>(new Set())
   const seededRef = useRef(false)
@@ -134,6 +141,22 @@ export function useMomentumFeed(recentActivity: RecentActivityItem[]) {
 
     setFeedItems((prev) => [...additions, ...prev].slice(0, 24))
   }, [recentActivity])
+
+  useEffect(() => {
+    if (!teamNames || Object.keys(teamNames).length === 0) return
+    setFeedItems((prev) => {
+      let changed = false
+      const next = prev.map((item) => {
+        const live = teamNames[item.tableId]?.trim()
+        if (live && live !== item.tableName) {
+          changed = true
+          return { ...item, tableName: live }
+        }
+        return item
+      })
+      return changed ? next : prev
+    })
+  }, [teamNames])
 
   useEffect(() => {
     const tick = () => {

@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server'
 import { fetchLeaderboardBundleWithClient } from '@/lib/leaderboard'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 /** Lightweight JSON for big-screen display — scores + recent activity, no images. */
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -10,12 +12,12 @@ export async function GET(request: Request) {
 
   try {
     const supabase = createServerSupabaseClient()
-    const { leaderboard, recentActivity } = await fetchLeaderboardBundleWithClient(
+    const { leaderboard, recentActivity, tableNames } = await fetchLeaderboardBundleWithClient(
       supabase,
       recentLimit
     )
     return NextResponse.json(
-      { leaderboard, recentActivity },
+      { leaderboard, recentActivity, tableNames },
       {
         headers: {
           'Cache-Control': 'no-store',

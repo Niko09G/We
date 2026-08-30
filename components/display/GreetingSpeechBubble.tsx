@@ -19,13 +19,19 @@ function fallbackAvatarBg(seed: string): string {
 export function GreetingSpeechBubble({
   greeting,
   teamVisual,
+  liveTableName,
 }: {
   greeting: GreetingRow
   teamVisual: DisplayTeamVisual | null
+  /** Current name from `tables` / `teams` — overrides denormalized `greeting.table_name`. */
+  liveTableName?: string | null
 }) {
   const isMission = greeting.source_type === 'mission'
   const teamName =
-    greeting.table_name?.trim() || greeting.name?.trim() || (isMission ? 'Table' : 'Guest')
+    liveTableName?.trim() ||
+    greeting.table_name?.trim() ||
+    greeting.name?.trim() ||
+    (isMission ? 'Table' : 'Guest')
   const displayName = isMission ? teamName : greeting.name?.trim() || 'Anonymous'
 
   const avatarUrl = isMission

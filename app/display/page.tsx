@@ -21,7 +21,7 @@ import {
   fetchGuestEmblemsConfig,
   type GuestEmblemsSettingsValue,
 } from '@/lib/guest-emblem-config'
-import type { LeaderboardEntry, RecentActivityItem } from '@/lib/leaderboard'
+import type { LeaderboardEntry, RecentActivityItem, TableNameLookup } from '@/lib/leaderboard'
 import { leaderboardEntryTeamKey } from '@/lib/leaderboard'
 import { supabase } from '@/lib/supabase/client'
 
@@ -100,9 +100,29 @@ function ImageWithFallback({
   )
 }
 
+function patchGreetingTableName(
+  greeting: GreetingRow,
+  tableNames: TableNameLookup
+): GreetingRow {
+  const tableId = greeting.table_id?.trim()
+  if (!tableId) return greeting
+  const liveName = tableNames[tableId]?.trim()
+  if (!liveName || liveName === greeting.table_name) return greeting
+  return { ...greeting, table_name: liveName }
+}
+
+function patchGreetingList(
+  rows: GreetingRow[],
+  tableNames: TableNameLookup
+): GreetingRow[] {
+  if (Object.keys(tableNames).length === 0) return rows
+  return rows.map((row) => patchGreetingTableName(row, tableNames))
+}
+
 async function fetchLiveBundle(): Promise<{
   leaderboard: LeaderboardEntry[]
   recentActivity: RecentActivityItem[]
+  tableNames: TableNameLookup
 }> {
   const res = await fetch(`/api/display/live?recent=${RECENT_FETCH_LIMIT}`, {
     cache: 'no-store',
@@ -114,6 +134,7 @@ async function fetchLiveBundle(): Promise<{
   return res.json() as Promise<{
     leaderboard: LeaderboardEntry[]
     recentActivity: RecentActivityItem[]
+    tableNames: TableNameLookup
   }>
 }
 
@@ -130,6 +151,7 @@ export default function DisplayPage() {
   const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([])
   const [leaderboardLoading, setLeaderboardLoading] = useState(true)
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null)
+  const [tableNames, setTableNames] = useState<TableNameLookup>({})
   const [rowAnim, setRowAnim] = useState<Record<string, { delta?: number }>>({})
   const [teamVisuals, setTeamVisuals] = useState<Record<string, DisplayTeamVisual>>({})
   const [teamAvatars, setTeamAvatars] = useState<Record<string, string>>({})
@@ -150,9 +172,15 @@ export default function DisplayPage() {
   const animClearRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const maxSeenCreatedAtRef = useRef<string | null>(null)
 
-  const feedItems = useMomentumFeed(recentActivity)
+  const feedItems = useMomentumFeed(recentActivity, tableNames)
 
   const currentGreeting = activeGreeting
+
+  const greetingLiveTableName = useMemo(() => {
+    const tableId = currentGreeting?.table_id?.trim()
+    if (!tableId) return null
+    return tableNames[tableId]?.trim() || null
+  }, [currentGreeting?.table_id, tableNames])
 
   const greetingTeamVisual = useMemo(() => {
     if (!currentGreeting?.table_id) return null
@@ -445,8 +473,33 @@ export default function DisplayPage() {
     []
   )
 
+  const applyTableNames = useCallback((names: TableNameLookup) => {
+    if (Object.keys(names).length === 0) return
+    setTableNames((prev) => ({ ...prev, ...names }))
+
+    const patch = (rows: GreetingRow[]) => patchGreetingList(rows, names)
+
+    unseenQueueRef.current = patch(unseenQueueRef.current)
+    setUnseenQueue(unseenQueueRef.current)
+
+    recycledPoolRef.current = patch(recycledPoolRef.current)
+    setRecycledPool(recycledPoolRef.current)
+
+    if (activeGreetingRef.current) {
+      const nextActive = patchGreetingTableName(activeGreetingRef.current, names)
+      if (nextActive !== activeGreetingRef.current) {
+        activeGreetingRef.current = nextActive
+        setActiveGreeting(nextActive)
+      }
+    }
+  }, [])
+
   const applyLiveBundle = useCallback(
-    (next: LeaderboardEntry[], recent: RecentActivityItem[]) => {
+    (
+      next: LeaderboardEntry[],
+      recent: RecentActivityItem[],
+      names: TableNameLookup
+    ) => {
       const prev = prevLeaderboardRef.current
       const nextRowAnim: Record<string, { delta?: number }> = {}
       const celebrationDeltas: Array<{ tableId: string; delta: number }> = []
@@ -472,19 +525,21 @@ export default function DisplayPage() {
       setLeaderboard(next)
       setRecentActivity(recent)
       setLeaderboardError(null)
+      applyTableNames(names)
 
       if (celebrationDeltas.length > 0) {
         spawnScoreCelebration(celebrationDeltas)
         animClearRef.current = setTimeout(() => setRowAnim({}), 1800)
       }
     },
-    [spawnScoreCelebration]
+    [applyTableNames, spawnScoreCelebration]
   )
 
   const refreshLiveData = useCallback(async () => {
     try {
-      const { leaderboard: next, recentActivity: recent } = await fetchLiveBundle()
-      applyLiveBundle(next, recent)
+      const { leaderboard: next, recentActivity: recent, tableNames: names } =
+        await fetchLiveBundle()
+      applyLiveBundle(next, recent, names)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to load leaderboard'
       setLeaderboardError(msg)
@@ -729,6 +784,7 @@ export default function DisplayPage() {
             <GreetingSpeechBubble
               greeting={currentGreeting}
               teamVisual={greetingTeamVisual}
+              liveTableName={greetingLiveTableName}
             />
           </div>
         )}
@@ -737,6 +793,7 @@ export default function DisplayPage() {
           items={feedItems}
           teamVisuals={teamVisuals}
           teamAvatars={teamAvatars}
+          teamNames={tableNames}
         />
 
         <DisplayConfetti fireKey={confettiFire} />
