@@ -249,7 +249,6 @@ export default function SnapsHostPage() {
                     <span className="flex items-center gap-1.5 text-xl font-black leading-none">
                       <span>+{SNAPS_SHOT_POINTS}</span>
                       <RewardUnitIcon size={22} className="opacity-95" />
-                      <span>{rewardName}{rewardName.endsWith('s') ? '' : 's'}</span>
                     </span>
                     <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/90">
                       Shot taken

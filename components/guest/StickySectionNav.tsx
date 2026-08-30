@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useScrollSpy, type ScrollSpySection } from '@/hooks/useScrollSpy'
 
 export type StickySectionNavItem = {
@@ -15,8 +15,14 @@ export type StickySectionNavItem = {
 const ACTIVE_GRADIENT =
   'linear-gradient(to right, #17a3d6, #3869e9, #5f32f3)'
 
+const HERO_SHOW_THRESHOLD = 0.2
+
 /** Keep scroll-spy paused through smooth programmatic scroll (~600ms or scrollend). */
 const MANUAL_SCROLL_LOCK_MS = 600
+
+function hasOpenGuestOverlay(): boolean {
+  return [...document.querySelectorAll('[aria-modal="true"]')].some((el) => el.isConnected)
+}
 
 export function StickySectionNav({
   items,
@@ -37,6 +43,19 @@ export function StickySectionNav({
   const [showLeftFade, setShowLeftFade] = useState(false)
   const [showRightFade, setShowRightFade] = useState(false)
   const [manualActiveSection, setManualActiveSection] = useState<string | null>(null)
+  const prevOverlayActiveRef = useRef(false)
+
+  const refreshHeroVisibility = useCallback(() => {
+    const hero = document.getElementById(heroContainerId)
+    if (!hero) {
+      setShow(true)
+      return
+    }
+    const rect = hero.getBoundingClientRect()
+    const h = rect.height || 1
+    const progress = (-rect.top) / h
+    setShow(progress >= HERO_SHOW_THRESHOLD)
+  }, [heroContainerId])
 
   const scrollSpySections = useMemo<ScrollSpySection[]>(
     () =>
@@ -105,27 +124,16 @@ export function StickySectionNav({
 
   // Show shortly after moving away from hero.
   useEffect(() => {
-    const hero = document.getElementById(heroContainerId)
-    if (!hero) {
-      setShow(true)
-      return
-    }
-
-    const THRESHOLD = 0.2
     let raf = 0
-    const update = () => {
-      raf = 0
-      const rect = hero.getBoundingClientRect()
-      const h = rect.height || 1
-      const progress = (-rect.top) / h
-      setShow(progress >= THRESHOLD)
-    }
     const onScroll = () => {
       if (raf) return
-      raf = window.requestAnimationFrame(update)
+      raf = window.requestAnimationFrame(() => {
+        raf = 0
+        refreshHeroVisibility()
+      })
     }
 
-    update()
+    refreshHeroVisibility()
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('resize', onScroll)
     return () => {
@@ -133,18 +141,37 @@ export function StickySectionNav({
       window.removeEventListener('scroll', onScroll)
       window.removeEventListener('resize', onScroll)
     }
-  }, [heroContainerId])
+  }, [refreshHeroVisibility])
 
-  // Hide nav when any modal/lightbox is open.
+  // Hide nav while a modal/lightbox is open; re-sync visibility when it closes.
   useEffect(() => {
-    const compute = () => {
-      setOverlayActive(Boolean(document.querySelector('[aria-modal="true"]')))
+    const syncOverlayState = () => {
+      setOverlayActive(hasOpenGuestOverlay())
     }
-    compute()
-    const mo = new MutationObserver(compute)
-    mo.observe(document.body, { childList: true, subtree: true, attributes: true })
-    return () => mo.disconnect()
+
+    syncOverlayState()
+    const mo = new MutationObserver(syncOverlayState)
+    mo.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['aria-modal', 'aria-hidden', 'hidden', 'class', 'style'],
+    })
+    window.addEventListener('focus', syncOverlayState)
+    return () => {
+      mo.disconnect()
+      window.removeEventListener('focus', syncOverlayState)
+    }
   }, [])
+
+  useEffect(() => {
+    if (prevOverlayActiveRef.current && !overlayActive) {
+      requestAnimationFrame(() => {
+        refreshHeroVisibility()
+      })
+    }
+    prevOverlayActiveRef.current = overlayActive
+  }, [overlayActive, refreshHeroVisibility])
 
   // Keep active item visible naturally by centering it in the rail.
   useEffect(() => {

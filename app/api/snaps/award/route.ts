@@ -88,15 +88,6 @@ export async function POST(request: Request) {
       throw new Error(insertErr.message)
     }
 
-    // Completions are unique per table+mission; first shot pings display realtime.
-    const { error: completionErr } = await supabase.from('completions').insert({
-      table_id: teamId,
-      mission_id: missionId,
-    })
-    if (completionErr && completionErr.code !== '23505') {
-      throw new Error(completionErr.message)
-    }
-
     const row = inserted as { id: string; created_at?: string; approved_at?: string | null }
     const activity: SnapsActivityItem = {
       id: row.id,

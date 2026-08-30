@@ -257,13 +257,15 @@ export async function fetchLeaderboardBundleWithClient(
     return a.teamName.localeCompare(b.teamName, undefined, { sensitivity: 'base' })
   })
 
-  const completionActivity = completions.map((c) => ({
-    id: c.id,
-    table_id: c.table_id,
-    mission_id: c.mission_id,
-    created_at: c.created_at,
-    points: oneTimeMissionPoints.get(c.mission_id) ?? 0,
-  }))
+  const completionActivity = completions
+    .filter((c) => oneTimeMissionPoints.has(c.mission_id))
+    .map((c) => ({
+      id: c.id,
+      table_id: c.table_id,
+      mission_id: c.mission_id,
+      created_at: c.created_at,
+      points: oneTimeMissionPoints.get(c.mission_id) ?? 0,
+    }))
   const repeatableActivity = approvedSubs
     .filter((s) => !!s.approved_at)
     .filter(
