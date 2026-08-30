@@ -6,23 +6,18 @@ import { RewardUnitIcon } from '@/components/reward/RewardUnitIcon'
 import { useRewardUnit } from '@/components/reward/RewardUnitProvider'
 import { listMissions, type MissionRecord } from '@/lib/admin-missions'
 import { rewardUnitCompactLabel } from '@/lib/reward-unit'
-import { tokenClaimUrl } from '@/lib/admin-tokens'
+import {
+  formatRedeemedByNames,
+  formatTokenRedemptionStatus,
+  tokenClaimUrl,
+  type AdminTokenRecord,
+} from '@/lib/admin-tokens'
 import { copyTextWithFallback } from '@/lib/copy-text'
 import { downloadClaimQrPng, qrDownloadFilename } from '@/lib/token-qr'
 import TokenAmountCell from './_components/TokenAmountCell'
 import TokenQrPreviewModal from './_components/TokenQrPreviewModal'
 
-type EnrichedToken = {
-  id: string
-  token: string
-  mission_id: string
-  points: number
-  claimed_by_table_id: string | null
-  claimed_at: string | null
-  created_at: string
-  mission_title: string
-  redeemed_by_name: string | null
-}
+type EnrichedToken = AdminTokenRecord
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
@@ -61,6 +56,7 @@ export default function TokensAdminPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [previewToken, setPreviewToken] = useState<EnrichedToken | null>(null)
   const [downloadingQrId, setDownloadingQrId] = useState<string | null>(null)
+  const [expandedRedemptionId, setExpandedRedemptionId] = useState<string | null>(null)
 
   function handleTokenAmountUpdated(tokenId: string, points: number) {
     setTokens((prev) => prev.map((t) => (t.id === tokenId ? { ...t, points } : t)))
@@ -130,9 +126,10 @@ export default function TokensAdminPage() {
 
   const summary = useMemo(() => {
     const total = tokens.length
-    const claimed = tokens.filter((t) => t.claimed_at).length
-    const available = total - claimed
-    return { total, claimed, available }
+    const totalClaims = tokens.reduce((sum, t) => sum + t.redemption_count, 0)
+    const tokensWithClaims = tokens.filter((t) => t.redemption_count > 0).length
+    const available = total - tokensWithClaims
+    return { total, totalClaims, tokensWithClaims, available }
   }, [tokens])
 
   async function handleGenerate() {
@@ -371,8 +368,8 @@ export default function TokensAdminPage() {
               <strong className="text-emerald-700 dark:text-emerald-400">{summary.available}</strong>
             </span>
             <span>
-              Claimed:{' '}
-              <strong className="text-zinc-700 dark:text-zinc-300">{summary.claimed}</strong>
+              Claims:{' '}
+              <strong className="text-zinc-700 dark:text-zinc-300">{summary.totalClaims}</strong>
             </span>
           </div>
         </div>
@@ -399,11 +396,13 @@ export default function TokensAdminPage() {
                 <div>Actions</div>
               </div>
               {tokens.map((t) => {
-                const claimed = Boolean(t.claimed_at)
+                const hasClaims = t.redemption_count > 0
+                const redeemedBy = formatRedeemedByNames(t.redemptions)
+                const expanded = expandedRedemptionId === t.id
                 const url = tokenClaimUrl(t.token)
                 return (
+                  <div key={t.id} className="space-y-0">
                   <div
-                    key={t.id}
                     className="grid min-w-[720px] grid-cols-[minmax(120px,1.2fr)_minmax(80px,0.7fr)_minmax(90px,0.8fr)_minmax(100px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)_minmax(200px,1.5fr)] items-start gap-x-3 rounded-lg border border-neutral-200/60 px-3 py-2.5 transition-colors hover:bg-neutral-50/80 dark:border-zinc-800 dark:hover:bg-zinc-800/40"
                   >
                     <div className="font-mono text-[13px] text-zinc-700 dark:text-zinc-300" title={t.token}>
@@ -419,9 +418,9 @@ export default function TokensAdminPage() {
                       />
                     </div>
                     <div>
-                      {claimed ? (
+                      {hasClaims ? (
                         <span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                          Claimed
+                          {formatTokenRedemptionStatus(t.redemption_count)}
                         </span>
                       ) : (
                         <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
@@ -431,12 +430,30 @@ export default function TokensAdminPage() {
                     </div>
                     <div
                       className="max-w-[140px] truncate text-[14px] text-zinc-600 dark:text-zinc-400"
-                      title={t.redeemed_by_name ?? ''}
+                      title={redeemedBy}
                     >
-                      {t.redeemed_by_name ?? '—'}
+                      {redeemedBy}
                     </div>
-                    <div className="whitespace-nowrap text-[13px] text-zinc-500 dark:text-zinc-400">
-                      {formatDate(t.claimed_at)}
+                    <div className="text-[13px] text-zinc-500 dark:text-zinc-400">
+                      {hasClaims && t.redemption_count > 1 ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedRedemptionId((prev) => (prev === t.id ? null : t.id))
+                          }
+                          className="text-left underline decoration-dotted underline-offset-2 hover:no-underline"
+                          title="Show all redemption times"
+                        >
+                          {formatDate(t.redemptions[0]?.redeemed_at ?? null)}
+                          <span className="ml-1 text-[11px] text-zinc-400">
+                            (+{t.redemption_count - 1} more)
+                          </span>
+                        </button>
+                      ) : (
+                        <span className="whitespace-nowrap">
+                          {hasClaims ? formatDate(t.redemptions[0]?.redeemed_at ?? null) : '—'}
+                        </span>
+                      )}
                     </div>
                     <div
                       className="max-w-[160px] truncate text-[14px] text-zinc-600 dark:text-zinc-400"
@@ -490,6 +507,29 @@ export default function TokensAdminPage() {
                         {resettingId === t.id ? '…' : 'Reset / Unclaim'}
                       </button>
                     </div>
+                  </div>
+                  {expanded && t.redemption_count > 1 ? (
+                    <div className="ml-3 mr-1 mb-1 rounded-lg border border-neutral-200/60 bg-neutral-50/80 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/50">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        Redemptions
+                      </p>
+                      <ul className="mt-1 space-y-1">
+                        {t.redemptions.map((r) => (
+                          <li
+                            key={`${r.table_id}-${r.redeemed_at}`}
+                            className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[13px] text-zinc-600 dark:text-zinc-400"
+                          >
+                            <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                              {r.table_name}
+                            </span>
+                            <span className="whitespace-nowrap text-zinc-500">
+                              {formatDate(r.redeemed_at)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                   </div>
                 )
               })}

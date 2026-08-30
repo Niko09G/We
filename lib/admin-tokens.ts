@@ -133,6 +133,59 @@ export async function lookupBeatcoinToken(
   return (await res.json()) as BeatcoinLookupResponse
 }
 
+export type TokenRedemptionRecord = {
+  table_id: string
+  table_name: string
+  redeemed_at: string
+}
+
+export type AdminTokenRecord = {
+  id: string
+  token: string
+  mission_id: string
+  points: number
+  created_at: string
+  mission_title: string
+  redemption_count: number
+  redemptions: TokenRedemptionRecord[]
+}
+
+const BEATCOIN_CLAIM_ERROR_MESSAGES: Record<string, string> = {
+  already_claimed_by_table: 'Your table has already claimed this BeatCoin!',
+  invalid_token: 'This BeatCoin link is not valid.',
+  missions_disabled: 'Missions are currently disabled.',
+  mission_not_found: 'This mission is no longer available.',
+  invalid_mission: 'This mission is not a BeatCoin mission.',
+  table_not_found: 'Table not found.',
+  table_archived: 'This table is archived.',
+  table_inactive: 'This table is inactive.',
+  mission_not_assigned: 'This mission is not assigned to your table.',
+}
+
+/** Map claim_beatcoin RPC error codes to guest-facing copy. */
+export function beatcoinClaimErrorMessage(code: string): string {
+  const key = code.trim()
+  return BEATCOIN_CLAIM_ERROR_MESSAGES[key] ?? key.replace(/_/g, ' ')
+}
+
+export function formatTokenRedemptionStatus(redemptionCount: number): string {
+  if (redemptionCount <= 0) return 'Available'
+  return redemptionCount === 1 ? '1 claim' : `${redemptionCount} claims`
+}
+
+export function formatRedeemedByNames(redemptions: TokenRedemptionRecord[]): string {
+  if (redemptions.length === 0) return '—'
+  return redemptions.map((r) => r.table_name).join(', ')
+}
+
+export function formatRedeemedAtSummary(redemptions: TokenRedemptionRecord[]): string {
+  if (redemptions.length === 0) return '—'
+  const latest = redemptions[0]?.redeemed_at
+  if (!latest) return '—'
+  if (redemptions.length === 1) return latest
+  return `${latest} (+${redemptions.length - 1} more)`
+}
+
 /** Public claim: award BeatCoins to a table for a token (one redemption per table). */
 export async function claimBeatcoinToken(
   token: string,

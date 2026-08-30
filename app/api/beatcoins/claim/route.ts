@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { normalizeClaimTokenInput } from '@/lib/admin-tokens'
+import { beatcoinClaimErrorMessage, normalizeClaimTokenInput } from '@/lib/admin-tokens'
 import { createServiceRoleClient, isServiceRoleConfigured } from '@/lib/supabase/service-role'
 
 export const dynamic = 'force-dynamic'
@@ -12,6 +12,12 @@ function readTableId(body: Record<string, unknown>): string {
         ? body.tableId
         : ''
   return raw.trim()
+}
+
+type ClaimBeatcoinRpcResult = {
+  ok?: boolean
+  error?: string
+  points?: number
 }
 
 /** Public: claim a Beatcoin for a table (one redemption per token per table). */
@@ -51,57 +57,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 
-  const { data: tokenRow, error: tokenLookupError } = await supabase
-    .from('beatcoin_tokens')
-    .select('id')
-    .eq('token', rawToken)
-    .maybeSingle()
-
-  if (tokenLookupError) {
-    console.error('[BeatCoin Claim Error]:', tokenLookupError)
-    return NextResponse.json({ error: tokenLookupError.message }, { status: 500 })
-  }
-
-  if (!tokenRow) {
-    return NextResponse.json({ error: 'invalid_token' }, { status: 400 })
-  }
-
-  const token_id = String(tokenRow.id)
-
-  const { data: existingRedemption, error: redemptionLookupError } = await supabase
-    .from('token_redemptions')
-    .select('id')
-    .eq('token_id', token_id)
-    .eq('table_id', tableId)
-    .maybeSingle()
-
-  if (redemptionLookupError) {
-    console.error('[BeatCoin Claim Error]:', redemptionLookupError)
-    return NextResponse.json({ error: redemptionLookupError.message }, { status: 500 })
-  }
-
-  if (existingRedemption) {
-    return NextResponse.json(
-      { error: 'Your table has already claimed this BeatCoin!' },
-      { status: 400 }
-    )
-  }
-
-  const { error: redemptionInsertError } = await supabase.from('token_redemptions').insert({
-    token_id,
-    table_id: tableId,
+  const { data, error } = await supabase.rpc('claim_beatcoin', {
+    p_token: rawToken,
+    p_table_id: tableId,
   })
 
-  if (redemptionInsertError) {
-    console.error('[BeatCoin Claim Error]:', redemptionInsertError)
-    if (redemptionInsertError.code === '23505') {
-      return NextResponse.json(
-        { error: 'Your table has already claimed this BeatCoin!' },
-        { status: 400 }
-      )
-    }
-    return NextResponse.json({ error: redemptionInsertError.message }, { status: 500 })
+  if (error) {
+    console.error('[BeatCoin Claim Error]:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ success: true })
+  const result = (data ?? null) as ClaimBeatcoinRpcResult | null
+  if (!result || result.ok !== true) {
+    const code = result?.error?.trim() || 'claim_failed'
+    const message = beatcoinClaimErrorMessage(code)
+    const status =
+      code === 'invalid_token' || code === 'table_not_found'
+        ? 400
+        : code === 'missions_disabled' ||
+            code === 'mission_not_assigned' ||
+            code === 'table_archived' ||
+            code === 'table_inactive'
+          ? 403
+          : 400
+    return NextResponse.json({ error: message }, { status })
+  }
+
+  return NextResponse.json({
+    success: true,
+    points: typeof result.points === 'number' ? result.points : 0,
+  })
 }

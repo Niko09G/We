@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto'
 import { NextResponse } from 'next/server'
+import type { AdminTokenRecord, TokenRedemptionRecord } from '@/lib/admin-tokens'
 import { createServiceRoleClient, isServiceRoleConfigured } from '@/lib/supabase/service-role'
 
 export const runtime = 'nodejs'
@@ -15,9 +16,13 @@ type TokenRow = {
   token: string
   mission_id: string
   points: number
-  claimed_by_table_id: string | null
-  claimed_at: string | null
   created_at: string
+}
+
+type RedemptionRow = {
+  token_id: string
+  table_id: string
+  redeemed_at: string
 }
 
 /** GET: list all tokens with mission title + redeemed table name (service role). */
@@ -39,34 +44,42 @@ export async function GET() {
     const supabase = createServiceRoleClient()
     const { data: tokens, error } = await supabase
       .from('beatcoin_tokens')
-      .select(
-        'id, token, mission_id, points, claimed_by_table_id, claimed_at, created_at'
-      )
+      .select('id, token, mission_id, points, created_at')
       .order('created_at', { ascending: false })
 
     if (error) throw new Error(error.message)
 
     const rows = (tokens ?? []) as TokenRow[]
+    const tokenIds = rows.map((r) => r.id)
     const missionIds = [...new Set(rows.map((r) => r.mission_id))]
-    const tableIds = [
-      ...new Set(
-        rows.map((r) => r.claimed_by_table_id).filter((id): id is string => Boolean(id))
-      ),
-    ]
 
-    const [missionsRes, tablesRes] = await Promise.all([
+    const [missionsRes, redemptionsRes] = await Promise.all([
       missionIds.length
         ? supabase.from('missions').select('id,title').in('id', missionIds)
         : Promise.resolve({ data: [] as { id: string; title: string }[], error: null }),
-      tableIds.length
-        ? supabase.from('tables').select('id,name').in('id', tableIds)
-        : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
+      tokenIds.length
+        ? supabase
+            .from('token_redemptions')
+            .select('token_id, table_id, redeemed_at')
+            .in('token_id', tokenIds)
+            .order('redeemed_at', { ascending: false })
+        : Promise.resolve({ data: [] as RedemptionRow[], error: null }),
     ])
 
     if ('error' in missionsRes && missionsRes.error)
       throw new Error(missionsRes.error.message)
-    if ('error' in tablesRes && tablesRes.error)
-      throw new Error(tablesRes.error.message)
+    if ('error' in redemptionsRes && redemptionsRes.error)
+      throw new Error(redemptionsRes.error.message)
+
+    const redemptionRows = (redemptionsRes.data ?? []) as RedemptionRow[]
+    const tableIds = [...new Set(redemptionRows.map((r) => r.table_id))]
+
+    const tablesRes =
+      tableIds.length > 0
+        ? await supabase.from('tables').select('id,name').in('id', tableIds)
+        : { data: [] as { id: string; name: string }[], error: null }
+
+    if ('error' in tablesRes && tablesRes.error) throw new Error(tablesRes.error.message)
 
     const missionTitle = new Map(
       (missionsRes.data ?? []).map((m) => [m.id, m.title ?? ''])
@@ -75,13 +88,30 @@ export async function GET() {
       (tablesRes.data ?? []).map((t) => [t.id, t.name ?? ''])
     )
 
-    const enriched = rows.map((r) => ({
-      ...r,
-      mission_title: missionTitle.get(r.mission_id) ?? '—',
-      redeemed_by_name: r.claimed_by_table_id
-        ? tableName.get(r.claimed_by_table_id) ?? '—'
-        : null,
-    }))
+    const redemptionsByToken = new Map<string, TokenRedemptionRecord[]>()
+    for (const row of redemptionRows) {
+      const list = redemptionsByToken.get(row.token_id) ?? []
+      list.push({
+        table_id: row.table_id,
+        table_name: tableName.get(row.table_id) ?? '—',
+        redeemed_at: row.redeemed_at,
+      })
+      redemptionsByToken.set(row.token_id, list)
+    }
+
+    const enriched: AdminTokenRecord[] = rows.map((r) => {
+      const redemptions = redemptionsByToken.get(r.id) ?? []
+      return {
+        id: r.id,
+        token: r.token,
+        mission_id: r.mission_id,
+        points: r.points,
+        created_at: r.created_at,
+        mission_title: missionTitle.get(r.mission_id) ?? '—',
+        redemption_count: redemptions.length,
+        redemptions,
+      }
+    })
 
     return NextResponse.json({ ok: true as const, tokens: enriched })
   } catch (e) {
