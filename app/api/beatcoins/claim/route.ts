@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
-import { isBeatcoinTokenUuid, normalizeClaimTokenInput } from '@/lib/admin-tokens'
+import { normalizeClaimTokenInput } from '@/lib/admin-tokens'
 import { createServiceRoleClient, isServiceRoleConfigured } from '@/lib/supabase/service-role'
-import { lookupBeatcoinTokenRow } from '@/lib/tokens'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,16 +24,12 @@ export async function POST(request: Request) {
   }
 
   const body = json as Record<string, unknown>
-  const token =
+  const rawToken =
     typeof body.token === 'string' ? normalizeClaimTokenInput(body.token) : ''
-  const table_id = readTableId(body)
+  const tableId = readTableId(body)
 
-  if (!token || !table_id) {
+  if (!rawToken || !tableId) {
     return NextResponse.json({ error: 'missing_token_or_table' }, { status: 400 })
-  }
-
-  if (!isBeatcoinTokenUuid(table_id)) {
-    return NextResponse.json({ error: 'invalid_table_id' }, { status: 400 })
   }
 
   if (!isServiceRoleConfigured()) {
@@ -56,27 +51,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 
-  let tokenData: Awaited<ReturnType<typeof lookupBeatcoinTokenRow>>
-  try {
-    tokenData = await lookupBeatcoinTokenRow(supabase, token)
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Failed to look up token'
-    console.error('[BeatCoin Claim Error]:', e)
-    return NextResponse.json({ error: msg }, { status: 500 })
+  const { data: tokenRow, error: tokenLookupError } = await supabase
+    .from('beatcoin_tokens')
+    .select('id')
+    .eq('token', rawToken)
+    .maybeSingle()
+
+  if (tokenLookupError) {
+    console.error('[BeatCoin Claim Error]:', tokenLookupError)
+    return NextResponse.json({ error: tokenLookupError.message }, { status: 500 })
   }
 
-  if (!tokenData) {
+  if (!tokenRow) {
     return NextResponse.json({ error: 'invalid_token' }, { status: 400 })
   }
 
-  const tokenIdString = String(tokenData.id)
-  const tableIdString = String(table_id).trim().toLowerCase()
+  const token_id = String(tokenRow.id)
 
   const { data: existingRedemption, error: redemptionLookupError } = await supabase
     .from('token_redemptions')
-    .select('*')
-    .eq('token_id', tokenIdString)
-    .eq('table_id', tableIdString)
+    .select('id')
+    .eq('token_id', token_id)
+    .eq('table_id', tableId)
     .maybeSingle()
 
   if (redemptionLookupError) {
@@ -92,8 +88,8 @@ export async function POST(request: Request) {
   }
 
   const { error: redemptionInsertError } = await supabase.from('token_redemptions').insert({
-    token_id: tokenIdString,
-    table_id: tableIdString,
+    token_id,
+    table_id: tableId,
   })
 
   if (redemptionInsertError) {
@@ -107,24 +103,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: redemptionInsertError.message }, { status: 500 })
   }
 
-  const points = typeof tokenData.points === 'number' ? tokenData.points : Number(tokenData.points)
-
-  const { error: submissionError } = await supabase.from('mission_submissions').insert({
-    table_id: tableIdString,
-    mission_id: tokenData.mission_id,
-    status: 'approved',
-    submission_type: 'beatcoin',
-    submission_data: {
-      beatcoin_token_id: tokenIdString,
-      points_awarded: points,
-    },
-    approved_at: new Date().toISOString(),
-  })
-
-  if (submissionError) {
-    console.error('[BeatCoin Claim Error]:', submissionError)
-    return NextResponse.json({ error: submissionError.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ success: true, points })
+  return NextResponse.json({ success: true })
 }

@@ -6,11 +6,7 @@ import { DynamicThemeColor } from '@/components/DynamicThemeColor'
 import { RewardAmount } from '@/components/reward/RewardAmount'
 import { RewardUnitIcon } from '@/components/reward/RewardUnitIcon'
 import { useRewardUnit } from '@/components/reward/RewardUnitProvider'
-import {
-  claimBeatcoinToken,
-  lookupBeatcoinToken,
-  type BeatcoinLookupOk,
-} from '@/lib/admin-tokens'
+import { lookupBeatcoinToken, type BeatcoinLookupOk } from '@/lib/admin-tokens'
 import {
   readGuestTableContext,
   saveGuestTableContext,
@@ -244,54 +240,37 @@ export default function ClaimBeatcoinClient({ token }: { token: string }) {
       setActiveTableId(tableId)
 
       try {
-        const data = await claimBeatcoinToken(token, tableId)
-        if (data.ok !== true) {
-          const code = data.error ?? 'claim_failed'
-          if (
-            code === 'already_claimed_by_table' ||
-            code === 'already_claimed' ||
-            /already claimed this beatcoin/i.test(code)
-          ) {
-            setPhase('claimed')
-            return
-          }
-          const serverMessage =
-            data.error ||
-            (data as { message?: string }).message ||
-            'claim_failed'
-          setErrorMessage(
-            code === 'missions_disabled'
-              ? 'Missions are paused right now.'
-              : code === 'mission_not_assigned'
-                ? 'This mission is not available for that team.'
-                : code === 'invalid_token'
-                  ? `This ${rewardUnit.name} link is not valid.`
-                  : serverMessage
-          )
-          setPhase(remembered?.tableId ? 'ready' : 'pick_table')
+        const res = await fetch('/api/beatcoins/claim', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, tableId }),
+        })
+
+        const data = (await res.json()) as {
+          success?: boolean
+          error?: string
+          message?: string
+        }
+
+        if (res.ok) {
+          setPointsAwarded(lookup.points)
+          saveGuestTableContext(tableId, tableName)
+          setPhase('success')
           return
         }
 
-        setPointsAwarded(typeof data.points === 'number' ? data.points : lookup.points)
-        saveGuestTableContext(tableId, tableName)
-        setPhase('success')
-      } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : typeof err === 'object' &&
-                err !== null &&
-                'error' in err &&
-                typeof (err as { error?: unknown }).error === 'string'
-              ? (err as { error: string }).error
-              : 'Network error. Try again.'
-        setErrorMessage(message)
+        setErrorMessage(
+          data.error?.trim() || data.message?.trim() || 'Claim failed. Try again.'
+        )
+        setPhase(remembered?.tableId ? 'ready' : 'pick_table')
+      } catch {
+        setErrorMessage('Network error. Try again.')
         setPhase(remembered?.tableId ? 'ready' : 'pick_table')
       } finally {
         setIsSubmitting(false)
       }
     },
-    [lookup, token, rewardUnit.name, remembered]
+    [lookup, token, remembered]
   )
 
   const rememberedTable = useMemo(
