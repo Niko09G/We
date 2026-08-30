@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server'
 import { isBeatcoinTokenUuid, normalizeClaimTokenInput } from '@/lib/admin-tokens'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import {
+  buildClaimBeatcoinRpcArgs,
+  isPostgresUuidTextMismatchError,
   isTokenRedemptionMigrationError,
+  resolveBeatcoinTokenForClaim,
   tokenRedemptionMigrationMessage,
 } from '@/lib/tokens'
 
@@ -55,13 +58,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: msg } as const, { status: 500 })
   }
 
-  const { data, error } = await supabase.rpc('claim_beatcoin', {
-    p_token: token,
-    p_table_id: table_id,
-  })
+  // Resolve to the opaque token string (text column) so claim RPC never compares id (uuid) to text.
+  const claimToken = await resolveBeatcoinTokenForClaim(supabase, token)
+  if (!claimToken) {
+    return NextResponse.json(
+      { ok: false, error: 'missing_token_or_table' } as const,
+      { status: 400 }
+    )
+  }
+
+  const { data, error } = await supabase.rpc(
+    'claim_beatcoin',
+    buildClaimBeatcoinRpcArgs(claimToken, table_id)
+  )
 
   if (error) {
     console.error('[BeatCoin Claim Error]:', error)
+    if (isPostgresUuidTextMismatchError(error)) {
+      console.error(
+        '[BeatCoin Claim Error]: Postgres text/uuid mismatch — deploy beatcoin_token_lookup_fix.sql'
+      )
+    }
     if (isTokenRedemptionMigrationError(error)) {
       return NextResponse.json(
         {
