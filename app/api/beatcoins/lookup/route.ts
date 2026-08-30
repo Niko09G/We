@@ -22,8 +22,8 @@ export async function GET(request: Request) {
   }
 
   const { data, error } = await supabase.rpc('peek_beatcoin', {
-    p_token: token,
-    p_table_id: tableId || null,
+    p_token: String(token),
+    p_table_id: tableId ? String(tableId) : null,
   })
   if (error) {
     return NextResponse.json(

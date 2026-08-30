@@ -11,6 +11,7 @@ import {
   formatTokenRedemptionStatus,
   tokenClaimUrl,
   type AdminTokenRecord,
+  type AdminTokenResetResponse,
 } from '@/lib/admin-tokens'
 import { copyTextWithFallback } from '@/lib/copy-text'
 import { downloadClaimQrPng, qrDownloadFilename } from '@/lib/token-qr'
@@ -186,12 +187,19 @@ export default function TokensAdminPage() {
     }
   }
 
+  function applyTokenResetToState(tokenId: string) {
+    setTokens((prev) =>
+      prev.map((row) =>
+        row.id === tokenId ? { ...row, redemption_count: 0, redemptions: [] } : row
+      )
+    )
+  }
+
   async function handleReset(t: EnrichedToken) {
     const ok = window.confirm(
       'Reset this token?\n\n' +
-        'The claim will be cleared so the token can be used again. ' +
-        'If a claim submission exists for this token, it will be removed so leaderboard points stay accurate. ' +
-        'If no matching submission is found (e.g. manual DB edits), only the token row is cleared.'
+        'All claims for this token will be cleared so tables can claim it again. ' +
+        'Linked mission submissions are removed so leaderboard points stay accurate.'
     )
     if (!ok) return
 
@@ -200,17 +208,19 @@ export default function TokensAdminPage() {
     setSuccess(null)
     try {
       const res = await fetch(`/api/admin/tokens/${t.id}/reset`, { method: 'POST' })
-      const data = (await res.json()) as { ok?: boolean; error?: string; message?: string }
+      const data = (await res.json()) as AdminTokenResetResponse | { ok?: false; error?: string }
 
-      if (!res.ok) {
+      if (!res.ok || !('ok' in data) || data.ok !== true) {
         if (res.status === 503) {
           setMisconfigured(true)
           return
         }
-        throw new Error(data.error || 'Reset failed.')
+        throw new Error('error' in data && data.error ? data.error : 'Reset failed.')
       }
+
+      applyTokenResetToState(t.id)
       setSuccess(data.message || 'Token reset.')
-      await refreshTokens()
+      void refreshTokens()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Reset failed.')
     } finally {

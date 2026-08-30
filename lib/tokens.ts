@@ -4,6 +4,7 @@
  */
 
 import { isBeatcoinTokenUuid } from '@/lib/admin-tokens'
+import { getMissionsEnabledWithClient } from '@/lib/app-settings'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const TOKEN_REDEMPTIONS_TABLE = 'token_redemptions' as const
@@ -15,9 +16,30 @@ export type BeatcoinTokenRow = {
   mission_id: string
 }
 
+export type BeatcoinClaimResult =
+  | { ok: true; points: number; mission_submission_id: string }
+  | { ok: false; error: string }
+
+export type BeatcoinResetResult =
+  | {
+      ok: true
+      deleted_submissions: number
+      deleted_redemptions: number
+      already_available: boolean
+      message: string
+    }
+  | { ok: false; error: string }
+
+type RedemptionRow = {
+  id: string
+  table_id: string
+  mission_submission_id: string | null
+}
+
 /**
  * Resolve QR / URL input to a beatcoin_tokens row (direct table query).
  * Matches case-insensitively on token text; falls back to row id when input is a UUID.
+ * Never compares the text `token` column to a uuid-typed parameter.
  */
 export async function lookupBeatcoinTokenRow(
   supabase: SupabaseClient,
@@ -25,15 +47,6 @@ export async function lookupBeatcoinTokenRow(
 ): Promise<BeatcoinTokenRow | null> {
   const normalized = String(rawToken).trim()
   if (!normalized) return null
-
-  const { data: byExact, error: exactErr } = await supabase
-    .from('beatcoin_tokens')
-    .select('id, token, points, mission_id')
-    .eq('token', normalized)
-    .maybeSingle()
-
-  if (exactErr) throw new Error(exactErr.message)
-  if (byExact) return byExact as BeatcoinTokenRow
 
   const { data: byIlike, error: ilikeErr } = await supabase
     .from('beatcoin_tokens')
@@ -49,7 +62,7 @@ export async function lookupBeatcoinTokenRow(
     const { data: byId, error: idErr } = await supabase
       .from('beatcoin_tokens')
       .select('id, token, points, mission_id')
-      .eq('id', normalized.toLowerCase())
+      .eq('id', String(normalized))
       .maybeSingle()
 
     if (idErr) throw new Error(idErr.message)
@@ -57,4 +70,215 @@ export async function lookupBeatcoinTokenRow(
   }
 
   return null
+}
+
+/** True when this table already redeemed the token. */
+export async function hasBeatcoinRedemptionForTable(
+  supabase: SupabaseClient,
+  tokenId: string,
+  tableId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from(TOKEN_REDEMPTIONS_TABLE)
+    .select('id')
+    .eq('token_id', String(tokenId))
+    .eq('table_id', String(tableId))
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data != null
+}
+
+/**
+ * Claim a Beatcoin for a table: approved mission_submission + token_redemptions row.
+ * Leaderboard points come from the approved submission (points_awarded in submission_data).
+ */
+export async function claimBeatcoinForTable(
+  supabase: SupabaseClient,
+  rawToken: string,
+  tableId: string
+): Promise<BeatcoinClaimResult> {
+  const normalizedTableId = String(tableId).trim()
+  if (!normalizedTableId) return { ok: false, error: 'missing_token_or_table' }
+
+  const missionsEnabled = await getMissionsEnabledWithClient(supabase)
+  if (!missionsEnabled) return { ok: false, error: 'missions_disabled' }
+
+  const tokenRow = await lookupBeatcoinTokenRow(supabase, rawToken)
+  if (!tokenRow) return { ok: false, error: 'invalid_token' }
+
+  const tokenId = String(tokenRow.id)
+  const missionId = String(tokenRow.mission_id)
+
+  if (await hasBeatcoinRedemptionForTable(supabase, tokenId, normalizedTableId)) {
+    return { ok: false, error: 'already_claimed_by_table' }
+  }
+
+  const { data: mission, error: missionErr } = await supabase
+    .from('missions')
+    .select('id, validation_type')
+    .eq('id', missionId)
+    .maybeSingle()
+
+  if (missionErr) throw new Error(missionErr.message)
+  if (!mission) return { ok: false, error: 'mission_not_found' }
+  if (String(mission.validation_type) !== 'beatcoin') {
+    return { ok: false, error: 'invalid_mission' }
+  }
+
+  const { data: table, error: tableErr } = await supabase
+    .from('tables')
+    .select('id, is_archived, is_active')
+    .eq('id', normalizedTableId)
+    .maybeSingle()
+
+  if (tableErr) throw new Error(tableErr.message)
+  if (!table) return { ok: false, error: 'table_not_found' }
+  if (table.is_archived === true) return { ok: false, error: 'table_archived' }
+  if (table.is_active === false) return { ok: false, error: 'table_inactive' }
+
+  const { data: assignment, error: assignErr } = await supabase
+    .from('mission_assignments')
+    .select('id')
+    .eq('table_id', normalizedTableId)
+    .eq('mission_id', missionId)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (assignErr) throw new Error(assignErr.message)
+  if (!assignment) return { ok: false, error: 'mission_not_assigned' }
+
+  const points = Math.max(0, Math.floor(Number(tokenRow.points) || 0))
+
+  const { data: submission, error: subErr } = await supabase
+    .from('mission_submissions')
+    .insert({
+      table_id: normalizedTableId,
+      mission_id: missionId,
+      status: 'approved',
+      submission_type: 'beatcoin',
+      submission_data: {
+        beatcoin_token_id: tokenId,
+        points_awarded: points,
+      },
+      approved_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single()
+
+  if (subErr) {
+    if (subErr.code === '23505') {
+      return { ok: false, error: 'already_claimed_by_table' }
+    }
+    throw new Error(subErr.message)
+  }
+
+  const submissionId = String(submission.id)
+
+  const { error: redemptionErr } = await supabase.from(TOKEN_REDEMPTIONS_TABLE).insert({
+    token_id: tokenId,
+    table_id: normalizedTableId,
+    mission_submission_id: submissionId,
+  })
+
+  if (redemptionErr) {
+    await supabase.from('mission_submissions').delete().eq('id', submissionId)
+    if (redemptionErr.code === '23505') {
+      return { ok: false, error: 'already_claimed_by_table' }
+    }
+    throw new Error(redemptionErr.message)
+  }
+
+  return {
+    ok: true,
+    points,
+    mission_submission_id: submissionId,
+  }
+}
+
+/**
+ * Admin reset: remove all redemptions for a token, delete linked mission_submissions
+ * (leaderboard deduction), and clear legacy claim columns on beatcoin_tokens.
+ */
+export async function resetBeatcoinTokenById(
+  supabase: SupabaseClient,
+  tokenId: string
+): Promise<BeatcoinResetResult> {
+  const normalizedTokenId = String(tokenId).trim()
+  if (!normalizedTokenId) return { ok: false, error: 'token_not_found' }
+
+  const { data: tokenRow, error: tokenErr } = await supabase
+    .from('beatcoin_tokens')
+    .select('id, mission_id, points, claimed_at')
+    .eq('id', normalizedTokenId)
+    .maybeSingle()
+
+  if (tokenErr) throw new Error(tokenErr.message)
+  if (!tokenRow) return { ok: false, error: 'token_not_found' }
+
+  const missionId = String(tokenRow.mission_id)
+
+  const { data: redemptions, error: redemptionsErr } = await supabase
+    .from(TOKEN_REDEMPTIONS_TABLE)
+    .select('id, table_id, mission_submission_id')
+    .eq('token_id', normalizedTokenId)
+
+  if (redemptionsErr) throw new Error(redemptionsErr.message)
+
+  const redemptionRows = (redemptions ?? []) as RedemptionRow[]
+  const submissionIdSet = new Set(
+    redemptionRows
+      .map((r) => r.mission_submission_id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      .map((id) => String(id))
+  )
+
+  const { data: linkedSubs, error: linkedSubsErr } = await supabase
+    .from('mission_submissions')
+    .select('id')
+    .eq('submission_type', 'beatcoin')
+    .eq('mission_id', missionId)
+    .contains('submission_data', { beatcoin_token_id: normalizedTokenId })
+
+  if (linkedSubsErr) throw new Error(linkedSubsErr.message)
+  for (const row of linkedSubs ?? []) {
+    submissionIdSet.add(String(row.id))
+  }
+
+  let deletedSubmissions = 0
+  const allSubmissionIds = [...submissionIdSet]
+  if (allSubmissionIds.length > 0) {
+    const { error: deleteSubsErr, count } = await supabase
+      .from('mission_submissions')
+      .delete({ count: 'exact' })
+      .in('id', allSubmissionIds)
+
+    if (deleteSubsErr) throw new Error(deleteSubsErr.message)
+    deletedSubmissions = count ?? allSubmissionIds.length
+  }
+
+  const { error: deleteRedemptionsErr, count: deletedRedemptions } = await supabase
+    .from(TOKEN_REDEMPTIONS_TABLE)
+    .delete({ count: 'exact' })
+    .eq('token_id', normalizedTokenId)
+
+  if (deleteRedemptionsErr) throw new Error(deleteRedemptionsErr.message)
+
+  await supabase
+    .from('beatcoin_tokens')
+    .update({ claimed_by_table_id: null, claimed_at: null })
+    .eq('id', normalizedTokenId)
+
+  const redemptionCount = redemptionRows.length
+  const alreadyAvailable = redemptionCount === 0 && tokenRow.claimed_at == null
+
+  return {
+    ok: true,
+    deleted_submissions: deletedSubmissions,
+    deleted_redemptions: deletedRedemptions ?? redemptionCount,
+    already_available: alreadyAvailable,
+    message: alreadyAvailable
+      ? 'Token was already available.'
+      : `Token reset (${deletedRedemptions ?? redemptionCount} claim(s) cleared).`,
+  }
 }

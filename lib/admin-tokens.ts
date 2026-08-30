@@ -150,6 +150,14 @@ export type AdminTokenRecord = {
   redemptions: TokenRedemptionRecord[]
 }
 
+export type AdminTokenResetResponse = {
+  ok: true
+  deleted_submissions: number
+  deleted_redemptions: number
+  already_available: boolean
+  message: string
+}
+
 const BEATCOIN_CLAIM_ERROR_MESSAGES: Record<string, string> = {
   already_claimed_by_table: 'Your table has already claimed this BeatCoin!',
   invalid_token: 'This BeatCoin link is not valid.',

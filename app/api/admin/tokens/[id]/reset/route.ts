@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient, isServiceRoleConfigured } from '@/lib/supabase/service-role'
+import { resetBeatcoinTokenById } from '@/lib/tokens'
 
 export const runtime = 'nodejs'
 
 /**
- * POST: unclaim a token — clear claim fields and remove the associated beatcoin
- * mission_submission so leaderboard points stay consistent.
+ * POST: unclaim a token — remove token_redemptions, delete linked mission_submissions
+ * (leaderboard deduction), and clear legacy claim fields.
  */
 export async function POST(
   _req: Request,
@@ -29,39 +30,21 @@ export async function POST(
 
   try {
     const supabase = createServiceRoleClient()
-    const { data, error } = await supabase.rpc('admin_reset_with_archive', {
-      p_scope: 'single_token',
-      p_token_id: tokenId,
-      p_note: 'Token reset from Tokens admin page',
-      p_actor: null,
-    })
+    const result = await resetBeatcoinTokenById(supabase, String(tokenId))
 
-    if (error) {
-      if (error.code === 'PGRST202') {
-        throw new Error(
-          'Missing admin_reset_with_archive RPC. Run supabase/schema/reset_archive_recovery.sql and retry.'
-        )
-      }
-      throw new Error(error.message)
-    }
-    const row = data as
-      | { ok?: boolean; error?: string; archived_submissions?: number; batch_id?: string }
-      | null
-    if (!row || row.ok !== true) {
-      if (row?.error === 'token_not_found') {
+    if (!result.ok) {
+      if (result.error === 'token_not_found') {
         return NextResponse.json({ ok: false as const, error: 'Token not found.' }, { status: 404 })
       }
-      throw new Error(row?.error || 'Token reset failed.')
+      throw new Error(result.error)
     }
 
     return NextResponse.json({
       ok: true as const,
-      deleted_submissions:
-        typeof row.archived_submissions === 'number' ? row.archived_submissions : 0,
-      message:
-        (row.archived_submissions ?? 0) > 0
-          ? `Token reset (archived in batch ${String(row.batch_id ?? '').slice(0, 8)}).`
-          : 'Token was already available or had no linked submission.',
+      deleted_submissions: result.deleted_submissions,
+      deleted_redemptions: result.deleted_redemptions,
+      already_available: result.already_available,
+      message: result.message,
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed to reset token.'

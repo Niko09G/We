@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { beatcoinClaimErrorMessage, normalizeClaimTokenInput } from '@/lib/admin-tokens'
 import { createServiceRoleClient, isServiceRoleConfigured } from '@/lib/supabase/service-role'
+import { claimBeatcoinForTable } from '@/lib/tokens'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,13 +12,7 @@ function readTableId(body: Record<string, unknown>): string {
       : typeof body.tableId === 'string'
         ? body.tableId
         : ''
-  return raw.trim()
-}
-
-type ClaimBeatcoinRpcResult = {
-  ok?: boolean
-  error?: string
-  points?: number
+  return String(raw).trim()
 }
 
 /** Public: claim a Beatcoin for a table (one redemption per token per table). */
@@ -57,34 +52,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 
-  const { data, error } = await supabase.rpc('claim_beatcoin', {
-    p_token: rawToken,
-    p_table_id: tableId,
-  })
+  try {
+    const result = await claimBeatcoinForTable(supabase, rawToken, tableId)
 
-  if (error) {
-    console.error('[BeatCoin Claim Error]:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!result.ok) {
+      const code = result.error.trim() || 'claim_failed'
+      const message = beatcoinClaimErrorMessage(code)
+      const status =
+        code === 'invalid_token' || code === 'table_not_found'
+          ? 400
+          : code === 'missions_disabled' ||
+              code === 'mission_not_assigned' ||
+              code === 'table_archived' ||
+              code === 'table_inactive'
+            ? 403
+            : 400
+      return NextResponse.json({ error: message }, { status })
+    }
+
+    return NextResponse.json({
+      success: true,
+      points: result.points,
+    })
+  } catch (e) {
+    console.error('[BeatCoin Claim Error]:', e)
+    const msg = e instanceof Error ? e.message : 'Claim failed.'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
-
-  const result = (data ?? null) as ClaimBeatcoinRpcResult | null
-  if (!result || result.ok !== true) {
-    const code = result?.error?.trim() || 'claim_failed'
-    const message = beatcoinClaimErrorMessage(code)
-    const status =
-      code === 'invalid_token' || code === 'table_not_found'
-        ? 400
-        : code === 'missions_disabled' ||
-            code === 'mission_not_assigned' ||
-            code === 'table_archived' ||
-            code === 'table_inactive'
-          ? 403
-          : 400
-    return NextResponse.json({ error: message }, { status })
-  }
-
-  return NextResponse.json({
-    success: true,
-    points: typeof result.points === 'number' ? result.points : 0,
-  })
 }

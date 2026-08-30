@@ -194,6 +194,77 @@ exception
 end;
 $$;
 
+-- Admin reset: remove redemptions, delete linked submissions (leaderboard), clear legacy columns.
+create or replace function public.reset_beatcoin_token(p_token_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_token record;
+  v_sub_ids uuid[];
+  v_deleted int := 0;
+  v_redemption_count int := 0;
+begin
+  select id, mission_id
+  into v_token
+  from public.beatcoin_tokens
+  where id = p_token_id
+  for update;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'token_not_found');
+  end if;
+
+  select count(*)::int
+  into v_redemption_count
+  from public.token_redemptions tr
+  where tr.token_id = p_token_id;
+
+  select array_agg(distinct sub_id)
+  into v_sub_ids
+  from (
+    select tr.mission_submission_id as sub_id
+    from public.token_redemptions tr
+    where tr.token_id = p_token_id
+      and tr.mission_submission_id is not null
+    union
+    select ms.id as sub_id
+    from public.mission_submissions ms
+    where ms.submission_type = 'beatcoin'
+      and ms.mission_id = v_token.mission_id
+      and (
+        ms.submission_data @> jsonb_build_object('beatcoin_token_id', p_token_id::text)
+        or ms.submission_data @> jsonb_build_object('beatcoin_token_id', p_token_id)
+      )
+  ) s
+  where sub_id is not null;
+
+  if v_sub_ids is not null and array_length(v_sub_ids, 1) > 0 then
+    delete from public.mission_submissions
+    where id = any(v_sub_ids);
+    get diagnostics v_deleted = row_count;
+  end if;
+
+  delete from public.token_redemptions
+  where token_id = p_token_id;
+
+  update public.beatcoin_tokens
+  set claimed_by_table_id = null,
+      claimed_at = null
+  where id = p_token_id;
+
+  return jsonb_build_object(
+    'ok', true,
+    'already_available', v_redemption_count = 0 and v_deleted = 0,
+    'deleted_submissions', v_deleted,
+    'deleted_redemptions', v_redemption_count
+  );
+end;
+$$;
+
 grant execute on function public.resolve_beatcoin_token_row(text) to anon, authenticated;
 grant execute on function public.peek_beatcoin (text, uuid) to anon, authenticated;
 grant execute on function public.claim_beatcoin (text, uuid) to anon, authenticated;
+grant execute on function public.reset_beatcoin_token(uuid) to anon, authenticated;
