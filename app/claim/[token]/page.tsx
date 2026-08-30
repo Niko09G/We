@@ -7,12 +7,12 @@ export default async function ClaimBeatcoinPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ token: string }> | { token: string }
-  searchParams: Promise<{ token?: string }> | { token?: string }
+  params: Promise<{ token: string }>
+  searchParams: Promise<{ token?: string }>
 }) {
-  const resolvedParams = await params
-  const sp = await searchParams
-  const token = parseClaimRouteToken(resolvedParams.token, sp.token)
+  const { token: pathToken } = await params
+  const { token: queryToken } = await searchParams
+  const token = parseClaimRouteToken(pathToken, queryToken)
 
   return <ClaimBeatcoinClient token={token} />
 }

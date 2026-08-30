@@ -120,6 +120,8 @@ type BeatcoinClaimApiErr = {
   error: string
 }
 
+type BeatcoinClaimApiPayload = BeatcoinClaimApiOk | BeatcoinClaimApiErr | BeatcoinClaimOk
+
 /** Public lookup: resolve QR token → points + per-table claim status. */
 export async function lookupBeatcoinToken(
   token: string,
@@ -145,21 +147,21 @@ export async function claimBeatcoinToken(
     }),
   })
 
-  let payload: (BeatcoinClaimApiOk | BeatcoinClaimApiErr) & BeatcoinClaimResponse
+  let payload: BeatcoinClaimApiPayload
   try {
-    payload = (await res.json()) as (BeatcoinClaimApiOk | BeatcoinClaimApiErr) & BeatcoinClaimResponse
+    payload = (await res.json()) as BeatcoinClaimApiPayload
   } catch {
     return { ok: false, error: `Request failed (${res.status})` }
   }
 
-  if (payload.success === true) {
+  if ('success' in payload && payload.success === true) {
     return { ok: true, points: payload.points }
   }
 
-  if (payload.ok === true) return payload
+  if ('ok' in payload && payload.ok === true) return payload
 
   const error =
-    payload.error?.trim() ||
+    ('error' in payload ? payload.error : undefined)?.trim() ||
     (res.ok ? 'claim_failed' : `Request failed (${res.status})`)
 
   return { ok: false, error }
