@@ -1,13 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isBeatcoinTokenUuid, normalizeClaimTokenInput } from '@/lib/admin-tokens'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
-import {
-  buildClaimBeatcoinRpcArgs,
-  isPostgresUuidTextMismatchError,
-  isTokenRedemptionMigrationError,
-  resolveBeatcoinTokenForClaim,
-  tokenRedemptionMigrationMessage,
-} from '@/lib/tokens'
+import { createServiceRoleClient, isServiceRoleConfigured } from '@/lib/supabase/service-role'
+import { lookupBeatcoinTokenRow } from '@/lib/tokens'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +21,7 @@ export async function POST(request: Request) {
   try {
     json = await request.json()
   } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid JSON body' } as const, { status: 400 })
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
   const body = json as Record<string, unknown>
@@ -36,83 +30,101 @@ export async function POST(request: Request) {
   const table_id = readTableId(body)
 
   if (!token || !table_id) {
-    return NextResponse.json(
-      { ok: false, error: 'missing_token_or_table' } as const,
-      { status: 400 }
-    )
+    return NextResponse.json({ error: 'missing_token_or_table' }, { status: 400 })
   }
 
   if (!isBeatcoinTokenUuid(table_id)) {
+    return NextResponse.json({ error: 'invalid_table_id' }, { status: 400 })
+  }
+
+  if (!isServiceRoleConfigured()) {
     return NextResponse.json(
-      { ok: false, error: 'invalid_table_id' } as const,
-      { status: 400 }
+      {
+        error:
+          'Set SUPABASE_SERVICE_ROLE_KEY on the server to claim BeatCoins (beatcoin_tokens is not exposed to anon).',
+      },
+      { status: 503 }
     )
   }
 
-  let supabase: ReturnType<typeof createServerSupabaseClient>
+  let supabase: ReturnType<typeof createServiceRoleClient>
   try {
-    supabase = createServerSupabaseClient()
+    supabase = createServiceRoleClient()
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Server configuration error'
     console.error('[BeatCoin Claim Error]:', e)
-    return NextResponse.json({ ok: false, error: msg } as const, { status: 500 })
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 
-  // Resolve to the opaque token string (text column) so claim RPC never compares id (uuid) to text.
-  const claimToken = await resolveBeatcoinTokenForClaim(supabase, token)
-  if (!claimToken) {
+  let tokenData: Awaited<ReturnType<typeof lookupBeatcoinTokenRow>>
+  try {
+    tokenData = await lookupBeatcoinTokenRow(supabase, token)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Failed to look up token'
+    console.error('[BeatCoin Claim Error]:', e)
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+
+  if (!tokenData) {
+    return NextResponse.json({ error: 'invalid_token' }, { status: 400 })
+  }
+
+  const tokenIdString = String(tokenData.id)
+  const tableIdString = String(table_id).trim().toLowerCase()
+
+  const { data: existingRedemption, error: redemptionLookupError } = await supabase
+    .from('token_redemptions')
+    .select('*')
+    .eq('token_id', tokenIdString)
+    .eq('table_id', tableIdString)
+    .maybeSingle()
+
+  if (redemptionLookupError) {
+    console.error('[BeatCoin Claim Error]:', redemptionLookupError)
+    return NextResponse.json({ error: redemptionLookupError.message }, { status: 500 })
+  }
+
+  if (existingRedemption) {
     return NextResponse.json(
-      { ok: false, error: 'missing_token_or_table' } as const,
+      { error: 'Your table has already claimed this BeatCoin!' },
       { status: 400 }
     )
   }
 
-  const { data, error } = await supabase.rpc(
-    'claim_beatcoin',
-    buildClaimBeatcoinRpcArgs(claimToken, table_id)
-  )
-
-  if (error) {
-    console.error('[BeatCoin Claim Error]:', error)
-    if (isPostgresUuidTextMismatchError(error)) {
-      console.error(
-        '[BeatCoin Claim Error]: Postgres text/uuid mismatch — deploy beatcoin_token_lookup_fix.sql'
-      )
-    }
-    if (isTokenRedemptionMigrationError(error)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: 'missing_migration',
-          message: tokenRedemptionMigrationMessage(),
-        } as const,
-        { status: 503 }
-      )
-    }
-    return NextResponse.json(
-      { ok: false, error: error.message || 'claim_failed' } as const,
-      { status: 500 }
-    )
-  }
-
-  const row = data as { ok?: boolean; error?: string; points?: number } | null
-  if (!row || row.ok !== true) {
-    const rawCode = (row as { error?: string })?.error ?? 'claim_failed'
-    const code =
-      rawCode === 'already_claimed' ? 'already_claimed_by_table' : rawCode
-    console.error('[BeatCoin Claim Error]:', row)
-    const status =
-      code === 'already_claimed_by_table' || code === 'invalid_token'
-        ? 409
-        : code === 'missions_disabled'
-          ? 503
-          : 422
-    return NextResponse.json({ ok: false, error: code } as const, { status })
-  }
-
-  return NextResponse.json({
-    ok: true,
-    points: row.points,
-    mission_submission_id: (row as { mission_submission_id?: string }).mission_submission_id,
+  const { error: redemptionInsertError } = await supabase.from('token_redemptions').insert({
+    token_id: tokenIdString,
+    table_id: tableIdString,
   })
+
+  if (redemptionInsertError) {
+    console.error('[BeatCoin Claim Error]:', redemptionInsertError)
+    if (redemptionInsertError.code === '23505') {
+      return NextResponse.json(
+        { error: 'Your table has already claimed this BeatCoin!' },
+        { status: 400 }
+      )
+    }
+    return NextResponse.json({ error: redemptionInsertError.message }, { status: 500 })
+  }
+
+  const points = typeof tokenData.points === 'number' ? tokenData.points : Number(tokenData.points)
+
+  const { error: submissionError } = await supabase.from('mission_submissions').insert({
+    table_id: tableIdString,
+    mission_id: tokenData.mission_id,
+    status: 'approved',
+    submission_type: 'beatcoin',
+    submission_data: {
+      beatcoin_token_id: tokenIdString,
+      points_awarded: points,
+    },
+    approved_at: new Date().toISOString(),
+  })
+
+  if (submissionError) {
+    console.error('[BeatCoin Claim Error]:', submissionError)
+    return NextResponse.json({ error: submissionError.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true, points })
 }

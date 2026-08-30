@@ -102,7 +102,6 @@ export type BeatcoinLookupResponse = BeatcoinLookupOk | BeatcoinLookupErr
 export type BeatcoinClaimOk = {
   ok: true
   points: number
-  mission_submission_id?: string
 }
 
 export type BeatcoinClaimErr = {
@@ -111,6 +110,15 @@ export type BeatcoinClaimErr = {
 }
 
 export type BeatcoinClaimResponse = BeatcoinClaimOk | BeatcoinClaimErr
+
+type BeatcoinClaimApiOk = {
+  success: true
+  points: number
+}
+
+type BeatcoinClaimApiErr = {
+  error: string
+}
 
 /** Public lookup: resolve QR token → points + per-table claim status. */
 export async function lookupBeatcoinToken(
@@ -137,18 +145,21 @@ export async function claimBeatcoinToken(
     }),
   })
 
-  let payload: BeatcoinClaimResponse & { message?: string }
+  let payload: (BeatcoinClaimApiOk | BeatcoinClaimApiErr) & BeatcoinClaimResponse
   try {
-    payload = (await res.json()) as BeatcoinClaimResponse & { message?: string }
+    payload = (await res.json()) as (BeatcoinClaimApiOk | BeatcoinClaimApiErr) & BeatcoinClaimResponse
   } catch {
     return { ok: false, error: `Request failed (${res.status})` }
+  }
+
+  if (payload.success === true) {
+    return { ok: true, points: payload.points }
   }
 
   if (payload.ok === true) return payload
 
   const error =
     payload.error?.trim() ||
-    payload.message?.trim() ||
     (res.ok ? 'claim_failed' : `Request failed (${res.status})`)
 
   return { ok: false, error }

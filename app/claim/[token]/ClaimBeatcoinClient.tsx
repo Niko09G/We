@@ -247,7 +247,11 @@ export default function ClaimBeatcoinClient({ token }: { token: string }) {
         const data = await claimBeatcoinToken(token, tableId)
         if (data.ok !== true) {
           const code = data.error ?? 'claim_failed'
-          if (code === 'already_claimed_by_table' || code === 'already_claimed') {
+          if (
+            code === 'already_claimed_by_table' ||
+            code === 'already_claimed' ||
+            /already claimed this beatcoin/i.test(code)
+          ) {
             setPhase('claimed')
             return
           }
