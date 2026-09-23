@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useScrollSpy, type ScrollSpySection } from '@/hooks/useScrollSpy'
 
 export type StickySectionNavItem = {
@@ -15,14 +15,8 @@ export type StickySectionNavItem = {
 const ACTIVE_GRADIENT =
   'linear-gradient(to right, #17a3d6, #3869e9, #5f32f3)'
 
-const HERO_SHOW_THRESHOLD = 0.2
-
 /** Keep scroll-spy paused through smooth programmatic scroll (~600ms or scrollend). */
 const MANUAL_SCROLL_LOCK_MS = 600
-
-function hasOpenGuestOverlay(): boolean {
-  return [...document.querySelectorAll('[aria-modal="true"]')].some((el) => el.isConnected)
-}
 
 export function StickySectionNav({
   items,
@@ -38,24 +32,11 @@ export function StickySectionNav({
   const manualNavLockRef = useRef(false)
   const manualScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const manualScrollEndHandlerRef = useRef<(() => void) | null>(null)
-  const [show, setShow] = useState(false)
-  const [overlayActive, setOverlayActive] = useState(false)
   const [showLeftFade, setShowLeftFade] = useState(false)
   const [showRightFade, setShowRightFade] = useState(false)
   const [manualActiveSection, setManualActiveSection] = useState<string | null>(null)
-  const prevOverlayActiveRef = useRef(false)
 
-  const refreshHeroVisibility = useCallback(() => {
-    const hero = document.getElementById(heroContainerId)
-    if (!hero) {
-      setShow(true)
-      return
-    }
-    const rect = hero.getBoundingClientRect()
-    const h = rect.height || 1
-    const progress = (-rect.top) / h
-    setShow(progress >= HERO_SHOW_THRESHOLD)
-  }, [heroContainerId])
+  void heroContainerId
 
   const scrollSpySections = useMemo<ScrollSpySection[]>(
     () =>
@@ -122,57 +103,6 @@ export function StickySectionNav({
   // Keep prop for future theming wiring; currently active uses fixed gradient.
   void highlightColor
 
-  // Show shortly after moving away from hero.
-  useEffect(() => {
-    let raf = 0
-    const onScroll = () => {
-      if (raf) return
-      raf = window.requestAnimationFrame(() => {
-        raf = 0
-        refreshHeroVisibility()
-      })
-    }
-
-    refreshHeroVisibility()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('resize', onScroll)
-    return () => {
-      if (raf) window.cancelAnimationFrame(raf)
-      window.removeEventListener('scroll', onScroll)
-      window.removeEventListener('resize', onScroll)
-    }
-  }, [refreshHeroVisibility])
-
-  // Hide nav while a modal/lightbox is open; re-sync visibility when it closes.
-  useEffect(() => {
-    const syncOverlayState = () => {
-      setOverlayActive(hasOpenGuestOverlay())
-    }
-
-    syncOverlayState()
-    const mo = new MutationObserver(syncOverlayState)
-    mo.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['aria-modal', 'aria-hidden', 'hidden', 'class', 'style'],
-    })
-    window.addEventListener('focus', syncOverlayState)
-    return () => {
-      mo.disconnect()
-      window.removeEventListener('focus', syncOverlayState)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (prevOverlayActiveRef.current && !overlayActive) {
-      requestAnimationFrame(() => {
-        refreshHeroVisibility()
-      })
-    }
-    prevOverlayActiveRef.current = overlayActive
-  }, [overlayActive, refreshHeroVisibility])
-
   // Keep active item visible naturally by centering it in the rail.
   useEffect(() => {
     const activeEl = itemRefs.current[activeSection]
@@ -219,23 +149,11 @@ export function StickySectionNav({
     }
   }, [])
 
-  const visible = show && !overlayActive
-
   const itemClass =
     'relative z-[3] flex h-14 min-w-[6.25rem] flex-col items-center justify-center gap-1 rounded-full px-2 text-[11px] font-semibold whitespace-nowrap transition-colors duration-100 ease-out'
 
-  const dockClass = useMemo(
-    () =>
-      `overflow-visible transition-[transform,opacity] duration-300 ease-out ${
-        visible
-          ? 'translate-y-0 opacity-100 pointer-events-auto'
-          : 'translate-y-8 opacity-0 pointer-events-none'
-      }`,
-    [visible]
-  )
-
   return (
-    <div className={dockClass} aria-hidden={!visible}>
+    <div className="overflow-visible">
       <nav
         className="pointer-events-auto relative h-[72px] overflow-visible rounded-[9999px] border border-zinc-200 bg-white p-1 shadow-[0_4px_12px_rgba(0,0,0,0.07)]"
         aria-label="Section navigation"

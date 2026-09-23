@@ -41,6 +41,7 @@ export type RecentActivityItem = {
   missionTitle: string
   points: number
   createdAt: string
+  avatar_url?: string | null
 }
 
 type ApprovedSubmissionRow = {
@@ -333,8 +334,11 @@ export async function fetchLeaderboardBundleWithClient(
   const sortedByTime = [...completionActivity, ...repeatableActivity].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   )
+  const entryByTeamId = new Map(entries.map((entry) => [entry.teamId, entry]))
+
   const recentActivity: RecentActivityItem[] = sortedByTime.slice(0, recentLimit).map((c) => {
     const teamId = physicalToTeamId.get(c.table_id) ?? c.table_id
+    const teamEntry = entryByTeamId.get(teamId)
     const teamLabel =
       tableNames[teamId] ||
       tableNames[c.table_id] ||
@@ -349,6 +353,7 @@ export async function fetchLeaderboardBundleWithClient(
       missionTitle: missionTitle.get(c.mission_id) ?? '—',
       points: c.points,
       createdAt: c.created_at,
+      avatar_url: teamEntry?.avatar_url ?? teamEntry?.logo_url ?? teamEntry?.image ?? null,
     }
   })
 

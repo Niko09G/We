@@ -89,12 +89,14 @@ export function BottomNav({
   highlightColor?: string
 }) {
   return (
-    <div className="fixed bottom-4 left-1/2 z-[9999] block w-[min(26rem,calc(100vw-1.25rem))] -translate-x-1/2 pointer-events-auto">
-      <StickySectionNav
-        heroContainerId={heroContainerId}
-        items={items}
-        highlightColor={highlightColor}
-      />
+    <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-[9999]">
+      <div className="pointer-events-auto mx-auto w-full max-w-lg px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <StickySectionNav
+          heroContainerId={heroContainerId}
+          items={items}
+          highlightColor={highlightColor}
+        />
+      </div>
     </div>
   )
 }

@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { AnnouncementOverlay } from '@/components/display/AnnouncementOverlay'
 import { BeatCoinFlyLayer, type FlyingBeatCoin } from '@/components/display/BeatCoinFly'
 import { DisplayConfetti } from '@/components/display/DisplayConfetti'
+import { DisplayFullscreenButton } from '@/components/display/DisplayFullscreenButton'
 import { GreetingSpeechBubble } from '@/components/display/GreetingSpeechBubble'
 import { LeaderboardSidebar } from '@/components/display/LeaderboardSidebar'
 import { MomentumFeed, useMomentumFeed } from '@/components/display/MomentumFeed'
+import { SpeechOverlay } from '@/components/display/SpeechOverlay'
 import {
   fetchDisplayTeamVisuals,
   type DisplayTeamVisual,
@@ -21,6 +24,14 @@ import {
   fetchGuestEmblemsConfig,
   type GuestEmblemsSettingsValue,
 } from '@/lib/guest-emblem-config'
+import {
+  DISPLAY_ACTIVE_OVERLAY_KEY,
+  DISPLAY_ANNOUNCEMENT_TEXT_KEY,
+  fetchDisplayOverlayState,
+  parseAnnouncementText,
+  parseDisplayOverlayMode,
+  type DisplayOverlayMode,
+} from '@/lib/display-settings'
 import type { LeaderboardEntry, RecentActivityItem, TableNameLookup } from '@/lib/leaderboard'
 import { leaderboardEntryTeamKey } from '@/lib/leaderboard'
 import { supabase } from '@/lib/supabase/client'
@@ -158,6 +169,8 @@ export default function DisplayPage() {
   const [confettiFire, setConfettiFire] = useState(0)
   const [flyingCoins, setFlyingCoins] = useState<FlyingBeatCoin[]>([])
   const [rankEmblems, setRankEmblems] = useState<GuestEmblemsSettingsValue>({})
+  const [activeOverlay, setActiveOverlay] = useState<DisplayOverlayMode>('leaderboard')
+  const [announcementText, setAnnouncementText] = useState('')
 
   const containerRef = useRef<HTMLDivElement>(null)
   const mainCanvasRef = useRef<HTMLDivElement>(null)
@@ -374,6 +387,73 @@ export default function DisplayPage() {
   useEffect(() => {
     void loadGreetings()
   }, [loadGreetings])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const state = await fetchDisplayOverlayState()
+        if (!cancelled) {
+          setActiveOverlay(state.mode)
+          setAnnouncementText(state.announcementText)
+        }
+      } catch {
+        /* table may not be migrated yet */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let resubscribeTimer: number | null = null
+
+    const applyDisplaySettingsRow = (row: Record<string, unknown> | null | undefined) => {
+      if (!row) return
+      const key = typeof row.key === 'string' ? row.key : null
+      if (!key) return
+      if (key === DISPLAY_ACTIVE_OVERLAY_KEY) {
+        setActiveOverlay(parseDisplayOverlayMode(row.value))
+      } else if (key === DISPLAY_ANNOUNCEMENT_TEXT_KEY) {
+        setAnnouncementText(parseAnnouncementText(row.value))
+      }
+    }
+
+    const attachOverlayChannel = () => {
+      if (cancelled) return
+
+      channel = supabase
+        .channel('display-overlay-settings')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'display_settings' },
+          (payload) => {
+            applyDisplaySettingsRow(payload.new as Record<string, unknown>)
+          }
+        )
+        .subscribe((status) => {
+          if (cancelled) return
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            if (channel) {
+              supabase.removeChannel(channel)
+              channel = null
+            }
+            resubscribeTimer = window.setTimeout(attachOverlayChannel, 2_000)
+          }
+        })
+    }
+
+    attachOverlayChannel()
+
+    return () => {
+      cancelled = true
+      if (resubscribeTimer) window.clearTimeout(resubscribeTimer)
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [])
 
   useEffect(() => {
     unseenQueueRef.current = unseenQueue
@@ -736,30 +816,53 @@ export default function DisplayPage() {
 
   const leaderboardEntries = leaderboard ?? []
 
+  if (activeOverlay === 'speech') {
+    return (
+      <>
+        <DisplayFullscreenButton />
+        <SpeechOverlay />
+      </>
+    )
+  }
+
+  if (activeOverlay === 'announcement') {
+    return (
+      <>
+        <DisplayFullscreenButton />
+        <AnnouncementOverlay text={announcementText} />
+      </>
+    )
+  }
+
   if (greetingLoading && !currentGreeting) {
     return (
-      <div ref={containerRef} className={DISPLAY_GRID_CLASS}>
-        <div className="flex min-w-0 items-center justify-center overflow-hidden rounded-2xl bg-zinc-900/50">
-          <span className="text-zinc-500">Loading…</span>
+      <>
+        <DisplayFullscreenButton />
+        <div ref={containerRef} className={DISPLAY_GRID_CLASS}>
+          <div className="flex min-w-0 items-center justify-center overflow-hidden rounded-2xl bg-zinc-900/50">
+            <span className="text-zinc-500">Loading…</span>
+          </div>
+          <LeaderboardSidebar
+            entries={[]}
+            teamVisuals={{}}
+            teamAvatars={{}}
+            rankEmblems={rankEmblems}
+            rowAnim={{}}
+            isFullscreen={false}
+            onRequestFullscreen={requestFullscreen}
+            loading
+            error={null}
+            teamCardRefs={teamCardRefs}
+          />
         </div>
-        <LeaderboardSidebar
-          entries={[]}
-          teamVisuals={{}}
-          teamAvatars={{}}
-          rankEmblems={rankEmblems}
-          rowAnim={{}}
-          isFullscreen={false}
-          onRequestFullscreen={requestFullscreen}
-          loading
-          error={null}
-          teamCardRefs={teamCardRefs}
-        />
-      </div>
+      </>
     )
   }
 
   return (
-    <div ref={containerRef} className={DISPLAY_GRID_CLASS}>
+    <>
+      <DisplayFullscreenButton />
+      <div ref={containerRef} className={DISPLAY_GRID_CLASS}>
       <div
         ref={mainCanvasRef}
         className="relative min-w-0 overflow-hidden rounded-2xl bg-zinc-900"
@@ -812,6 +915,7 @@ export default function DisplayPage() {
         error={leaderboardError}
         teamCardRefs={teamCardRefs}
       />
-    </div>
+      </div>
+    </>
   )
 }

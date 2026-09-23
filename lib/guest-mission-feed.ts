@@ -1,4 +1,4 @@
-import { resolveTeamPageConfig } from '@/lib/team-page-config'
+import { buildTableAvatarMap, resolveTeamAvatarUrl } from '@/lib/table-avatar-url'
 import { supabase } from '@/lib/supabase/client'
 
 const FEED_LIMIT = 18
@@ -369,25 +369,26 @@ function liveFeedItemAfterCursor(
   return item.id < cursor.id
 }
 
-/** Table avatar URLs from `tables.page_config` (hero.avatarImage). */
+/** Table avatar URLs from `tables.avatar_url`, `tables.avatar`, or `page_config`. */
 export async function loadTableAvatarUrls(): Promise<Record<string, string>> {
   const { data, error } = await supabase
     .from('tables')
-    .select('id,name,color,page_config')
+    .select('id,name,color,page_config,team_id')
     .eq('is_archived', false)
 
   if (error || !data?.length) return {}
 
-  const map: Record<string, string> = {}
-  for (const row of data) {
-    const resolved = resolveTeamPageConfig(row.page_config, {
-      tableColor: (row as { color?: string | null }).color ?? null,
-      tableName: (row as { name?: string }).name ?? '',
-    })
-    const url = resolved.hero.avatarImage.url?.trim()
-    if (url) map[row.id as string] = url
-  }
-  return map
+  return buildTableAvatarMap(
+    (data ?? []) as Array<{
+      id: string
+      name?: string | null
+      color?: string | null
+      page_config?: unknown
+      team_id?: string | null
+      avatar_url?: string | null
+      avatar?: string | null
+    }>
+  )
 }
 
 function resolveFeedAvatarUrl(
@@ -397,11 +398,7 @@ function resolveFeedAvatarUrl(
 ): string | null {
   const tid = tableId?.trim()
   if (!tid) return null
-  return (
-    tableAvatars[tid]?.trim() ||
-    guestEmblems?.team_emblem_by_table_id?.[tid]?.trim() ||
-    null
-  )
+  return resolveTeamAvatarUrl(tid, tableAvatars, guestEmblems ?? {})
 }
 
 function greetingRowToLiveFeedItem(

@@ -172,7 +172,7 @@ const NAV_ITEMS: NavItem[] = [
     icon: ({ active }) => <NavIcon active={active} d={<><path d="M5 18V8M12 18V5M19 18v-9" /></>} />,
   },
   {
-    href: '/admin/display',
+    href: '/admin/display-control',
     label: 'Display Controls',
     key: 'display',
     section: 'scoring',
@@ -221,6 +221,9 @@ export default function AdminSidebar() {
     if (pathname.startsWith('/admin/attendees')) return 'attendees'
     if (pathname.startsWith('/admin/submissions')) return 'submissions'
     if (pathname.startsWith('/admin/greetings')) return 'greetings'
+    if (pathname.startsWith('/admin/display-control') || pathname.startsWith('/admin/display')) {
+      return 'display'
+    }
     if (pathname.startsWith('/admin/settings')) return 'settings'
     if (pathname.startsWith('/admin/recovery')) return 'recovery'
     return 'display'

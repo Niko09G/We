@@ -18,7 +18,7 @@ export type TeamAvatarProps = {
   /** Team avatar from page_config or guest emblems. */
   avatarUrl?: string | null
   tableColor?: string | null
-  size?: 'sm' | 'md'
+  size?: 'sm' | 'md' | 'lg'
   className?: string
 }
 
@@ -30,7 +30,13 @@ export function TeamAvatar({
   className = '',
 }: TeamAvatarProps) {
   const url = avatarUrl?.trim()
-  const dim = size === 'sm' ? 'h-7 w-7 text-[10px]' : 'h-8 w-8 text-[11px]'
+  const dim =
+    size === 'sm'
+      ? 'h-7 w-7 text-[10px]'
+      : size === 'lg'
+        ? 'h-10 w-10 text-[11px]'
+        : 'h-8 w-8 text-[11px]'
+  const imgSize = size === 'lg' ? 40 : size === 'sm' ? 28 : 32
 
   return (
     <span
@@ -38,7 +44,13 @@ export function TeamAvatar({
     >
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" className="h-full w-full object-cover" />
+        <img
+          src={url}
+          alt=""
+          width={imgSize}
+          height={imgSize}
+          className="h-full w-full shrink-0 object-cover"
+        />
       ) : (
         <span
           className={`flex h-full w-full items-center justify-center font-semibold text-white ${size === 'sm' ? 'text-[10px]' : 'text-[11px]'}`}

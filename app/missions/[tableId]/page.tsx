@@ -7,6 +7,7 @@ import { MissionSocialFeedSection } from '@/components/guest/MissionSocialFeedSe
 import { MissionCard } from '@/components/guest/MissionCard'
 import { SeatingMapPanel } from '@/components/guest/SeatingMapPanel'
 import { MissionsTableHero } from '@/components/guest/MissionsTableHero'
+import { TeamAvatar } from '@/components/guest/TeamAvatar'
 import { Leaderboard } from '@/components/Leaderboard'
 import { getMissionsEnabled } from '@/lib/app-settings'
 import { fetchLeaderboard, fetchLeaderboardBundle, fetchRecentScoringActivity, type LeaderboardEntry, type RecentActivityItem } from '@/lib/leaderboard'
@@ -25,6 +26,7 @@ import { rewardUnitCompactLabel } from '@/lib/reward-unit'
 import { MissionModal, type MissionForModal } from './MissionModal'
 import {
   fetchGuestMissionFeed,
+  loadTableAvatarUrls,
   resolveAdviceMissionIdFromRows,
   resolveFeedMissionIds,
   resolveGreetingMissionIdFromRows,
@@ -47,6 +49,10 @@ import {
   heroBackgroundStyle,
   resolveTeamPageConfig,
 } from '@/lib/team-page-config'
+import {
+  mergeLeaderboardAvatarsIntoMap,
+  resolveTeamAvatarUrl,
+} from '@/lib/table-avatar-url'
 
 type TableIdParams = { tableId: string }
 
@@ -68,6 +74,7 @@ type MomentumEntry = {
   tableId: string
   tableName: string
   tableColor: string | null
+  avatarUrl?: string | null
   eventType: MomentumEventType
   coinChange: number
   message: string
@@ -91,6 +98,7 @@ function scoringActivityToMomentum(item: RecentActivityItem): MomentumEntry {
     tableId: item.tableId,
     tableName: item.tableName,
     tableColor: item.tableColor,
+    avatarUrl: item.avatar_url ?? null,
     eventType: pts >= 18 ? 'on_fire' : pts >= 8 ? 'move' : 'neutral',
     coinChange: pts,
     activityTitle: item.missionTitle,
@@ -111,6 +119,7 @@ function buildSeedMomentumFromLeaderboard(rows: LeaderboardEntry[]): MomentumEnt
       tableId: row.tableId,
       tableName: row.tableName,
       tableColor: row.tableColor,
+      avatarUrl: row.avatar_url ?? row.logo_url ?? row.image ?? null,
       eventType: 'entered' as const,
       coinChange: safeRewardPoints(row.totalPoints),
       message: `${row.tableName} has ${safeRewardPoints(row.totalPoints)} coins on the board 🎉`,
@@ -122,23 +131,12 @@ function buildSeedMomentumFromLeaderboard(rows: LeaderboardEntry[]): MomentumEnt
     tableId: row.tableId,
     tableName: row.tableName,
     tableColor: row.tableColor,
+    avatarUrl: row.avatar_url ?? row.logo_url ?? row.image ?? null,
     eventType: 'neutral' as const,
     coinChange: 0,
     message: `${row.tableName} is ready to compete — missions await!`,
     createdAt: now - i * 1000,
   }))
-}
-
-function resolveTeamAvatarUrl(
-  teamTableId: string,
-  tableAvatars: Record<string, string>,
-  guestEmblems: GuestEmblemsSettingsValue
-): string | null {
-  return (
-    tableAvatars[teamTableId]?.trim() ||
-    guestEmblems.team_emblem_by_table_id?.[teamTableId]?.trim() ||
-    null
-  )
 }
 
 function isUuid(value: unknown): value is string {
@@ -238,6 +236,11 @@ export default function MissionsTablePage({
     [tablePageConfigRaw, tableColor, tableName]
   )
 
+  const leaderboardByTeamId = useMemo(
+    () => new Map(leaderboardRows.map((row) => [row.teamId || row.tableId, row])),
+    [leaderboardRows]
+  )
+
   const displayMomentumFeed = useMemo(() => {
     if (momentumFeed.length > 0) return momentumFeed
     return buildSeedMomentumFromLeaderboard(leaderboardRows)
@@ -329,6 +332,7 @@ export default function MissionsTablePage({
           tableId: row.tableId,
           tableName: row.tableName,
           tableColor: row.tableColor,
+          avatarUrl: row.avatar_url ?? row.logo_url ?? row.image ?? null,
           eventType: 'lead',
           coinChange: 0,
           message: `${row.tableName} took the lead 👑`,
@@ -348,6 +352,7 @@ export default function MissionsTablePage({
               tableId: row.tableId,
               tableName: row.tableName,
               tableColor: row.tableColor,
+              avatarUrl: row.avatar_url ?? row.logo_url ?? row.image ?? null,
               eventType: 'entered',
               coinChange: nextPoints,
               message: `${row.tableName} finally entered the leaderboard 🎉`,
@@ -388,6 +393,7 @@ export default function MissionsTablePage({
           tableId: row.tableId,
           tableName: row.tableName,
           tableColor: row.tableColor,
+          avatarUrl: row.avatar_url ?? row.logo_url ?? row.image ?? null,
           eventType,
           coinChange: delta,
           message,
@@ -960,27 +966,10 @@ export default function MissionsTablePage({
   useEffect(() => {
     if (!leaderboardTableIdsKey) return
     let cancelled = false
-    const tableIds = [
-      ...new Set(
-        leaderboardRows.flatMap((entry) => entry.memberTableIds ?? [entry.teamId])
-      ),
-    ]
     void (async () => {
-      const { data, error } = await supabase
-        .from('tables')
-        .select('id, name, color, page_config')
-        .in('id', tableIds)
-      if (cancelled || error || !data) return
-      const next: Record<string, string> = {}
-      for (const row of data) {
-        const resolved = resolveTeamPageConfig(row.page_config, {
-          tableColor: (row as { color?: string | null }).color ?? null,
-          tableName: row.name as string,
-        })
-        const url = resolved.hero.avatarImage.url?.trim()
-        if (url) next[row.id as string] = url
-      }
-      setTableAvatars(next)
+      const fromTables = await loadTableAvatarUrls()
+      if (cancelled) return
+      setTableAvatars(mergeLeaderboardAvatarsIntoMap(fromTables, leaderboardRows))
     })()
     return () => {
       cancelled = true
@@ -1416,11 +1405,15 @@ export default function MissionsTablePage({
                     className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
                   >
                     {displayMomentumFeed.map((item, idx) => {
-                      const avatarUrl = resolveTeamAvatarUrl(
-                        item.tableId,
-                        tableAvatars,
-                        guestEmblems
-                      )
+                      const leaderboardRow = leaderboardByTeamId.get(item.tableId) ?? null
+                      const avatarUrl =
+                        item.avatarUrl ??
+                        resolveTeamAvatarUrl(
+                          item.tableId,
+                          tableAvatars,
+                          guestEmblems,
+                          leaderboardRow
+                        )
                       return (
                       <div
                         key={item.id}
@@ -1436,16 +1429,13 @@ export default function MissionsTablePage({
                       >
                         <div className="flex items-start justify-between gap-3">
                           <span className="inline-flex min-w-0 items-center gap-2.5">
-                            {avatarUrl ? (
-                              <span className="inline-flex h-9 w-9 shrink-0 overflow-hidden rounded-full border-2 border-white/35">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={avatarUrl}
-                                  alt=""
-                                  className="h-full w-full object-cover"
-                                />
-                              </span>
-                            ) : null}
+                            <TeamAvatar
+                              name={item.tableName}
+                              avatarUrl={avatarUrl}
+                              tableColor={item.tableColor}
+                              size="lg"
+                              className="border-2 border-white/35"
+                            />
                             {item.activityTitle ? (
                               <span className="text-sm font-medium leading-snug text-white">
                                 <span className="font-bold">{item.tableName}</span>

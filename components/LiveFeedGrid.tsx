@@ -1,7 +1,9 @@
 'use client'
 
 import { useLayoutEffect, useMemo, useRef } from 'react'
+import { TeamAvatar } from '@/components/guest/TeamAvatar'
 import type { GuestMissionFeedItem } from '@/lib/guest-mission-feed'
+import { resolveTeamAvatarUrl } from '@/lib/table-avatar-url'
 
 const TILE_GAP = 'gap-2'
 const RAIL_GAP = 'gap-4'
@@ -161,32 +163,6 @@ function AdviceCardText({ text }: { text: string }) {
   )
 }
 
-function AdviceTeamAvatar({
-  avatarUrl,
-  tableColor,
-}: {
-  avatarUrl: string | null
-  tableColor: string | null
-}) {
-  const url = avatarUrl?.trim()
-  const bg = tableColor?.trim() && /^#?[0-9a-fA-F]{3,6}$/.test(tableColor.trim())
-    ? tableColor.trim().startsWith('#')
-      ? tableColor.trim()
-      : `#${tableColor.trim()}`
-    : '#52525b'
-
-  return (
-    <span className="inline-flex h-8 w-8 shrink-0 overflow-hidden rounded-full border-2 border-white/40 bg-white/15">
-      {url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" className="h-full w-full object-cover" />
-      ) : (
-        <span className="block h-full w-full" style={{ backgroundColor: bg }} aria-hidden />
-      )}
-    </span>
-  )
-}
-
 function AdviceCard({
   item,
   onOpen,
@@ -208,7 +184,12 @@ function AdviceCard({
       style={{ background: teamGradientFromColor(item.tableColor) }}
     >
       <div className="absolute top-3 right-3 z-10">
-        <AdviceTeamAvatar avatarUrl={avatarUrl} tableColor={item.tableColor} />
+        <TeamAvatar
+          name={item.tableName}
+          avatarUrl={avatarUrl}
+          tableColor={item.tableColor}
+          size="lg"
+        />
       </div>
       <div className="relative flex min-h-0 flex-1 flex-col px-3 pb-3 pt-3">
         <div
@@ -353,9 +334,7 @@ export function LiveFeedGrid({
   const { panels } = useLiveFeedPanels(items)
 
   const resolveAvatarForAdvice = (tableId: string) =>
-    tableAvatars[tableId]?.trim() ||
-    guestEmblems.team_emblem_by_table_id?.[tableId]?.trim() ||
-    null
+    resolveTeamAvatarUrl(tableId, tableAvatars, guestEmblems)
 
   return (
     <div
