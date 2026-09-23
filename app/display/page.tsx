@@ -9,6 +9,7 @@ import { DisplayFullscreenButton } from '@/components/display/DisplayFullscreenB
 import { GreetingSpeechBubble } from '@/components/display/GreetingSpeechBubble'
 import { LeaderboardSidebar } from '@/components/display/LeaderboardSidebar'
 import { MomentumFeed, useMomentumFeed } from '@/components/display/MomentumFeed'
+import { PresenterSlide } from '@/components/display/PresenterSlide'
 import { SpeechOverlay } from '@/components/display/SpeechOverlay'
 import {
   fetchDisplayTeamVisuals,
@@ -26,12 +27,20 @@ import {
 } from '@/lib/guest-emblem-config'
 import {
   DISPLAY_ACTIVE_OVERLAY_KEY,
+  DISPLAY_ACTIVE_SLIDE_ID_KEY,
   DISPLAY_ANNOUNCEMENT_TEXT_KEY,
   fetchDisplayOverlayState,
+  parseActiveSlideId,
   parseAnnouncementText,
   parseDisplayOverlayMode,
   type DisplayOverlayMode,
 } from '@/lib/display-settings'
+import {
+  fetchDisplaySlideById,
+  isDisplaySlideId,
+  normalizeDisplaySlideRow,
+  type DisplaySlideRow,
+} from '@/lib/display-slides'
 import type { LeaderboardEntry, RecentActivityItem, TableNameLookup } from '@/lib/leaderboard'
 import { leaderboardEntryTeamKey } from '@/lib/leaderboard'
 import { supabase } from '@/lib/supabase/client'
@@ -171,6 +180,9 @@ export default function DisplayPage() {
   const [rankEmblems, setRankEmblems] = useState<GuestEmblemsSettingsValue>({})
   const [activeOverlay, setActiveOverlay] = useState<DisplayOverlayMode>('leaderboard')
   const [announcementText, setAnnouncementText] = useState('')
+  const [activeSlideId, setActiveSlideId] = useState<string | null>(null)
+  const [activeSlide, setActiveSlide] = useState<DisplaySlideRow | null>(null)
+  const activeSlideIdRef = useRef<string | null>(null)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const mainCanvasRef = useRef<HTMLDivElement>(null)
@@ -385,6 +397,28 @@ export default function DisplayPage() {
   }, [bumpRotationTimer, touchMaxSeenCreatedAt])
 
   useEffect(() => {
+    activeSlideIdRef.current = activeSlideId
+  }, [activeSlideId])
+
+  const loadActiveSlide = useCallback(async (slideId: string | null) => {
+    activeSlideIdRef.current = slideId
+    if (!slideId) {
+      setActiveSlide(null)
+      return
+    }
+
+    try {
+      const slide = await fetchDisplaySlideById(slideId)
+      if (activeSlideIdRef.current !== slideId) return
+      setActiveSlide(slide)
+    } catch {
+      if (activeSlideIdRef.current === slideId) {
+        setActiveSlide(null)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     void loadGreetings()
   }, [loadGreetings])
 
@@ -396,6 +430,12 @@ export default function DisplayPage() {
         if (!cancelled) {
           setActiveOverlay(state.mode)
           setAnnouncementText(state.announcementText)
+          setActiveSlideId(state.activeSlideId)
+          if (state.mode === 'slide' && state.activeSlideId) {
+            await loadActiveSlide(state.activeSlideId)
+          } else {
+            setActiveSlide(null)
+          }
         }
       } catch {
         /* table may not be migrated yet */
@@ -404,7 +444,7 @@ export default function DisplayPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [loadActiveSlide])
 
   useEffect(() => {
     let cancelled = false
@@ -416,9 +456,27 @@ export default function DisplayPage() {
       const key = typeof row.key === 'string' ? row.key : null
       if (!key) return
       if (key === DISPLAY_ACTIVE_OVERLAY_KEY) {
-        setActiveOverlay(parseDisplayOverlayMode(row.value))
+        const mode = parseDisplayOverlayMode(row.value)
+        setActiveOverlay(mode)
+        if (mode === 'slide' && isDisplaySlideId(row.value)) {
+          const slideId = row.value.trim()
+          setActiveSlideId(slideId)
+          void loadActiveSlide(slideId)
+        } else if (mode !== 'slide') {
+          setActiveSlideId(null)
+          setActiveSlide(null)
+        }
       } else if (key === DISPLAY_ANNOUNCEMENT_TEXT_KEY) {
         setAnnouncementText(parseAnnouncementText(row.value))
+      } else if (key === DISPLAY_ACTIVE_SLIDE_ID_KEY) {
+        const slideId = parseActiveSlideId(row.value)
+        setActiveSlideId(slideId)
+        if (slideId) {
+          setActiveOverlay('slide')
+          void loadActiveSlide(slideId)
+        } else {
+          setActiveSlide(null)
+        }
       }
     }
 
@@ -447,6 +505,61 @@ export default function DisplayPage() {
     }
 
     attachOverlayChannel()
+
+    return () => {
+      cancelled = true
+      if (resubscribeTimer) window.clearTimeout(resubscribeTimer)
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [loadActiveSlide])
+
+  useEffect(() => {
+    let cancelled = false
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let resubscribeTimer: number | null = null
+
+    const applySlideRow = (row: Record<string, unknown> | null | undefined) => {
+      if (!row) return
+      const slide = normalizeDisplaySlideRow(row)
+      if (!slide) return
+      if (activeSlideIdRef.current === slide.id) {
+        setActiveSlide(slide)
+      }
+    }
+
+    const attachSlidesChannel = () => {
+      if (cancelled) return
+
+      channel = supabase
+        .channel('display-slides-live')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'display_slides' },
+          (payload) => {
+            if (payload.eventType === 'DELETE') {
+              const oldRow = payload.old as Record<string, unknown>
+              const deletedId = typeof oldRow.id === 'string' ? oldRow.id : null
+              if (deletedId && activeSlideIdRef.current === deletedId) {
+                setActiveSlide(null)
+              }
+              return
+            }
+            applySlideRow(payload.new as Record<string, unknown>)
+          }
+        )
+        .subscribe((status) => {
+          if (cancelled) return
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            if (channel) {
+              supabase.removeChannel(channel)
+              channel = null
+            }
+            resubscribeTimer = window.setTimeout(attachSlidesChannel, 2_000)
+          }
+        })
+    }
+
+    attachSlidesChannel()
 
     return () => {
       cancelled = true
@@ -830,6 +943,26 @@ export default function DisplayPage() {
       <>
         <DisplayFullscreenButton />
         <AnnouncementOverlay text={announcementText} />
+      </>
+    )
+  }
+
+  if (activeOverlay === 'slide') {
+    if (!activeSlide) {
+      return (
+        <>
+          <DisplayFullscreenButton />
+          <div className="flex h-screen w-screen items-center justify-center bg-zinc-950">
+            <span className="text-zinc-500">Loading slide…</span>
+          </div>
+        </>
+      )
+    }
+
+    return (
+      <>
+        <DisplayFullscreenButton />
+        <PresenterSlide slide={activeSlide} />
       </>
     )
   }

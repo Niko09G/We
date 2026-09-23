@@ -28,5 +28,6 @@ create policy "Allow anon update display_settings"
 insert into public.display_settings (key, value)
 values
   ('active_overlay', to_jsonb('leaderboard'::text)),
-  ('announcement_text', to_jsonb(''::text))
+  ('announcement_text', to_jsonb(''::text)),
+  ('active_slide_id', to_jsonb(''::text))
 on conflict (key) do nothing;

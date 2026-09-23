@@ -1,8 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { SlideBuilderSection } from '@/app/admin/display-control/_components/SlideBuilderSection'
+import { AdminSegmentedControl } from '@/app/admin/_components/AdminSegmentedControl'
 import {
   displayOverlayLabel,
   fetchDisplayOverlayState,
@@ -10,7 +12,10 @@ import {
   setDisplayOverlayMode,
   type DisplayOverlayMode,
 } from '@/lib/display-settings'
+import { fetchDisplaySlideById } from '@/lib/display-slides'
 import { supabase } from '@/lib/supabase/client'
+
+type AdminTab = 'modes' | 'slides'
 
 type ModeCard = {
   mode: DisplayOverlayMode
@@ -41,7 +46,10 @@ const MODE_CARDS: ModeCard[] = [
 ]
 
 export default function DisplayControlPage() {
+  const [tab, setTab] = useState<AdminTab>('modes')
   const [activeMode, setActiveMode] = useState<DisplayOverlayMode>('leaderboard')
+  const [activeSlideId, setActiveSlideId] = useState<string | null>(null)
+  const [activeSlideTitle, setActiveSlideTitle] = useState<string | null>(null)
   const [announcementDraft, setAnnouncementDraft] = useState('')
   const [liveAnnouncementText, setLiveAnnouncementText] = useState('')
   const [loading, setLoading] = useState(true)
@@ -54,8 +62,16 @@ export default function DisplayControlPage() {
     try {
       const state = await fetchDisplayOverlayState()
       setActiveMode(state.mode)
+      setActiveSlideId(state.activeSlideId)
       setLiveAnnouncementText(state.announcementText)
       setAnnouncementDraft(state.announcementText)
+
+      if (state.mode === 'slide' && state.activeSlideId) {
+        const slide = await fetchDisplaySlideById(state.activeSlideId)
+        setActiveSlideTitle(slide?.title ?? null)
+      } else {
+        setActiveSlideTitle(null)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load display state.')
     } finally {
@@ -110,6 +126,11 @@ export default function DisplayControlPage() {
     return () => window.clearTimeout(t)
   }, [success])
 
+  const liveLabel = useMemo(
+    () => displayOverlayLabel(activeMode, activeSlideTitle),
+    [activeMode, activeSlideTitle]
+  )
+
   async function activateMode(mode: DisplayOverlayMode) {
     setPendingMode(mode)
     setError(null)
@@ -122,7 +143,12 @@ export default function DisplayControlPage() {
         await setDisplayOverlayMode(mode)
       }
       setActiveMode(mode)
+      if (mode !== 'slide') {
+        setActiveSlideId(null)
+        setActiveSlideTitle(null)
+      }
       setSuccess(`${displayOverlayLabel(mode)} is now live on the big screen.`)
+      await loadState()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update display.')
     } finally {
@@ -147,6 +173,18 @@ export default function DisplayControlPage() {
         </p>
       </div>
 
+      <AdminSegmentedControl
+        options={[
+          { value: 'modes', label: 'Modes' },
+          { value: 'slides', label: 'Slides / Presenters' },
+        ]}
+        value={tab}
+        onChange={setTab}
+        variant="signature"
+        ariaLabel="Display control sections"
+        className="mb-5"
+      />
+
       <div
         className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3"
         role="status"
@@ -156,7 +194,7 @@ export default function DisplayControlPage() {
           Live on screen
         </p>
         <p className="mt-1 text-lg font-semibold text-emerald-950">
-          {loading ? 'Loading…' : displayOverlayLabel(activeMode)}
+          {loading ? 'Loading…' : liveLabel}
         </p>
         {activeMode === 'announcement' && liveAnnouncementText.trim() ? (
           <p className="mt-2 text-sm text-emerald-800/90">&ldquo;{liveAnnouncementText.trim()}&rdquo;</p>
@@ -175,59 +213,74 @@ export default function DisplayControlPage() {
         </p>
       ) : null}
 
-      <div className="flex flex-col gap-3">
-        {MODE_CARDS.map((card) => {
-          const isActive = activeMode === card.mode
-          const isPending = pendingMode === card.mode
-          return (
-            <button
-              key={card.mode}
-              type="button"
-              disabled={isPending || loading}
-              onClick={() => void activateMode(card.mode)}
-              className={`rounded-2xl border px-4 py-5 text-left transition active:scale-[0.99] disabled:opacity-60 ${
-                isActive
-                  ? 'border-[#5b38f2] bg-[#5b38f2]/8 shadow-[0_0_0_1px_rgba(91,56,242,0.25)]'
-                  : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50'
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <span className="text-3xl leading-none" aria-hidden>
-                  {card.emoji}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-base font-semibold text-zinc-900">{card.title}</p>
-                    {isActive ? (
-                      <span className="rounded-full bg-[#5b38f2] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                        Live
-                      </span>
-                    ) : null}
+      {tab === 'modes' ? (
+        <>
+          <div className="flex flex-col gap-3">
+            {MODE_CARDS.map((card) => {
+              const isActive = activeMode === card.mode
+              const isPending = pendingMode === card.mode
+              return (
+                <button
+                  key={card.mode}
+                  type="button"
+                  disabled={isPending || loading}
+                  onClick={() => void activateMode(card.mode)}
+                  className={`rounded-2xl border px-4 py-5 text-left transition active:scale-[0.99] disabled:opacity-60 ${
+                    isActive
+                      ? 'border-[#5b38f2] bg-[#5b38f2]/8 shadow-[0_0_0_1px_rgba(91,56,242,0.25)]'
+                      : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="text-3xl leading-none" aria-hidden>
+                      {card.emoji}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-base font-semibold text-zinc-900">{card.title}</p>
+                        {isActive ? (
+                          <span className="rounded-full bg-[#5b38f2] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                            Live
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 text-sm text-zinc-600">{card.description}</p>
+                      {isPending ? (
+                        <p className="mt-2 text-xs font-medium text-[#5b38f2]">Sending…</p>
+                      ) : null}
+                    </div>
                   </div>
-                  <p className="mt-1 text-sm text-zinc-600">{card.description}</p>
-                  {isPending ? (
-                    <p className="mt-2 text-xs font-medium text-[#5b38f2]">Sending…</p>
-                  ) : null}
-                </div>
-              </div>
-            </button>
-          )
-        })}
-      </div>
+                </button>
+              )
+            })}
+          </div>
 
-      <label className="mt-5 block">
-        <span className="text-sm font-medium text-zinc-800">Announcement text</span>
-        <textarea
-          value={announcementDraft}
-          onChange={(e) => setAnnouncementDraft(e.target.value)}
-          rows={3}
-          placeholder="e.g. Cake cutting in 10 minutes!"
-          className="mt-2 w-full rounded-xl border border-zinc-200 bg-white px-3 py-3 text-base text-zinc-900 outline-none transition focus:border-[#5b38f2]"
+          <label className="mt-5 block">
+            <span className="text-sm font-medium text-zinc-800">Announcement text</span>
+            <textarea
+              value={announcementDraft}
+              onChange={(e) => setAnnouncementDraft(e.target.value)}
+              rows={3}
+              placeholder="e.g. Cake cutting in 10 minutes!"
+              className="mt-2 w-full rounded-xl border border-zinc-200 bg-white px-3 py-3 text-base text-zinc-900 outline-none transition focus:border-[#5b38f2]"
+            />
+            <p className="mt-2 text-xs text-zinc-500">
+              Tap the announcement card above to push this message to the display.
+            </p>
+          </label>
+        </>
+      ) : (
+        <SlideBuilderSection
+          activeMode={activeMode}
+          activeSlideId={activeSlideId}
+          onActivated={(message) => {
+            setSuccess(message)
+            setError(null)
+            void loadState()
+          }}
+          onError={setError}
         />
-        <p className="mt-2 text-xs text-zinc-500">
-          Tap the announcement card above to push this message to the display.
-        </p>
-      </label>
+      )}
 
       <Link
         href="/display"
