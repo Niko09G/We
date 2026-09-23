@@ -182,6 +182,7 @@ export default function DisplayPage() {
   const [announcementText, setAnnouncementText] = useState('')
   const [activeSlideId, setActiveSlideId] = useState<string | null>(null)
   const [activeSlide, setActiveSlide] = useState<DisplaySlideRow | null>(null)
+  const [activeSlideLoading, setActiveSlideLoading] = useState(false)
   const activeSlideIdRef = useRef<string | null>(null)
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -404,9 +405,11 @@ export default function DisplayPage() {
     activeSlideIdRef.current = slideId
     if (!slideId) {
       setActiveSlide(null)
+      setActiveSlideLoading(false)
       return
     }
 
+    setActiveSlideLoading(true)
     try {
       const slide = await fetchDisplaySlideById(slideId)
       if (activeSlideIdRef.current !== slideId) return
@@ -414,6 +417,10 @@ export default function DisplayPage() {
     } catch {
       if (activeSlideIdRef.current === slideId) {
         setActiveSlide(null)
+      }
+    } finally {
+      if (activeSlideIdRef.current === slideId) {
+        setActiveSlideLoading(false)
       }
     }
   }, [])
@@ -948,12 +955,26 @@ export default function DisplayPage() {
   }
 
   if (activeOverlay === 'slide') {
-    if (!activeSlide) {
+    if (activeSlideLoading && !activeSlide) {
       return (
         <>
           <DisplayFullscreenButton />
           <div className="flex h-screen w-screen items-center justify-center bg-zinc-950">
             <span className="text-zinc-500">Loading slide…</span>
+          </div>
+        </>
+      )
+    }
+
+    if (!activeSlide) {
+      return (
+        <>
+          <DisplayFullscreenButton />
+          <div className="flex h-screen w-screen flex-col items-center justify-center gap-2 bg-zinc-950 px-8 text-center">
+            <span className="text-zinc-400">Presenter slide unavailable</span>
+            <span className="text-sm text-zinc-600">
+              The slide could not be loaded. Switch modes from the admin display remote.
+            </span>
           </div>
         </>
       )

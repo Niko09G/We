@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-import { uploadPresenterImage } from '@/lib/display-slide-assets'
+import { resolvePresenterImageUrl } from '@/lib/display-slide-assets'
 import {
   createDisplaySlide,
   deleteDisplaySlide,
@@ -220,7 +220,9 @@ export function SlideBuilderSection({
       let image_url = speaker.image_url.trim()
       if (speaker.imageFile) {
         const compressed = await compressAvatarImage(speaker.imageFile)
-        image_url = await uploadPresenterImage(compressed.blob, compressed.contentType)
+        image_url = await resolvePresenterImageUrl(compressed.blob, compressed.contentType)
+      } else if (!image_url && speaker.imagePreview) {
+        image_url = speaker.imagePreview
       }
       resolved.push({
         name: speaker.name.trim(),

@@ -33,8 +33,35 @@ export const SLIDE_BG_PRESETS = [
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+const SLIDE_SELECT =
+  'id, bg_color, eyebrow, title, speakers, created_at, updated_at' as const
+const SLIDE_SELECT_NO_UPDATED =
+  'id, bg_color, eyebrow, title, speakers, created_at' as const
+
 export function isDisplaySlideId(value: unknown): value is string {
   return typeof value === 'string' && UUID_RE.test(value.trim())
+}
+
+function isMissingUpdatedAtColumn(message: string): boolean {
+  const m = message.toLowerCase()
+  return (
+    m.includes('updated_at') &&
+    (m.includes('schema cache') ||
+      m.includes('could not find') ||
+      m.includes('does not exist') ||
+      m.includes('column'))
+  )
+}
+
+function isMissingCreatedAtColumn(message: string): boolean {
+  const m = message.toLowerCase()
+  return (
+    m.includes('created_at') &&
+    (m.includes('schema cache') ||
+      m.includes('could not find') ||
+      m.includes('does not exist') ||
+      m.includes('column'))
+  )
 }
 
 function parseSpeakers(value: unknown): DisplaySlideSpeaker[] {
@@ -55,6 +82,9 @@ export function normalizeDisplaySlideRow(row: Record<string, unknown>): DisplayS
   const id = typeof row.id === 'string' ? row.id : null
   if (!id) return null
 
+  const createdAt =
+    typeof row.created_at === 'string' ? row.created_at : new Date().toISOString()
+
   return {
     id,
     bg_color:
@@ -64,53 +94,103 @@ export function normalizeDisplaySlideRow(row: Record<string, unknown>): DisplayS
     eyebrow: typeof row.eyebrow === 'string' ? row.eyebrow : '',
     title: typeof row.title === 'string' ? row.title : '',
     speakers: parseSpeakers(row.speakers),
-    created_at: typeof row.created_at === 'string' ? row.created_at : new Date().toISOString(),
-    updated_at: typeof row.updated_at === 'string' ? row.updated_at : new Date().toISOString(),
+    created_at: createdAt,
+    updated_at:
+      typeof row.updated_at === 'string' ? row.updated_at : createdAt,
   }
 }
 
-export async function fetchDisplaySlides(): Promise<DisplaySlideRow[]> {
-  const { data, error } = await supabase
-    .from('display_slides')
-    .select('id, bg_color, eyebrow, title, speakers, created_at, updated_at')
-    .order('created_at', { ascending: true })
-
-  if (error) throw new Error(error.message || 'Failed to load display slides.')
-
+function normalizeSlideRows(data: unknown[] | null | undefined): DisplaySlideRow[] {
   return (data ?? [])
     .map((row) => normalizeDisplaySlideRow(row as Record<string, unknown>))
     .filter((row): row is DisplaySlideRow => row !== null)
 }
 
+async function queryDisplaySlides(): Promise<DisplaySlideRow[]> {
+  const primary = await supabase
+    .from('display_slides')
+    .select(SLIDE_SELECT)
+    .order('created_at', { ascending: false })
+
+  if (!primary.error) return normalizeSlideRows(primary.data)
+
+  if (isMissingUpdatedAtColumn(primary.error.message)) {
+    const withoutUpdated = await supabase
+      .from('display_slides')
+      .select(SLIDE_SELECT_NO_UPDATED)
+      .order('created_at', { ascending: false })
+    if (!withoutUpdated.error) return normalizeSlideRows(withoutUpdated.data)
+  }
+
+  if (isMissingCreatedAtColumn(primary.error.message)) {
+    const unordered = await supabase.from('display_slides').select(SLIDE_SELECT_NO_UPDATED)
+    if (!unordered.error) return normalizeSlideRows(unordered.data)
+  }
+
+  throw new Error(primary.error.message || 'Failed to load display slides.')
+}
+
+async function queryDisplaySlideById(id: string): Promise<DisplaySlideRow | null> {
+  const primary = await supabase
+    .from('display_slides')
+    .select(SLIDE_SELECT)
+    .eq('id', id)
+    .maybeSingle()
+
+  if (!primary.error) {
+    if (!primary.data) return null
+    return normalizeDisplaySlideRow(primary.data as Record<string, unknown>)
+  }
+
+  if (isMissingUpdatedAtColumn(primary.error.message)) {
+    const fallback = await supabase
+      .from('display_slides')
+      .select(SLIDE_SELECT_NO_UPDATED)
+      .eq('id', id)
+      .maybeSingle()
+    if (!fallback.error) {
+      if (!fallback.data) return null
+      return normalizeDisplaySlideRow(fallback.data as Record<string, unknown>)
+    }
+  }
+
+  throw new Error(primary.error.message || 'Failed to load display slide.')
+}
+
+export async function fetchDisplaySlides(): Promise<DisplaySlideRow[]> {
+  return queryDisplaySlides()
+}
+
 export async function fetchDisplaySlideById(id: string): Promise<DisplaySlideRow | null> {
   const trimmed = id.trim()
   if (!trimmed) return null
-
-  const { data, error } = await supabase
-    .from('display_slides')
-    .select('id, bg_color, eyebrow, title, speakers, created_at, updated_at')
-    .eq('id', trimmed)
-    .maybeSingle()
-
-  if (error) throw new Error(error.message || 'Failed to load display slide.')
-  if (!data) return null
-  return normalizeDisplaySlideRow(data as Record<string, unknown>)
+  return queryDisplaySlideById(trimmed)
 }
 
 export async function createDisplaySlide(input: DisplaySlideInput): Promise<DisplaySlideRow> {
-  const { data, error } = await supabase
+  const payload = {
+    bg_color: input.bg_color.trim() || SLIDE_BG_PRESETS[0].color,
+    eyebrow: input.eyebrow.trim(),
+    title: input.title.trim(),
+    speakers: input.speakers,
+  }
+
+  let result = await supabase
     .from('display_slides')
-    .insert({
-      bg_color: input.bg_color.trim() || SLIDE_BG_PRESETS[0].color,
-      eyebrow: input.eyebrow.trim(),
-      title: input.title.trim(),
-      speakers: input.speakers,
-    })
-    .select('id, bg_color, eyebrow, title, speakers, created_at, updated_at')
+    .insert(payload)
+    .select(SLIDE_SELECT)
     .single()
 
-  if (error) throw new Error(error.message || 'Failed to create slide.')
-  const row = normalizeDisplaySlideRow(data as Record<string, unknown>)
+  if (result.error && isMissingUpdatedAtColumn(result.error.message)) {
+    result = await supabase
+      .from('display_slides')
+      .insert(payload)
+      .select(SLIDE_SELECT_NO_UPDATED)
+      .single()
+  }
+
+  if (result.error) throw new Error(result.error.message || 'Failed to create slide.')
+  const row = normalizeDisplaySlideRow(result.data as Record<string, unknown>)
   if (!row) throw new Error('Failed to parse created slide.')
   return row
 }
@@ -119,21 +199,33 @@ export async function updateDisplaySlide(
   id: string,
   input: DisplaySlideInput
 ): Promise<DisplaySlideRow> {
-  const { data, error } = await supabase
+  const payload = {
+    bg_color: input.bg_color.trim() || SLIDE_BG_PRESETS[0].color,
+    eyebrow: input.eyebrow.trim(),
+    title: input.title.trim(),
+    speakers: input.speakers,
+    updated_at: new Date().toISOString(),
+  }
+
+  let result = await supabase
     .from('display_slides')
-    .update({
-      bg_color: input.bg_color.trim() || SLIDE_BG_PRESETS[0].color,
-      eyebrow: input.eyebrow.trim(),
-      title: input.title.trim(),
-      speakers: input.speakers,
-      updated_at: new Date().toISOString(),
-    })
+    .update(payload)
     .eq('id', id)
-    .select('id, bg_color, eyebrow, title, speakers, created_at, updated_at')
+    .select(SLIDE_SELECT)
     .single()
 
-  if (error) throw new Error(error.message || 'Failed to update slide.')
-  const row = normalizeDisplaySlideRow(data as Record<string, unknown>)
+  if (result.error && isMissingUpdatedAtColumn(result.error.message)) {
+    const { updated_at: _ignored, ...payloadWithoutUpdated } = payload
+    result = await supabase
+      .from('display_slides')
+      .update(payloadWithoutUpdated)
+      .eq('id', id)
+      .select(SLIDE_SELECT_NO_UPDATED)
+      .single()
+  }
+
+  if (result.error) throw new Error(result.error.message || 'Failed to update slide.')
+  const row = normalizeDisplaySlideRow(result.data as Record<string, unknown>)
   if (!row) throw new Error('Failed to parse updated slide.')
   return row
 }
