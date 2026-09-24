@@ -8,6 +8,7 @@ import {
   createDisplaySlide,
   deleteDisplaySlide,
   fetchDisplaySlides,
+  normalizeDisplaySlideRow,
   SLIDE_BG_PRESETS,
   updateDisplaySlide,
   type DisplaySlideRow,
@@ -126,23 +127,93 @@ export function SlideBuilderSection({
   useEffect(() => {
     let cancelled = false
     let channel: ReturnType<typeof supabase.channel> | null = null
+    let resubscribeTimer: number | null = null
 
-    channel = supabase
-      .channel('display-control-slides')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'display_slides' },
-        () => {
-          if (!cancelled) void loadSlides()
-        }
-      )
-      .subscribe()
+    const applySlidePayload = (payload: {
+      eventType: string
+      new: Record<string, unknown>
+      old: Record<string, unknown>
+    }) => {
+      if (cancelled) return
+
+      if (payload.eventType === 'DELETE') {
+        const deletedId =
+          typeof payload.old.id === 'string' ? payload.old.id : null
+        if (!deletedId) return
+        setSlides((prev) => prev.filter((slide) => slide.id !== deletedId))
+        return
+      }
+
+      const slide = normalizeDisplaySlideRow(payload.new)
+      if (!slide) return
+
+      setSlides((prev) => {
+        const index = prev.findIndex((row) => row.id === slide.id)
+        if (index === -1) return [slide, ...prev]
+        const next = [...prev]
+        next[index] = slide
+        return next
+      })
+    }
+
+    const attach = () => {
+      if (cancelled) return
+
+      channel = supabase
+        .channel('display-control-slides')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'display_slides' },
+          (payload) => {
+            applySlidePayload({
+              eventType: 'INSERT',
+              new: payload.new as Record<string, unknown>,
+              old: {},
+            })
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'display_slides' },
+          (payload) => {
+            applySlidePayload({
+              eventType: 'UPDATE',
+              new: payload.new as Record<string, unknown>,
+              old: {},
+            })
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'display_slides' },
+          (payload) => {
+            applySlidePayload({
+              eventType: 'DELETE',
+              new: {},
+              old: payload.old as Record<string, unknown>,
+            })
+          }
+        )
+        .subscribe((status) => {
+          if (cancelled) return
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            if (channel) {
+              supabase.removeChannel(channel)
+              channel = null
+            }
+            resubscribeTimer = window.setTimeout(attach, 2_000)
+          }
+        })
+    }
+
+    attach()
 
     return () => {
       cancelled = true
+      if (resubscribeTimer) window.clearTimeout(resubscribeTimer)
       if (channel) supabase.removeChannel(channel)
     }
-  }, [loadSlides])
+  }, [])
 
   function resetForm(next?: SlideFormState) {
     for (const speaker of form.speakers) {

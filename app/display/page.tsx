@@ -48,7 +48,8 @@ import { supabase } from '@/lib/supabase/client'
 const DISPLAY_GRID_CLASS = 'grid h-screen w-screen grid-cols-[8.6fr_3.4fr] gap-6 bg-zinc-950 p-6'
 
 const GREETING_ROTATE_MS = 10_000
-const FALLBACK_POLL_MS = 5_000
+const FALLBACK_POLL_MS = 15_000
+const LIVE_REFRESH_DEBOUNCE_MS = 800
 const FALLBACK_GREETING_LIMIT = 5
 const RECENT_FETCH_LIMIT = 8
 
@@ -197,6 +198,7 @@ export default function DisplayPage() {
   const teamCardRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const animClearRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const maxSeenCreatedAtRef = useRef<string | null>(null)
+  const liveRefreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const feedItems = useMomentumFeed(recentActivity, tableNames)
 
@@ -494,7 +496,36 @@ export default function DisplayPage() {
         .channel('display-overlay-settings')
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'display_settings' },
+          {
+            event: '*',
+            schema: 'public',
+            table: 'display_settings',
+            filter: `key=eq.${DISPLAY_ACTIVE_OVERLAY_KEY}`,
+          },
+          (payload) => {
+            applyDisplaySettingsRow(payload.new as Record<string, unknown>)
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'display_settings',
+            filter: `key=eq.${DISPLAY_ANNOUNCEMENT_TEXT_KEY}`,
+          },
+          (payload) => {
+            applyDisplaySettingsRow(payload.new as Record<string, unknown>)
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'display_settings',
+            filter: `key=eq.${DISPLAY_ACTIVE_SLIDE_ID_KEY}`,
+          },
           (payload) => {
             applyDisplaySettingsRow(payload.new as Record<string, unknown>)
           }
@@ -521,6 +552,8 @@ export default function DisplayPage() {
   }, [loadActiveSlide])
 
   useEffect(() => {
+    if (!activeSlideId) return
+
     let cancelled = false
     let channel: ReturnType<typeof supabase.channel> | null = null
     let resubscribeTimer: number | null = null
@@ -538,10 +571,15 @@ export default function DisplayPage() {
       if (cancelled) return
 
       channel = supabase
-        .channel('display-slides-live')
+        .channel(`display-slides-live:${activeSlideId}`)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'display_slides' },
+          {
+            event: '*',
+            schema: 'public',
+            table: 'display_slides',
+            filter: `id=eq.${activeSlideId}`,
+          },
           (payload) => {
             if (payload.eventType === 'DELETE') {
               const oldRow = payload.old as Record<string, unknown>
@@ -573,7 +611,7 @@ export default function DisplayPage() {
       if (resubscribeTimer) window.clearTimeout(resubscribeTimer)
       if (channel) supabase.removeChannel(channel)
     }
-  }, [])
+  }, [activeSlideId])
 
   useEffect(() => {
     unseenQueueRef.current = unseenQueue
@@ -750,6 +788,16 @@ export default function DisplayPage() {
     }
   }, [applyLiveBundle])
 
+  const scheduleRefreshLiveData = useCallback(() => {
+    if (liveRefreshDebounceRef.current) {
+      clearTimeout(liveRefreshDebounceRef.current)
+    }
+    liveRefreshDebounceRef.current = setTimeout(() => {
+      liveRefreshDebounceRef.current = null
+      void refreshLiveData()
+    }, LIVE_REFRESH_DEBOUNCE_MS)
+  }, [refreshLiveData])
+
   const pollDisplayFallback = useCallback(async () => {
     try {
       const rows = await fetchDisplayGreetingsSince(
@@ -772,6 +820,7 @@ export default function DisplayPage() {
 
   useEffect(() => {
     const id = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
       void pollDisplayFallback()
     }, FALLBACK_POLL_MS)
     return () => window.clearInterval(id)
@@ -789,9 +838,28 @@ export default function DisplayPage() {
         .channel('display-realtime')
         .on(
           'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'greetings' },
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'greetings',
+            filter: 'status=eq.ready',
+          },
           (payload) => {
-            console.log('Realtime greeting received:', payload)
+            const row = greetingFromRealtimeRow(
+              payload.new as Record<string, unknown>
+            )
+            if (row) enqueueUnseenGreeting(row)
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'greetings',
+            filter: 'status=eq.ready',
+          },
+          (payload) => {
             const row = greetingFromRealtimeRow(
               payload.new as Record<string, unknown>
             )
@@ -802,14 +870,6 @@ export default function DisplayPage() {
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'greetings' },
           (payload) => {
-            const row = greetingFromRealtimeRow(
-              payload.new as Record<string, unknown>
-            )
-            if (row) {
-              enqueueUnseenGreeting(row)
-              return
-            }
-
             const updatedId =
               typeof (payload.new as { id?: unknown }).id === 'string'
                 ? (payload.new as { id: string }).id
@@ -838,34 +898,64 @@ export default function DisplayPage() {
         )
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'tables' },
+          { event: 'INSERT', schema: 'public', table: 'tables' },
           () => {
-            void refreshLiveData()
+            scheduleRefreshLiveData()
           }
         )
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'teams' },
+          { event: 'UPDATE', schema: 'public', table: 'tables' },
           () => {
-            void refreshLiveData()
+            scheduleRefreshLiveData()
           }
         )
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'completions' },
+          { event: 'INSERT', schema: 'public', table: 'teams' },
           () => {
-            void refreshLiveData()
+            scheduleRefreshLiveData()
           }
         )
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'mission_submissions' },
+          { event: 'UPDATE', schema: 'public', table: 'teams' },
           () => {
-            void refreshLiveData()
+            scheduleRefreshLiveData()
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'completions' },
+          () => {
+            scheduleRefreshLiveData()
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'mission_submissions',
+            filter: 'status=eq.approved',
+          },
+          () => {
+            scheduleRefreshLiveData()
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'mission_submissions',
+            filter: 'status=eq.approved',
+          },
+          () => {
+            scheduleRefreshLiveData()
           }
         )
         .subscribe((status) => {
-          console.log('Realtime status:', status)
           if (cancelled) return
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
             if (channel) {
@@ -881,10 +971,14 @@ export default function DisplayPage() {
 
     return () => {
       cancelled = true
+      if (liveRefreshDebounceRef.current) {
+        clearTimeout(liveRefreshDebounceRef.current)
+        liveRefreshDebounceRef.current = null
+      }
       if (resubscribeTimer) window.clearTimeout(resubscribeTimer)
       if (channel) supabase.removeChannel(channel)
     }
-  }, [enqueueUnseenGreeting, removeGreetingFromQueues, refreshLiveData])
+  }, [enqueueUnseenGreeting, removeGreetingFromQueues, scheduleRefreshLiveData])
 
   const leaderboardTableIdsKey = useMemo(() => {
     const ids = new Set<string>()

@@ -6,13 +6,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SlideBuilderSection } from '@/app/admin/display-control/_components/SlideBuilderSection'
 import { AdminSegmentedControl } from '@/app/admin/_components/AdminSegmentedControl'
 import {
+  DISPLAY_ACTIVE_OVERLAY_KEY,
+  DISPLAY_ACTIVE_SLIDE_ID_KEY,
+  DISPLAY_ANNOUNCEMENT_TEXT_KEY,
   displayOverlayLabel,
   fetchDisplayOverlayState,
+  parseActiveSlideId,
+  parseAnnouncementText,
+  parseDisplayOverlayMode,
   setDisplayAnnouncementMode,
   setDisplayOverlayMode,
   type DisplayOverlayMode,
 } from '@/lib/display-settings'
-import { fetchDisplaySlideById } from '@/lib/display-slides'
+import { fetchDisplaySlideById, isDisplaySlideId } from '@/lib/display-slides'
 import { supabase } from '@/lib/supabase/client'
 
 type AdminTab = 'modes' | 'slides'
@@ -88,15 +94,80 @@ export default function DisplayControlPage() {
     let channel: ReturnType<typeof supabase.channel> | null = null
     let resubscribeTimer: number | null = null
 
+    const applySettingsRow = (row: Record<string, unknown> | null | undefined) => {
+      if (!row) return
+      const key = typeof row.key === 'string' ? row.key : null
+      if (!key) return
+
+      if (key === DISPLAY_ACTIVE_OVERLAY_KEY) {
+        const mode = parseDisplayOverlayMode(row.value)
+        setActiveMode(mode)
+        if (mode === 'slide' && isDisplaySlideId(row.value)) {
+          const slideId = row.value.trim()
+          setActiveSlideId(slideId)
+          void fetchDisplaySlideById(slideId).then((slide) => {
+            if (!cancelled) setActiveSlideTitle(slide?.title ?? null)
+          })
+        } else if (mode !== 'slide') {
+          setActiveSlideId(null)
+          setActiveSlideTitle(null)
+        }
+      } else if (key === DISPLAY_ANNOUNCEMENT_TEXT_KEY) {
+        const text = parseAnnouncementText(row.value)
+        setLiveAnnouncementText(text)
+        setAnnouncementDraft(text)
+      } else if (key === DISPLAY_ACTIVE_SLIDE_ID_KEY) {
+        const slideId = parseActiveSlideId(row.value)
+        setActiveSlideId(slideId)
+        if (slideId) {
+          setActiveMode('slide')
+          void fetchDisplaySlideById(slideId).then((slide) => {
+            if (!cancelled) setActiveSlideTitle(slide?.title ?? null)
+          })
+        } else {
+          setActiveSlideTitle(null)
+        }
+      }
+    }
+
     const attach = () => {
       if (cancelled) return
       channel = supabase
         .channel('display-control-settings')
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'display_settings' },
-          () => {
-            void loadState()
+          {
+            event: '*',
+            schema: 'public',
+            table: 'display_settings',
+            filter: `key=eq.${DISPLAY_ACTIVE_OVERLAY_KEY}`,
+          },
+          (payload) => {
+            applySettingsRow(payload.new as Record<string, unknown>)
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'display_settings',
+            filter: `key=eq.${DISPLAY_ANNOUNCEMENT_TEXT_KEY}`,
+          },
+          (payload) => {
+            applySettingsRow(payload.new as Record<string, unknown>)
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'display_settings',
+            filter: `key=eq.${DISPLAY_ACTIVE_SLIDE_ID_KEY}`,
+          },
+          (payload) => {
+            applySettingsRow(payload.new as Record<string, unknown>)
           }
         )
         .subscribe((status) => {
@@ -118,7 +189,7 @@ export default function DisplayControlPage() {
       if (resubscribeTimer) window.clearTimeout(resubscribeTimer)
       if (channel) supabase.removeChannel(channel)
     }
-  }, [loadState])
+  }, [])
 
   useEffect(() => {
     if (!success) return
