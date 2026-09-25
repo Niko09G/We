@@ -482,20 +482,12 @@ export default function ClaimBeatcoinClient({ token }: { token: string }) {
               ) : null}
             </div>
 
-            <div className="mt-8 flex flex-col gap-3">
-              <Link
-                href="/display"
-                className="w-full rounded-2xl bg-violet-600 py-3.5 text-center text-sm font-semibold text-white"
-              >
-                View Leaderboard
-              </Link>
-              <Link
-                href={activeTableId ? `/missions/${activeTableId}` : '/missions'}
-                className="w-full rounded-2xl border border-zinc-200 bg-white py-3.5 text-center text-sm font-semibold text-slate-900"
-              >
-                Go to Missions
-              </Link>
-            </div>
+            <Link
+              href={activeTableId ? `/missions/${activeTableId}` : '/missions'}
+              className="mt-8 block w-full rounded-xl bg-purple-600 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-purple-700"
+            >
+              Back to Missions
+            </Link>
           </div>
         ) : null}
       </div>

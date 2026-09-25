@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { useScrollSpy, type ScrollSpySection } from '@/hooks/useScrollSpy'
 
 export type StickySectionNavItem = {
@@ -35,6 +36,7 @@ export function StickySectionNav({
   const [showLeftFade, setShowLeftFade] = useState(false)
   const [showRightFade, setShowRightFade] = useState(false)
   const [manualActiveSection, setManualActiveSection] = useState<string | null>(null)
+  const pathname = usePathname()
 
   void heroContainerId
 
@@ -100,6 +102,10 @@ export function StickySectionNav({
     return () => clearManualScrollLock()
   }, [])
 
+  useEffect(() => {
+    clearManualScrollLock()
+  }, [pathname])
+
   // Keep prop for future theming wiring; currently active uses fixed gradient.
   void highlightColor
 
@@ -150,7 +156,7 @@ export function StickySectionNav({
   }, [])
 
   const itemClass =
-    'relative z-[3] flex h-14 min-w-[6.25rem] flex-col items-center justify-center gap-1 rounded-full px-2 text-[11px] font-semibold whitespace-nowrap transition-colors duration-100 ease-out'
+    'relative z-[3] flex h-14 min-w-[6.25rem] flex-col items-center justify-center gap-1 rounded-full px-2 text-[11px] font-semibold whitespace-nowrap'
 
   return (
     <div className="overflow-visible">
@@ -194,7 +200,9 @@ export function StickySectionNav({
                   itemRefs.current[item.id] = el
                 }}
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
                   beginManualScroll(item.id)
                   const target = document.getElementById(item.targetId)
                   if (target) {

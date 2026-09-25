@@ -17,7 +17,6 @@ import {
 } from '@/lib/display-team-visuals'
 import {
   fetchDisplayGreetings,
-  fetchDisplayGreetingsSince,
   recordGreetingDisplayed,
   type GreetingRow,
 } from '@/lib/greetings-admin'
@@ -48,9 +47,7 @@ import { supabase } from '@/lib/supabase/client'
 const DISPLAY_GRID_CLASS = 'grid h-screen w-screen grid-cols-[8.6fr_3.4fr] gap-6 bg-zinc-950 p-6'
 
 const GREETING_ROTATE_MS = 10_000
-const FALLBACK_POLL_MS = 15_000
 const LIVE_REFRESH_DEBOUNCE_MS = 800
-const FALLBACK_GREETING_LIMIT = 5
 const RECENT_FETCH_LIMIT = 8
 
 function sortGreetingsNewestFirst(rows: GreetingRow[]): GreetingRow[] {
@@ -497,7 +494,7 @@ export default function DisplayPage() {
         .on(
           'postgres_changes',
           {
-            event: '*',
+            event: 'UPDATE',
             schema: 'public',
             table: 'display_settings',
             filter: `key=eq.${DISPLAY_ACTIVE_OVERLAY_KEY}`,
@@ -509,7 +506,19 @@ export default function DisplayPage() {
         .on(
           'postgres_changes',
           {
-            event: '*',
+            event: 'INSERT',
+            schema: 'public',
+            table: 'display_settings',
+            filter: `key=eq.${DISPLAY_ACTIVE_OVERLAY_KEY}`,
+          },
+          (payload) => {
+            applyDisplaySettingsRow(payload.new as Record<string, unknown>)
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
             schema: 'public',
             table: 'display_settings',
             filter: `key=eq.${DISPLAY_ANNOUNCEMENT_TEXT_KEY}`,
@@ -521,7 +530,31 @@ export default function DisplayPage() {
         .on(
           'postgres_changes',
           {
-            event: '*',
+            event: 'INSERT',
+            schema: 'public',
+            table: 'display_settings',
+            filter: `key=eq.${DISPLAY_ANNOUNCEMENT_TEXT_KEY}`,
+          },
+          (payload) => {
+            applyDisplaySettingsRow(payload.new as Record<string, unknown>)
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'display_settings',
+            filter: `key=eq.${DISPLAY_ACTIVE_SLIDE_ID_KEY}`,
+          },
+          (payload) => {
+            applyDisplaySettingsRow(payload.new as Record<string, unknown>)
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
             schema: 'public',
             table: 'display_settings',
             filter: `key=eq.${DISPLAY_ACTIVE_SLIDE_ID_KEY}`,
@@ -575,21 +608,41 @@ export default function DisplayPage() {
         .on(
           'postgres_changes',
           {
-            event: '*',
+            event: 'UPDATE',
             schema: 'public',
             table: 'display_slides',
             filter: `id=eq.${activeSlideId}`,
           },
           (payload) => {
-            if (payload.eventType === 'DELETE') {
-              const oldRow = payload.old as Record<string, unknown>
-              const deletedId = typeof oldRow.id === 'string' ? oldRow.id : null
-              if (deletedId && activeSlideIdRef.current === deletedId) {
-                setActiveSlide(null)
-              }
-              return
-            }
             applySlideRow(payload.new as Record<string, unknown>)
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'display_slides',
+            filter: `id=eq.${activeSlideId}`,
+          },
+          (payload) => {
+            applySlideRow(payload.new as Record<string, unknown>)
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'DELETE',
+            schema: 'public',
+            table: 'display_slides',
+            filter: `id=eq.${activeSlideId}`,
+          },
+          (payload) => {
+            const oldRow = payload.old as Record<string, unknown>
+            const deletedId = typeof oldRow.id === 'string' ? oldRow.id : null
+            if (deletedId && activeSlideIdRef.current === deletedId) {
+              setActiveSlide(null)
+            }
           }
         )
         .subscribe((status) => {
@@ -798,33 +851,9 @@ export default function DisplayPage() {
     }, LIVE_REFRESH_DEBOUNCE_MS)
   }, [refreshLiveData])
 
-  const pollDisplayFallback = useCallback(async () => {
-    try {
-      const rows = await fetchDisplayGreetingsSince(
-        maxSeenCreatedAtRef.current,
-        FALLBACK_GREETING_LIMIT
-      )
-      for (const row of rows) {
-        enqueueUnseenGreeting(row)
-      }
-    } catch {
-      /* polling safety net — ignore transient errors */
-    }
-
-    void refreshLiveData()
-  }, [enqueueUnseenGreeting, refreshLiveData])
-
   useEffect(() => {
     void refreshLiveData()
   }, [refreshLiveData])
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
-      void pollDisplayFallback()
-    }, FALLBACK_POLL_MS)
-    return () => window.clearInterval(id)
-  }, [pollDisplayFallback])
 
   useEffect(() => {
     let cancelled = false

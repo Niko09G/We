@@ -1,5 +1,6 @@
 'use client'
 
+import { usePathname } from 'next/navigation'
 import {
   StickySectionNav,
   type StickySectionNavItem,
@@ -88,10 +89,13 @@ export function BottomNav({
   items: StickySectionNavItem[]
   highlightColor?: string
 }) {
+  const pathname = usePathname()
+
   return (
     <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-[9999]">
       <div className="pointer-events-auto mx-auto w-full max-w-lg px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <StickySectionNav
+          key={pathname}
           heroContainerId={heroContainerId}
           items={items}
           highlightColor={highlightColor}

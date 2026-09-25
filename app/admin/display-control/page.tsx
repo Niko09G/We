@@ -137,7 +137,7 @@ export default function DisplayControlPage() {
         .on(
           'postgres_changes',
           {
-            event: '*',
+            event: 'UPDATE',
             schema: 'public',
             table: 'display_settings',
             filter: `key=eq.${DISPLAY_ACTIVE_OVERLAY_KEY}`,
@@ -149,7 +149,19 @@ export default function DisplayControlPage() {
         .on(
           'postgres_changes',
           {
-            event: '*',
+            event: 'INSERT',
+            schema: 'public',
+            table: 'display_settings',
+            filter: `key=eq.${DISPLAY_ACTIVE_OVERLAY_KEY}`,
+          },
+          (payload) => {
+            applySettingsRow(payload.new as Record<string, unknown>)
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
             schema: 'public',
             table: 'display_settings',
             filter: `key=eq.${DISPLAY_ANNOUNCEMENT_TEXT_KEY}`,
@@ -161,7 +173,31 @@ export default function DisplayControlPage() {
         .on(
           'postgres_changes',
           {
-            event: '*',
+            event: 'INSERT',
+            schema: 'public',
+            table: 'display_settings',
+            filter: `key=eq.${DISPLAY_ANNOUNCEMENT_TEXT_KEY}`,
+          },
+          (payload) => {
+            applySettingsRow(payload.new as Record<string, unknown>)
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'display_settings',
+            filter: `key=eq.${DISPLAY_ACTIVE_SLIDE_ID_KEY}`,
+          },
+          (payload) => {
+            applySettingsRow(payload.new as Record<string, unknown>)
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
             schema: 'public',
             table: 'display_settings',
             filter: `key=eq.${DISPLAY_ACTIVE_SLIDE_ID_KEY}`,
