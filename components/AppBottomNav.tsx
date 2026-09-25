@@ -20,11 +20,11 @@ export function AppBottomNav() {
   const pathname = usePathname()
 
   if (pathname === '/') {
-    return <BottomNav heroContainerId="section-hero" items={LOBBY_BOTTOM_NAV_ITEMS} />
+    return <BottomNav items={LOBBY_BOTTOM_NAV_ITEMS} />
   }
 
   if (/^\/missions\/[^/]+$/.test(pathname)) {
-    return <BottomNav heroContainerId="section-hero" items={MISSION_BOTTOM_NAV_ITEMS} />
+    return <BottomNav items={MISSION_BOTTOM_NAV_ITEMS} />
   }
 
   return null
