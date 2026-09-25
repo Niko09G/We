@@ -3,8 +3,8 @@
 import { usePathname } from 'next/navigation'
 import {
   BottomNav,
+  getMissionBottomNavItems,
   LOBBY_BOTTOM_NAV_ITEMS,
-  MISSION_BOTTOM_NAV_ITEMS,
 } from '@/components/BottomNav'
 
 function showsGuestBottomNav(pathname: string): boolean {
@@ -23,8 +23,9 @@ export function AppBottomNav() {
     return <BottomNav items={LOBBY_BOTTOM_NAV_ITEMS} />
   }
 
-  if (/^\/missions\/[^/]+$/.test(pathname)) {
-    return <BottomNav items={MISSION_BOTTOM_NAV_ITEMS} />
+  const missionMatch = pathname.match(/^\/missions\/([^/]+)$/)
+  if (missionMatch) {
+    return <BottomNav items={getMissionBottomNavItems(missionMatch[1])} />
   }
 
   return null
