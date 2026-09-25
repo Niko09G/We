@@ -1,91 +1,181 @@
 'use client'
 
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { useSyncExternalStore } from 'react'
+import { useScrollSpy, type ScrollSpySection } from '@/hooks/useScrollSpy'
 
 export type BottomNavItem = {
   id: string
   label: string
   targetId: string
-  /** When set, item is active when `usePathname()` matches this path (or a nested segment). */
-  href?: string
+  activeIconSrc: string
+  inactiveIconSrc: string
+  iconAlt: string
 }
 
 /** Lobby landing page — anchor jumps to in-page sections. */
 export const LOBBY_BOTTOM_NAV_ITEMS: BottomNavItem[] = [
-  { id: 'seat-finder', label: 'Seat finder', targetId: 'seat-finder' },
-  { id: 'program', label: 'Program', targetId: 'program' },
-  { id: 'mcs', label: "MC's", targetId: 'mcs' },
-  { id: 'teams', label: 'Teams', targetId: 'teams' },
+  {
+    id: 'seat-finder',
+    label: 'Seat finder',
+    targetId: 'seat-finder',
+    activeIconSrc: '/nav/PinW.svg',
+    inactiveIconSrc: '/nav/PinC.svg',
+    iconAlt: 'Seat finder',
+  },
+  {
+    id: 'program',
+    label: 'Program',
+    targetId: 'program',
+    activeIconSrc: '/nav/MissionW.svg',
+    inactiveIconSrc: '/nav/MissionC.svg',
+    iconAlt: 'Program',
+  },
+  {
+    id: 'mcs',
+    label: "MC's",
+    targetId: 'mcs',
+    activeIconSrc: '/nav/HeartW.svg',
+    inactiveIconSrc: '/nav/HeartC.svg',
+    iconAlt: "MC's",
+  },
+  {
+    id: 'teams',
+    label: 'Teams',
+    targetId: 'teams',
+    activeIconSrc: '/nav/BarW.svg',
+    inactiveIconSrc: '/nav/BarC.svg',
+    iconAlt: 'Teams',
+  },
 ]
 
 /** Table mission page — anchor jumps; seat finder appears before leaderboard. */
 export const MISSION_BOTTOM_NAV_ITEMS: BottomNavItem[] = [
-  { id: 'missions', label: 'Missions', targetId: 'missions' },
-  { id: 'feed', label: 'Feed', targetId: 'feed' },
-  { id: 'seat-finder', label: 'Seat finder', targetId: 'seat-finder' },
-  { id: 'leaderboard', label: 'Leaderboard', targetId: 'leaderboard' },
+  {
+    id: 'missions',
+    label: 'Missions',
+    targetId: 'missions',
+    activeIconSrc: '/nav/MissionW.svg',
+    inactiveIconSrc: '/nav/MissionC.svg',
+    iconAlt: 'Missions',
+  },
+  {
+    id: 'feed',
+    label: 'Feed',
+    targetId: 'feed',
+    activeIconSrc: '/nav/HeartW.svg',
+    inactiveIconSrc: '/nav/HeartC.svg',
+    iconAlt: 'Feed',
+  },
+  {
+    id: 'seat-finder',
+    label: 'Seat finder',
+    targetId: 'seat-finder',
+    activeIconSrc: '/nav/PinW.svg',
+    inactiveIconSrc: '/nav/PinC.svg',
+    iconAlt: 'Seat finder',
+  },
+  {
+    id: 'leaderboard',
+    label: 'Leaderboard',
+    targetId: 'leaderboard',
+    activeIconSrc: '/nav/BarW.svg',
+    inactiveIconSrc: '/nav/BarC.svg',
+    iconAlt: 'Leaderboard',
+  },
 ]
 
 const ACTIVE_CLASS =
-  'bg-purple-600 text-white shadow-md px-4 py-2 rounded-full text-xs font-medium transition-colors'
+  'flex min-w-[4.5rem] flex-col items-center justify-center gap-1 rounded-full bg-purple-600 px-3 py-2 text-[11px] font-medium text-white shadow-md transition-colors'
 const INACTIVE_CLASS =
-  'text-slate-400 hover:text-slate-200 px-4 py-2 rounded-full text-xs font-medium transition-colors'
+  'flex min-w-[4.5rem] flex-col items-center justify-center gap-1 rounded-full px-3 py-2 text-[11px] font-medium text-slate-400 transition-colors hover:text-slate-200'
 
-function subscribeToHash(onStoreChange: () => void) {
-  window.addEventListener('hashchange', onStoreChange)
-  return () => window.removeEventListener('hashchange', onStoreChange)
-}
-
-function getHashSnapshot() {
-  return window.location.hash.replace(/^#/, '')
-}
-
-function getServerHashSnapshot() {
-  return ''
-}
-
-function useUrlHash() {
-  return useSyncExternalStore(subscribeToHash, getHashSnapshot, getServerHashSnapshot)
-}
-
-function isPathActive(pathname: string, href: string): boolean {
-  return pathname === href || pathname.startsWith(`${href}/`)
-}
-
-function getActiveItemId(
-  pathname: string,
-  hash: string,
-  items: BottomNavItem[],
-): string | null {
-  const hrefMatch = items.find((item) => item.href && isPathActive(pathname, item.href))
-  if (hrefMatch) return hrefMatch.id
-
-  if (hash) {
-    const hashMatch = items.find((item) => item.id === hash || item.targetId === hash)
-    if (hashMatch) return hashMatch.id
-  }
-
-  return null
-}
-
-function scrollToSection(pathname: string, targetId: string) {
-  const target = document.getElementById(targetId)
-  if (!target) return
-
-  target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-
-  const nextHash = `#${targetId}`
-  if (window.location.hash !== nextHash) {
-    window.history.replaceState(null, '', `${pathname}${nextHash}`)
-    window.dispatchEvent(new HashChangeEvent('hashchange'))
-  }
-}
+/** Keep scroll-spy paused through smooth programmatic scroll (~600ms or scrollend). */
+const MANUAL_SCROLL_LOCK_MS = 600
 
 export function BottomNav({ items }: { items: BottomNavItem[] }) {
   const pathname = usePathname()
-  const hash = useUrlHash()
-  const activeId = getActiveItemId(pathname, hash, items)
+  const manualNavLockRef = useRef(false)
+  const manualScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const manualScrollEndHandlerRef = useRef<(() => void) | null>(null)
+  const [manualActiveSection, setManualActiveSection] = useState<string | null>(null)
+
+  const scrollSpySections = useMemo<ScrollSpySection[]>(
+    () =>
+      items.map((item) => ({
+        id: item.id,
+        targetId: item.targetId,
+      })),
+    [items],
+  )
+
+  const scrollSpyActive = useScrollSpy(scrollSpySections, {
+    pausedRef: manualNavLockRef,
+  })
+
+  const activeId = manualActiveSection ?? scrollSpyActive
+
+  const clearManualScrollLock = () => {
+    if (manualScrollTimerRef.current) {
+      clearTimeout(manualScrollTimerRef.current)
+      manualScrollTimerRef.current = null
+    }
+    if (manualScrollEndHandlerRef.current) {
+      window.removeEventListener('scrollend', manualScrollEndHandlerRef.current)
+      manualScrollEndHandlerRef.current = null
+    }
+    manualNavLockRef.current = false
+    setManualActiveSection(null)
+  }
+
+  const releaseManualScrollLock = () => {
+    if (!manualNavLockRef.current) return
+    clearManualScrollLock()
+  }
+
+  const beginManualScroll = (sectionId: string) => {
+    clearManualScrollLock()
+    manualNavLockRef.current = true
+    setManualActiveSection(sectionId)
+  }
+
+  const scheduleManualScrollRelease = () => {
+    if (manualScrollTimerRef.current) {
+      clearTimeout(manualScrollTimerRef.current)
+    }
+    manualScrollTimerRef.current = setTimeout(() => {
+      manualScrollTimerRef.current = null
+      releaseManualScrollLock()
+    }, MANUAL_SCROLL_LOCK_MS)
+
+    const onScrollEnd = () => {
+      releaseManualScrollLock()
+    }
+    if (manualScrollEndHandlerRef.current) {
+      window.removeEventListener('scrollend', manualScrollEndHandlerRef.current)
+    }
+    manualScrollEndHandlerRef.current = onScrollEnd
+    window.addEventListener('scrollend', onScrollEnd)
+  }
+
+  useEffect(() => {
+    return () => clearManualScrollLock()
+  }, [])
+
+  useEffect(() => {
+    clearManualScrollLock()
+  }, [pathname])
+
+  const handleItemClick = (item: BottomNavItem) => {
+    beginManualScroll(item.id)
+    const target = document.getElementById(item.targetId)
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      scheduleManualScrollRelease()
+    } else {
+      clearManualScrollLock()
+    }
+  }
 
   return (
     <nav
@@ -98,11 +188,17 @@ export function BottomNav({ items }: { items: BottomNavItem[] }) {
           <button
             key={item.id}
             type="button"
-            onClick={() => scrollToSection(pathname, item.targetId)}
+            onClick={() => handleItemClick(item)}
             aria-current={isActive ? 'true' : undefined}
             className={isActive ? ACTIVE_CLASS : INACTIVE_CLASS}
           >
-            {item.label}
+            <img
+              src={isActive ? item.activeIconSrc : item.inactiveIconSrc}
+              alt={item.iconAlt}
+              className="h-6 w-6 object-contain"
+              draggable={false}
+            />
+            <span className="leading-none">{item.label}</span>
           </button>
         )
       })}
