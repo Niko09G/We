@@ -196,6 +196,7 @@ export default function DisplayPage() {
   const animClearRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const maxSeenCreatedAtRef = useRef<string | null>(null)
   const liveRefreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const leaderboardFetchIdRef = useRef(0)
 
   const feedItems = useMomentumFeed(recentActivity, tableNames)
 
@@ -826,34 +827,66 @@ export default function DisplayPage() {
     [applyTableNames, spawnScoreCelebration]
   )
 
-  const refreshLiveData = useCallback(async () => {
+  const fetchLeaderboardData = useCallback(async () => {
+    const fetchId = ++leaderboardFetchIdRef.current
     try {
       const { leaderboard: next, recentActivity: recent, tableNames: names } =
         await fetchLiveBundle()
+      if (fetchId !== leaderboardFetchIdRef.current) return
       applyLiveBundle(next, recent, names)
     } catch (e) {
+      if (fetchId !== leaderboardFetchIdRef.current) return
       const msg = e instanceof Error ? e.message : 'Failed to load leaderboard'
       setLeaderboardError(msg)
-      setLeaderboard((prev) => prev)
-      setRecentActivity((prev) => prev)
     } finally {
-      setLeaderboardLoading(false)
+      if (fetchId === leaderboardFetchIdRef.current) {
+        setLeaderboardLoading(false)
+      }
     }
   }, [applyLiveBundle])
 
-  const scheduleRefreshLiveData = useCallback(() => {
+  const scheduleFetchLeaderboardData = useCallback(() => {
     if (liveRefreshDebounceRef.current) {
       clearTimeout(liveRefreshDebounceRef.current)
     }
     liveRefreshDebounceRef.current = setTimeout(() => {
       liveRefreshDebounceRef.current = null
-      void refreshLiveData()
+      void fetchLeaderboardData()
     }, LIVE_REFRESH_DEBOUNCE_MS)
-  }, [refreshLiveData])
+  }, [fetchLeaderboardData])
 
   useEffect(() => {
-    void refreshLiveData()
-  }, [refreshLiveData])
+    void fetchLeaderboardData()
+  }, [fetchLeaderboardData])
+
+  useEffect(() => {
+    const onSchemaDbChange = () => {
+      scheduleFetchLeaderboardData()
+    }
+
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'teams' },
+        onSchemaDbChange
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tables' },
+        onSchemaDbChange
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'token_redemptions' },
+        onSchemaDbChange
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [scheduleFetchLeaderboardData])
 
   useEffect(() => {
     let cancelled = false
@@ -927,37 +960,9 @@ export default function DisplayPage() {
         )
         .on(
           'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'tables' },
-          () => {
-            scheduleRefreshLiveData()
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'tables' },
-          () => {
-            scheduleRefreshLiveData()
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'teams' },
-          () => {
-            scheduleRefreshLiveData()
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'teams' },
-          () => {
-            scheduleRefreshLiveData()
-          }
-        )
-        .on(
-          'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'completions' },
           () => {
-            scheduleRefreshLiveData()
+            scheduleFetchLeaderboardData()
           }
         )
         .on(
@@ -969,7 +974,7 @@ export default function DisplayPage() {
             filter: 'status=eq.approved',
           },
           () => {
-            scheduleRefreshLiveData()
+            scheduleFetchLeaderboardData()
           }
         )
         .on(
@@ -981,7 +986,7 @@ export default function DisplayPage() {
             filter: 'status=eq.approved',
           },
           () => {
-            scheduleRefreshLiveData()
+            scheduleFetchLeaderboardData()
           }
         )
         .subscribe((status) => {
@@ -1007,7 +1012,7 @@ export default function DisplayPage() {
       if (resubscribeTimer) window.clearTimeout(resubscribeTimer)
       if (channel) supabase.removeChannel(channel)
     }
-  }, [enqueueUnseenGreeting, removeGreetingFromQueues, scheduleRefreshLiveData])
+  }, [enqueueUnseenGreeting, removeGreetingFromQueues, scheduleFetchLeaderboardData])
 
   const leaderboardTableIdsKey = useMemo(() => {
     const ids = new Set<string>()
