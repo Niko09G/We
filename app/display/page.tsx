@@ -47,7 +47,7 @@ import { supabase } from '@/lib/supabase/client'
 const DISPLAY_GRID_CLASS = 'grid h-screen w-screen grid-cols-[8.6fr_3.4fr] gap-6 bg-zinc-950 p-6'
 
 const GREETING_ROTATE_MS = 10_000
-const LIVE_REFRESH_DEBOUNCE_MS = 800
+const LEADERBOARD_POLL_MS = 5_000
 const RECENT_FETCH_LIMIT = 8
 
 function sortGreetingsNewestFirst(rows: GreetingRow[]): GreetingRow[] {
@@ -144,6 +144,7 @@ async function fetchLiveBundle(): Promise<{
 }> {
   const res = await fetch(`/api/display/live?recent=${RECENT_FETCH_LIMIT}`, {
     cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache' },
   })
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null
@@ -195,8 +196,8 @@ export default function DisplayPage() {
   const teamCardRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const animClearRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const maxSeenCreatedAtRef = useRef<string | null>(null)
-  const liveRefreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const leaderboardFetchIdRef = useRef(0)
+  const fetchLeaderboardDataRef = useRef<() => void>(() => {})
 
   const feedItems = useMomentumFeed(recentActivity, tableNames)
 
@@ -845,48 +846,38 @@ export default function DisplayPage() {
     }
   }, [applyLiveBundle])
 
-  const scheduleFetchLeaderboardData = useCallback(() => {
-    if (liveRefreshDebounceRef.current) {
-      clearTimeout(liveRefreshDebounceRef.current)
-    }
-    liveRefreshDebounceRef.current = setTimeout(() => {
-      liveRefreshDebounceRef.current = null
-      void fetchLeaderboardData()
-    }, LIVE_REFRESH_DEBOUNCE_MS)
-  }, [fetchLeaderboardData])
-
-  useEffect(() => {
+  fetchLeaderboardDataRef.current = () => {
     void fetchLeaderboardData()
-  }, [fetchLeaderboardData])
+  }
 
   useEffect(() => {
-    const onSchemaDbChange = () => {
-      scheduleFetchLeaderboardData()
+    const runFetch = () => {
+      fetchLeaderboardDataRef.current()
     }
+
+    runFetch()
 
     const channel = supabase
-      .channel('schema-db-changes')
+      .channel('leaderboard-changes')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'teams' },
-        onSchemaDbChange
+        { event: '*', schema: 'public' },
+        (payload) => {
+          console.log('Realtime event received:', payload)
+          runFetch()
+        }
       )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tables' },
-        onSchemaDbChange
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'token_redemptions' },
-        onSchemaDbChange
-      )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('Supabase Realtime Status:', status)
+      })
+
+    const interval = window.setInterval(runFetch, LEADERBOARD_POLL_MS)
 
     return () => {
       supabase.removeChannel(channel)
+      window.clearInterval(interval)
     }
-  }, [scheduleFetchLeaderboardData])
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -958,37 +949,6 @@ export default function DisplayPage() {
             removeGreetingFromQueues(deletedId)
           }
         )
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'completions' },
-          () => {
-            scheduleFetchLeaderboardData()
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'mission_submissions',
-            filter: 'status=eq.approved',
-          },
-          () => {
-            scheduleFetchLeaderboardData()
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'mission_submissions',
-            filter: 'status=eq.approved',
-          },
-          () => {
-            scheduleFetchLeaderboardData()
-          }
-        )
         .subscribe((status) => {
           if (cancelled) return
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -1005,14 +965,10 @@ export default function DisplayPage() {
 
     return () => {
       cancelled = true
-      if (liveRefreshDebounceRef.current) {
-        clearTimeout(liveRefreshDebounceRef.current)
-        liveRefreshDebounceRef.current = null
-      }
       if (resubscribeTimer) window.clearTimeout(resubscribeTimer)
       if (channel) supabase.removeChannel(channel)
     }
-  }, [enqueueUnseenGreeting, removeGreetingFromQueues, scheduleFetchLeaderboardData])
+  }, [enqueueUnseenGreeting, removeGreetingFromQueues])
 
   const leaderboardTableIdsKey = useMemo(() => {
     const ids = new Set<string>()
