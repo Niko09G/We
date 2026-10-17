@@ -15,11 +15,7 @@ import {
   fetchDisplayTeamVisuals,
   type DisplayTeamVisual,
 } from '@/lib/display-team-visuals'
-import {
-  fetchDisplayGreetings,
-  recordGreetingDisplayed,
-  type GreetingRow,
-} from '@/lib/greetings-admin'
+import { recordGreetingDisplayed, type GreetingRow } from '@/lib/greetings-admin'
 import {
   fetchGuestEmblemsConfig,
   type GuestEmblemsSettingsValue,
@@ -47,6 +43,7 @@ import { supabase } from '@/lib/supabase/client'
 const DISPLAY_GRID_CLASS = 'grid h-screen w-screen grid-cols-[8.6fr_3.4fr] gap-6 bg-zinc-950 p-6'
 
 const GREETING_ROTATE_MS = 10_000
+const GREETING_POLL_MS = 5_000
 const LEADERBOARD_POLL_MS = 5_000
 const RECENT_FETCH_LIMIT = 8
 
@@ -56,33 +53,16 @@ function sortGreetingsNewestFirst(rows: GreetingRow[]): GreetingRow[] {
   )
 }
 
-function greetingFromRealtimeRow(row: Record<string, unknown>): GreetingRow | null {
-  const id = typeof row.id === 'string' ? row.id : null
-  const image_url = typeof row.image_url === 'string' ? row.image_url.trim() : ''
-  const status = typeof row.status === 'string' ? row.status : null
-  const created_at = typeof row.created_at === 'string' ? row.created_at : null
-  if (!id || !image_url || !status || !created_at) return null
-  if (status !== 'ready') return null
-
-  const messageRaw = typeof row.message === 'string' ? row.message.trim() : ''
-  const message = messageRaw.length > 0 ? messageRaw : 'Greeting'
-
-  const sourceTypeRaw = row.source_type
-  const source_type: GreetingRow['source_type'] =
-    sourceTypeRaw === 'mission' ? 'mission' : 'upload'
-
-  return {
-    id,
-    message,
-    image_url,
-    status,
-    created_at,
-    name: typeof row.name === 'string' ? row.name : null,
-    source_type,
-    table_id: typeof row.table_id === 'string' ? row.table_id : null,
-    table_name: typeof row.table_name === 'string' ? row.table_name : null,
-    table_color: typeof row.table_color === 'string' ? row.table_color : null,
+async function fetchGreetingsRemote(): Promise<GreetingRow[]> {
+  const res = await fetch('/api/display/greetings', {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache' },
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null
+    throw new Error(body?.error ?? 'Failed to load greetings')
   }
+  return res.json() as Promise<GreetingRow[]>
 }
 
 function ImageWithFallback({
@@ -198,6 +178,11 @@ export default function DisplayPage() {
   const maxSeenCreatedAtRef = useRef<string | null>(null)
   const leaderboardFetchIdRef = useRef(0)
   const fetchLeaderboardDataRef = useRef<() => void>(() => {})
+  const fetchGreetingsRef = useRef<() => void>(() => {})
+  const greetingsInitializedRef = useRef(false)
+  const tableNamesRef = useRef<TableNameLookup>({})
+
+  tableNamesRef.current = tableNames
 
   const feedItems = useMomentumFeed(recentActivity, tableNames)
 
@@ -357,46 +342,101 @@ export default function DisplayPage() {
     [bumpRotationTimer, showFromUnseenQueue, showRecycledAtIndex]
   )
 
-  const loadGreetings = useCallback(async () => {
+  const fetchGreetings = useCallback(async () => {
     try {
-      const pool = sortGreetingsNewestFirst(await fetchDisplayGreetings())
+      const pool = patchGreetingList(
+        sortGreetingsNewestFirst(await fetchGreetingsRemote()),
+        tableNamesRef.current
+      )
       for (const row of pool) {
         touchMaxSeenCreatedAt(row.created_at)
       }
-      recycledPoolRef.current = pool
-      setRecycledPool(pool)
-      unseenQueueRef.current = []
-      setUnseenQueue([])
-      recycledIndexRef.current = 0
-      setRecycledIndex(0)
 
-      if (pool.length > 0) {
-        activeGreetingRef.current = pool[0]
-        setActiveGreeting(pool[0])
-        isShowingRecycledRef.current = true
-        setIsShowingRecycled(true)
-      } else {
+      if (!greetingsInitializedRef.current) {
+        greetingsInitializedRef.current = true
+        recycledPoolRef.current = pool
+        setRecycledPool(pool)
+        unseenQueueRef.current = []
+        setUnseenQueue([])
+        recycledIndexRef.current = 0
+        setRecycledIndex(0)
+
+        if (pool.length > 0) {
+          activeGreetingRef.current = pool[0]
+          setActiveGreeting(pool[0])
+          isShowingRecycledRef.current = true
+          setIsShowingRecycled(true)
+        } else {
+          activeGreetingRef.current = null
+          setActiveGreeting(null)
+          isShowingRecycledRef.current = false
+          setIsShowingRecycled(false)
+        }
+        bumpRotationTimer()
+        return
+      }
+
+      const readyById = new Map(pool.map((g) => [g.id, g]))
+      const staleIds = new Set<string>()
+      for (const g of [...unseenQueueRef.current, ...recycledPoolRef.current]) {
+        if (!readyById.has(g.id)) staleIds.add(g.id)
+      }
+      for (const id of staleIds) {
+        removeGreetingFromQueues(id)
+      }
+
+      unseenQueueRef.current = unseenQueueRef.current
+        .map((g) => readyById.get(g.id) ?? g)
+        .filter((g) => readyById.has(g.id))
+      setUnseenQueue(unseenQueueRef.current)
+
+      recycledPoolRef.current = recycledPoolRef.current
+        .map((g) => readyById.get(g.id) ?? g)
+        .filter((g) => readyById.has(g.id))
+      setRecycledPool(recycledPoolRef.current)
+
+      if (activeGreetingRef.current) {
+        const updated = readyById.get(activeGreetingRef.current.id)
+        if (updated) {
+          activeGreetingRef.current = updated
+          setActiveGreeting(updated)
+        }
+      }
+
+      const known = new Set([
+        ...unseenQueueRef.current.map((g) => g.id),
+        ...recycledPoolRef.current.map((g) => g.id),
+      ])
+      const newcomers = pool
+        .filter((g) => !known.has(g.id))
+        .sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        )
+      for (const row of newcomers) {
+        enqueueUnseenGreeting(row)
+      }
+    } catch {
+      if (!greetingsInitializedRef.current) {
+        recycledPoolRef.current = []
+        setRecycledPool([])
+        unseenQueueRef.current = []
+        setUnseenQueue([])
+        recycledIndexRef.current = 0
+        setRecycledIndex(0)
         activeGreetingRef.current = null
         setActiveGreeting(null)
         isShowingRecycledRef.current = false
         setIsShowingRecycled(false)
       }
-      bumpRotationTimer()
-    } catch {
-      recycledPoolRef.current = []
-      setRecycledPool([])
-      unseenQueueRef.current = []
-      setUnseenQueue([])
-      recycledIndexRef.current = 0
-      setRecycledIndex(0)
-      activeGreetingRef.current = null
-      setActiveGreeting(null)
-      isShowingRecycledRef.current = false
-      setIsShowingRecycled(false)
     } finally {
       setGreetingLoading(false)
     }
-  }, [bumpRotationTimer, touchMaxSeenCreatedAt])
+  }, [
+    bumpRotationTimer,
+    touchMaxSeenCreatedAt,
+    enqueueUnseenGreeting,
+    removeGreetingFromQueues,
+  ])
 
   useEffect(() => {
     activeSlideIdRef.current = activeSlideId
@@ -425,10 +465,6 @@ export default function DisplayPage() {
       }
     }
   }, [])
-
-  useEffect(() => {
-    void loadGreetings()
-  }, [loadGreetings])
 
   useEffect(() => {
     let cancelled = false
@@ -850,6 +886,44 @@ export default function DisplayPage() {
     void fetchLeaderboardData()
   }
 
+  fetchGreetingsRef.current = () => {
+    void fetchGreetings()
+  }
+
+  useEffect(() => {
+    const runFetch = () => {
+      fetchGreetingsRef.current()
+    }
+
+    runFetch()
+
+    const channel = supabase
+      .channel('display-greetings-channel')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'greetings' },
+        (payload) => {
+          console.log('New greeting received:', payload)
+          runFetch()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'greetings' },
+        () => {
+          runFetch()
+        }
+      )
+      .subscribe()
+
+    const interval = window.setInterval(runFetch, GREETING_POLL_MS)
+
+    return () => {
+      supabase.removeChannel(channel)
+      window.clearInterval(interval)
+    }
+  }, [])
+
   useEffect(() => {
     const runFetch = () => {
       fetchLeaderboardDataRef.current()
@@ -878,97 +952,6 @@ export default function DisplayPage() {
       window.clearInterval(interval)
     }
   }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    let channel: ReturnType<typeof supabase.channel> | null = null
-    let resubscribeTimer: number | null = null
-
-    const attachRealtimeChannel = () => {
-      if (cancelled) return
-
-      channel = supabase
-        .channel('display-realtime')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'greetings',
-            filter: 'status=eq.ready',
-          },
-          (payload) => {
-            const row = greetingFromRealtimeRow(
-              payload.new as Record<string, unknown>
-            )
-            if (row) enqueueUnseenGreeting(row)
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'greetings',
-            filter: 'status=eq.ready',
-          },
-          (payload) => {
-            const row = greetingFromRealtimeRow(
-              payload.new as Record<string, unknown>
-            )
-            if (row) enqueueUnseenGreeting(row)
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'greetings' },
-          (payload) => {
-            const updatedId =
-              typeof (payload.new as { id?: unknown }).id === 'string'
-                ? (payload.new as { id: string }).id
-                : null
-            const newStatus =
-              typeof (payload.new as { status?: unknown }).status === 'string'
-                ? (payload.new as { status: string }).status
-                : null
-            if (!updatedId || newStatus === 'ready') return
-
-            removeGreetingFromQueues(updatedId)
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: 'DELETE', schema: 'public', table: 'greetings' },
-          (payload) => {
-            const deletedId =
-              typeof (payload.old as { id?: unknown }).id === 'string'
-                ? (payload.old as { id: string }).id
-                : null
-            if (!deletedId) return
-
-            removeGreetingFromQueues(deletedId)
-          }
-        )
-        .subscribe((status) => {
-          if (cancelled) return
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            if (channel) {
-              supabase.removeChannel(channel)
-              channel = null
-            }
-            resubscribeTimer = window.setTimeout(attachRealtimeChannel, 2_000)
-          }
-        })
-    }
-
-    attachRealtimeChannel()
-
-    return () => {
-      cancelled = true
-      if (resubscribeTimer) window.clearTimeout(resubscribeTimer)
-      if (channel) supabase.removeChannel(channel)
-    }
-  }, [enqueueUnseenGreeting, removeGreetingFromQueues])
 
   const leaderboardTableIdsKey = useMemo(() => {
     const ids = new Set<string>()
